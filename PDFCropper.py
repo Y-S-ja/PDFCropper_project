@@ -99,6 +99,17 @@ class NumberedPdfCropperApp:
         # スクロール範囲を画像の大きさに合わせる
         self.canvas.config(scrollregion=(0, 0, w, h))
 
+    def zoom(self, factor):
+        # 1. 画像の倍率を変更
+        self.current_scale *= factor
+        
+        # 2. キャンバス上のすべての図形（枠と文字）を座標変換
+        # scale("all", 基準x, 基準y, x倍率, y倍率)
+        self.canvas.scale("all", 0, 0, factor, factor)
+        
+        # 3. 画像だけは画質維持のため作り直して差し替え
+        self.update_image_display()
+
     def on_press(self, event):
         self.start_x, self.start_y = event.x, event.y
         
