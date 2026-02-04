@@ -57,7 +57,7 @@ class NumberedPdfCropperApp:
         self.start_x, self.start_y = event.x, event.y
         
         # 1. 枠を作る
-        new_rect = self.canvas.create_rectangle(self.start_x, self.start_y, event.x, event.y, outline="red", width=2)
+        new_rect = self.canvas.create_rectangle(self.start_x, self.start_y, event.x, event.y, outline="red", fill="red", stipple="gray12", width=2)
         self.rects.append(new_rect)
         
         # 2. 番号を作る
