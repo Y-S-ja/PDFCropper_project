@@ -214,8 +214,9 @@ class NumberedPdfCropperApp:
                 coords = self.canvas.coords(r_id)
                 px1 = min(coords[0], coords[2]) * scale_x
                 px2 = max(coords[0], coords[2]) * scale_x
-                py1 = (self.image.height - max(coords[1], coords[3])) * scale_y
-                py2 = (self.image.height - min(coords[1], coords[3])) * scale_y
+                # Y軸反転
+                py1 = (img_h - max(coords[1], coords[3])) * scale_y
+                py2 = (img_h - min(coords[1], coords[3])) * scale_y
 
                 import copy
                 new_page = copy.copy(page_in)
