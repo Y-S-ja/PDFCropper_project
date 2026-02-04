@@ -38,10 +38,13 @@ class NumberedPdfCropperApp:
         self.toolbar = tk.Frame(root)
         self.toolbar.pack(side="top", fill="x", padx=10, pady=5)
 
-        self.btn_save = tk.Button(self.toolbar, text="PDFを分割保存", command=self.save_all_clips, bg="lightblue")
-        self.btn_save.pack(side="left", padx=5)
-        self.btn_clear = tk.Button(self.toolbar, text="枠をすべて消す", command=self.clear_rects)
-        self.btn_clear.pack(side="left", padx=5)
+        # ボタン類
+        tk.Button(self.toolbar, text="保存", command=self.save_all_clips, bg="lightblue").pack(side="left", padx=5)
+        tk.Button(self.toolbar, text="全消去", command=self.clear_rects).pack(side="left", padx=5)
+        
+        # ズームボタンを追加
+        tk.Button(self.toolbar, text="＋ 拡大", command=lambda: self.zoom(1.2)).pack(side="left", padx=10)
+        tk.Button(self.toolbar, text="－ 縮小", command=lambda: self.zoom(0.8)).pack(side="left", padx=5)
 
         self.label_info = tk.Label(self.toolbar, text="マウスで複数の枠を描けます")
         self.label_info.pack(side="left", padx=20)
