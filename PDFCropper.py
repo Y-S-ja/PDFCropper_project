@@ -134,12 +134,14 @@ class NumberedPdfCropperApp:
     def on_move(self, event):
         # 枠を動かす
         if self.rects:
-            # 現在の枠の範囲を決定
-            # 開始点と現在点の「大きい方」が常に右下(max)になる
-            x2 = max(self.start_x, event.x)
-            y2 = max(self.start_y, event.y)
-            x1 = min(self.start_x, event.x)
-            y1 = min(self.start_y, event.y)
+            # スクロール対応座標
+            cur_x = self.canvas.canvasx(event.x)
+            cur_y = self.canvas.canvasy(event.y)
+
+            x2 = max(self.start_x, cur_x)
+            y2 = max(self.start_y, cur_y)
+            x1 = min(self.start_x, cur_x)
+            y1 = min(self.start_y, cur_y)
 
             self.canvas.coords(self.rects[-1], x1, y1, x2, y2)
             
