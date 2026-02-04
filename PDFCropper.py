@@ -51,7 +51,6 @@ class NumberedPdfCropperApp:
 
         self.canvas.bind("<Button-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_move)
-        # 右クリック（個別削除）を追加
         self.canvas.bind("<Button-3>", self.on_right_click)
 
     def on_press(self, event):
@@ -87,7 +86,7 @@ class NumberedPdfCropperApp:
             # anchor="se" を指定しているので、(x2, y2)が文字の右下角になります
             self.canvas.coords(self.texts[-1], x2 - 5, y2 - 5)
     
-    # 右クリックで個別削除（新規！）
+    # 右クリックで個別削除
     def on_right_click(self, event):
         # 1. クリックされた地点のすぐ近くにあるアイテムを探す
         # find_closest は一番近いオブジェクトのIDを返します
@@ -117,7 +116,7 @@ class NumberedPdfCropperApp:
             # 4. 番号を振り直す
             self.reorder_numbers()
 
-    # 番号を振り直す（新規！）
+    # 番号を振り直す
     def reorder_numbers(self):
         # 残っている全てのテキストの内容を「1, 2, 3...」と更新する
         for i, text_id in enumerate(self.texts):
