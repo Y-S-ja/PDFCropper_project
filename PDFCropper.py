@@ -81,6 +81,24 @@ class NumberedPdfCropperApp:
         self.canvas.bind("<B1-Motion>", self.on_move)
         self.canvas.bind("<Button-3>", self.on_right_click)
 
+    def update_image_display(self):
+        # 原本から現在の倍率でリサイズ
+        w = int(self.original_image.width * self.current_scale)
+        h = int(self.original_image.height * self.current_scale)
+        resized = self.original_image.resize((w, h), Image.LANCZOS)
+        
+        self.tk_image = ImageTk.PhotoImage(resized)
+
+        # キャンバス上の画像を更新（ID=1 は常に画像であることを前提）
+        # まだ画像がない場合は作成、あれば差し替え
+        if not self.canvas.find_withtag("bg_image"):
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image, tags="bg_image")
+        else:
+            self.canvas.itemconfig("bg_image", image=self.tk_image)
+        
+        # スクロール範囲を画像の大きさに合わせる
+        self.canvas.config(scrollregion=(0, 0, w, h))
+
     def on_press(self, event):
         self.start_x, self.start_y = event.x, event.y
         
