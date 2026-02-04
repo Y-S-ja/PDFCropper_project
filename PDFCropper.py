@@ -11,10 +11,10 @@ try:
 except:
     pass
 
-class NumberedPdfCropperApp:
+class ZoomablePdfCropperApp:
     def __init__(self, root, pdf_path):
         self.root = root
-        self.root.title("番号付きPDFカッター")
+        self.root.title("ズーム対応PDFカッター")
         self.pdf_path = pdf_path
 
         # --- 1. 画像の準備 ---
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
     if path:
         root.deiconify()
-        app = NumberedPdfCropperApp(root, path)
+        app = ZoomablePdfCropperApp(root, path)
         root.mainloop()
     else:
         root.destroy()
