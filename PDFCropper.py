@@ -179,11 +179,8 @@ class NumberedPdfCropperApp:
             self.canvas.itemconfig(text_id, text=str(i + 1))
 
     def clear_rects(self):
-        # 枠と番号を両方消す
-        for r in self.rects:
-            self.canvas.delete(r)
-        for t in self.texts:
-            self.canvas.delete(t)
+        for item in self.rects + self.texts:
+            self.canvas.delete(item)
         self.rects = []
         self.texts = []
 
