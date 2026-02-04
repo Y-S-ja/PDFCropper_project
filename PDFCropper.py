@@ -111,19 +111,23 @@ class NumberedPdfCropperApp:
         self.update_image_display()
 
     def on_press(self, event):
-        self.start_x, self.start_y = event.x, event.y
+        # キャンバスがスクロールしている場合、event.x は「見えている画面上の座標」になるため、
+        # canvasx() を使って「キャンバス全体の絶対座標」に変換する必要がある
+        canvas_x = self.canvas.canvasx(event.x)
+        canvas_y = self.canvas.canvasy(event.y)
         
-        # 1. 枠を作る
-        new_rect = self.canvas.create_rectangle(self.start_x, self.start_y, event.x, event.y, outline="red", fill="red", stipple="gray12", width=2)
+        self.start_x, self.start_y = canvas_x, canvas_y
+        
+        new_rect = self.canvas.create_rectangle(
+            canvas_x, canvas_y, canvas_x, canvas_y, 
+            outline="red", width=2, fill="red", stipple="gray12"
+        )
         self.rects.append(new_rect)
         
-        # 2. 番号を作る
         text_id = self.canvas.create_text(
-            self.start_x, self.start_y,
-            text=str(len(self.rects)), # リストの長さを番号にする
-            fill="red", # 文字色
-            font=("Arial", 12, "bold"), # フォント
-            anchor="se" # テキストの「南東(右下)」を基準点にする
+            canvas_x, canvas_y,
+            text=str(len(self.rects)),
+            anchor="se"
         )
         self.texts.append(text_id)
 
