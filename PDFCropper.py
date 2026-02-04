@@ -17,17 +17,24 @@ class NumberedPdfCropperApp:
         self.root.title("番号付きPDFカッター")
         self.pdf_path = pdf_path
 
-        # プレビュー準備
+        # --- 1. 画像の準備 ---
         self.doc = fitz.open(pdf_path)
-        zoom = 2.0
-        pix = self.doc[0].get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-        img_full = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        max_h = 600
-        ratio = max_h / img_full.height
-        self.image = img_full.resize((int(img_full.width * ratio), max_h), Image.LANCZOS)
-        self.tk_image = ImageTk.PhotoImage(self.image)
-
-        # GUI配置
+        # かなり高画質で読み込んでおく（ズーム耐性のため）
+        zoom_extract = 3.0 
+        pix = self.doc[0].get_pixmap(matrix=fitz.Matrix(zoom_extract, zoom_extract))
+        
+        # 「原本」として保持しておく（ここから毎回リサイズする）
+        self.original_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        
+        # 現在の表示用画像
+        self.current_scale = 1.0 # 初期の縮小率（後で計算）
+        self.displayed_image = None
+        
+        # 初期表示サイズ（高さ600pxに合わせる）
+        target_height = 600
+        self.current_scale = target_height / self.original_image.height
+        
+        # --- 2. GUI配置（スクロールバー対応） ---
         self.toolbar = tk.Frame(root)
         self.toolbar.pack(side="top", fill="x", padx=10, pady=5)
 
