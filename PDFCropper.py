@@ -46,12 +46,30 @@ class NumberedPdfCropperApp:
         tk.Button(self.toolbar, text="＋ 拡大", command=lambda: self.zoom(1.2)).pack(side="left", padx=10)
         tk.Button(self.toolbar, text="－ 縮小", command=lambda: self.zoom(0.8)).pack(side="left", padx=5)
 
-        self.label_info = tk.Label(self.toolbar, text="マウスで複数の枠を描けます")
-        self.label_info.pack(side="left", padx=20)
+        # --- キャンバスとスクロールバーをまとめるフレーム ---
+        self.canvas_frame = tk.Frame(root)
+        self.canvas_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.canvas = tk.Canvas(root, width=self.image.width, height=self.image.height, cursor="cross", bg="gray")
-        self.canvas.pack(side="top", padx=10, pady=10)
-        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+        # 縦スクロールバー
+        self.v_scroll = tk.Scrollbar(self.canvas_frame, orient="vertical")
+        self.v_scroll.pack(side="right", fill="y")
+
+        # 横スクロールバー
+        self.h_scroll = tk.Scrollbar(self.canvas_frame, orient="horizontal")
+        self.h_scroll.pack(side="bottom", fill="x")
+
+        # キャンバス作成
+        self.canvas = tk.Canvas(self.canvas_frame, bg="gray", cursor="cross",
+                                xscrollcommand=self.h_scroll.set,
+                                yscrollcommand=self.v_scroll.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        # スクロールバーとキャンバスを紐付け
+        self.v_scroll.config(command=self.canvas.yview)
+        self.h_scroll.config(command=self.canvas.xview)
+
+        # 初期画像の描画
+        self.update_image_display()
 
         # 状態管理
         self.rects = [] # 枠のIDリスト
