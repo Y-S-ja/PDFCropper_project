@@ -192,9 +192,19 @@ class NumberedPdfCropperApp:
         save_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf")])
         if not save_path: return
 
-        pdf_page_info = self.doc[0]
-        scale_x = pdf_page_info.rect.width / self.image.width
-        scale_y = pdf_page_info.rect.height / self.image.height
+        # 重要：保存時の座標計算
+        # 現在表示されている画像サイズ（self.tk_image.width()）を基準に計算すれば、
+        # ズーム状態に関係なく正しい比率が得られます。
+        
+        pdf_w = self.doc[0].rect.width
+        pdf_h = self.doc[0].rect.height
+        
+        # 現在の画像の大きさ
+        img_w = self.tk_image.width()
+        img_h = self.tk_image.height()
+        
+        scale_x = pdf_w / img_w
+        scale_y = pdf_h / img_h
 
         reader = PdfReader(self.pdf_path)
         writer = PdfWriter()
