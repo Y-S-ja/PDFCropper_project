@@ -151,32 +151,25 @@ class NumberedPdfCropperApp:
     
     # 右クリックで個別削除
     def on_right_click(self, event):
-        # 1. クリックされた地点のすぐ近くにあるアイテムを探す
-        # find_closest は一番近いオブジェクトのIDを返します
-        closest_items = self.canvas.find_closest(event.x, event.y)
-        if not closest_items:
-            return
+        # スクロール対応座標
+        click_x = self.canvas.canvasx(event.x)
+        click_y = self.canvas.canvasy(event.y)
         
-        target_id = closest_items[0]
+        closest = self.canvas.find_closest(click_x, click_y)
+        if closest:
+            t_id = closest[0]
+        else: return
 
-        # 2. そのアイテムが「枠」か「番号」のどちらに属するか調べる
-        target_idx = -1
-        if target_id in self.rects:
-            target_idx = self.rects.index(target_id)
-        elif target_id in self.texts:
-            target_idx = self.texts.index(target_id)
-
-        # 3. リストに含まれるアイテムだったら削除処理を実行
-        if target_idx != -1: # アイテムが選択されていれば、target_idxは0以上
-            # キャンバスから削除
-            self.canvas.delete(self.rects[target_idx])
-            self.canvas.delete(self.texts[target_idx])
-            
-            # リストから削除
-            self.rects.pop(target_idx)
-            self.texts.pop(target_idx)
-
-            # 4. 番号を振り直す
+        idx = -1
+        if t_id in self.rects:
+            idx = self.rects.index(t_id)
+        elif t_id in self.texts:
+            idx = self.texts.index(t_id)
+        if target_idx != -1:
+            self.canvas.delete(self.rects[idx])
+            self.canvas.delete(self.texts[idx])
+            self.rects.pop(idx)
+            self.texts.pop(idx)
             self.reorder_numbers()
 
     # 番号を振り直す
