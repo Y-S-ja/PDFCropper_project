@@ -182,7 +182,7 @@ class ZoomablePdfCropperApp:
             target_item = self.crop_areas[idx]
             self.canvas.delete(target_item['rect_id'])
             self.canvas.delete(target_item['text_id'])
-            self.crop_areas.pop(target_idx)
+            self.crop_areas.pop(idx)
             self.reorder_numbers()
 
     # 番号を振り直す
