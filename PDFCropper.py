@@ -122,7 +122,6 @@ class ZoomablePdfCropperApp:
             canvas_x, canvas_y, canvas_x, canvas_y, 
             outline="red", width=2, fill="red", stipple="gray12"
         )
-        self.rects.append(new_rect)
         
         text_id = self.canvas.create_text(
             canvas_x, canvas_y,
@@ -130,7 +129,12 @@ class ZoomablePdfCropperApp:
             fill="red",
             anchor="se"
         )
-        self.texts.append(text_id)
+
+        new_item = {
+            "rect_id":new_erct,
+            "text_id":text_id
+        }
+        self.crop_areas.append(new_item)
 
     def on_move(self, event):
         # 枠を動かす
