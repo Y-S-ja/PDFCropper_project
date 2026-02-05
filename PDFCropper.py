@@ -168,10 +168,14 @@ class ZoomablePdfCropperApp:
         else: return
 
         idx = -1
-        if t_id in self.rects:
-            idx = self.rects.index(t_id)
-        elif t_id in self.texts:
-            idx = self.texts.index(t_id)
+
+        for i, area in enumerate(self.crop_areas):
+            # 今見ている辞書の 'rect_id' か 'text_id' のどちらかが、
+            # クリックされたID(t_id)と一致するかチェック
+            if t_id == area['rect_id'] or t_id == area['text_id']:
+                idx = i
+                break # 見つかったのでループを抜ける
+
         if idx != -1:
             self.canvas.delete(self.rects[idx])
             self.canvas.delete(self.texts[idx])
