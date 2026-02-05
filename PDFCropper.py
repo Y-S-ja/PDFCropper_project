@@ -138,7 +138,7 @@ class ZoomablePdfCropperApp:
 
     def on_move(self, event):
         # 枠を動かす
-        if self.rects:
+        if self.crop_areas:
             # スクロール対応座標
             cur_x = self.canvas.canvasx(event.x)
             cur_y = self.canvas.canvasy(event.y)
@@ -148,11 +148,13 @@ class ZoomablePdfCropperApp:
             x1 = min(self.start_x, cur_x)
             y1 = min(self.start_y, cur_y)
 
-            self.canvas.coords(self.rects[-1], x1, y1, x2, y2)
+            current_item = self.crop_areas[-1]
+
+            self.canvas.coords(current_item["rect_id"], x1, y1, x2, y2)
             
             # 番号を枠の右下(x2, y2)の少し内側に配置
             # anchor="se" を指定しているので、(x2, y2)が文字の右下角になります
-            self.canvas.coords(self.texts[-1], x2 - 5, y2 - 5)
+            self.canvas.coords(current_item["text_id"], x2 - 5, y2 - 5)
     
     # 右クリックで個別削除
     def on_right_click(self, event):
