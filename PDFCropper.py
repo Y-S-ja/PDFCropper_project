@@ -72,8 +72,8 @@ class ZoomablePdfCropperApp:
         self.update_image_display()
 
         # 状態管理
-        self.rects = [] # 枠のIDリスト
-        self.texts = [] # 番号のIDリスト
+        # リストはこれ1本にする！
+        self.crop_areas = []
         self.start_x = 0
         self.start_y = 0
 
