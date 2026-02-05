@@ -123,9 +123,11 @@ class ZoomablePdfCropperApp:
             outline="red", width=2, fill="red", stipple="gray12"
         )
         
+        current_number = len(self.crop_areas) + 1
+
         text_id = self.canvas.create_text(
             canvas_x, canvas_y,
-            text=str(len(self.rects)),
+            text=str(current_number),
             fill="red",
             anchor="se"
         )
