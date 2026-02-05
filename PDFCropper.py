@@ -72,8 +72,8 @@ class ZoomablePdfCropperApp:
         self.update_image_display()
 
         # 状態管理
-        self.rects = [] # 枠のIDリスト
-        self.texts = [] # 番号のIDリスト
+        # リストはこれ1本にする！
+        self.crop_areas = []
         self.start_x = 0
         self.start_y = 0
 
@@ -122,19 +122,25 @@ class ZoomablePdfCropperApp:
             canvas_x, canvas_y, canvas_x, canvas_y, 
             outline="red", width=2, fill="red", stipple="gray12"
         )
-        self.rects.append(new_rect)
         
+        current_number = len(self.crop_areas) + 1
+
         text_id = self.canvas.create_text(
             canvas_x, canvas_y,
-            text=str(len(self.rects)),
+            text=str(current_number),
             fill="red",
             anchor="se"
         )
-        self.texts.append(text_id)
+
+        new_item = {
+            "rect_id":new_rect,
+            "text_id":text_id
+        }
+        self.crop_areas.append(new_item)
 
     def on_move(self, event):
         # 枠を動かす
-        if self.rects:
+        if self.crop_areas:
             # スクロール対応座標
             cur_x = self.canvas.canvasx(event.x)
             cur_y = self.canvas.canvasy(event.y)
@@ -144,11 +150,13 @@ class ZoomablePdfCropperApp:
             x1 = min(self.start_x, cur_x)
             y1 = min(self.start_y, cur_y)
 
-            self.canvas.coords(self.rects[-1], x1, y1, x2, y2)
+            current_item = self.crop_areas[-1]
+
+            self.canvas.coords(current_item["rect_id"], x1, y1, x2, y2)
             
             # 番号を枠の右下(x2, y2)の少し内側に配置
             # anchor="se" を指定しているので、(x2, y2)が文字の右下角になります
-            self.canvas.coords(self.texts[-1], x2 - 5, y2 - 5)
+            self.canvas.coords(current_item["text_id"], x2 - 5, y2 - 5)
     
     # 右クリックで個別削除
     def on_right_click(self, event):
@@ -162,22 +170,26 @@ class ZoomablePdfCropperApp:
         else: return
 
         idx = -1
-        if t_id in self.rects:
-            idx = self.rects.index(t_id)
-        elif t_id in self.texts:
-            idx = self.texts.index(t_id)
+
+        for i, area in enumerate(self.crop_areas):
+            # 今見ている辞書の 'rect_id' か 'text_id' のどちらかが、
+            # クリックされたID(t_id)と一致するかチェック
+            if t_id == area['rect_id'] or t_id == area['text_id']:
+                idx = i
+                break # 見つかったのでループを抜ける
+
         if idx != -1:
-            self.canvas.delete(self.rects[idx])
-            self.canvas.delete(self.texts[idx])
-            self.rects.pop(idx)
-            self.texts.pop(idx)
+            target_item = self.crop_areas[idx]
+            self.canvas.delete(target_item['rect_id'])
+            self.canvas.delete(target_item['text_id'])
+            self.crop_areas.pop(idx)
             self.reorder_numbers()
 
     # 番号を振り直す
     def reorder_numbers(self):
-        # 残っている全てのテキストの内容を「1, 2, 3...」と更新する
-        for i, text_id in enumerate(self.texts):
-            self.canvas.itemconfig(text_id, text=str(i + 1))
+        # crop_areasの中にある全てのtext_idを順番に書き換える
+        for i, area in enumerate(self.crop_areas):
+            self.canvas.itemconfig(area['text_id'], text=str(i + 1))
 
     def clear_rects(self):
         for item in self.rects + self.texts:
