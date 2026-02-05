@@ -185,9 +185,9 @@ class ZoomablePdfCropperApp:
 
     # 番号を振り直す
     def reorder_numbers(self):
-        # 残っている全てのテキストの内容を「1, 2, 3...」と更新する
-        for i, text_id in enumerate(self.texts):
-            self.canvas.itemconfig(text_id, text=str(i + 1))
+        # crop_areasの中にある全てのtext_idを順番に書き換える
+        for i, area in enumerate(self.crop_areas):
+            self.canvas.itemconfig(area['text_id'], text=str(i + 1))
 
     def clear_rects(self):
         for item in self.rects + self.texts:
