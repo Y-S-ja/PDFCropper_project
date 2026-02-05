@@ -14,6 +14,7 @@ except:
 class ZoomablePdfCropperApp:
     def __init__(self, root, pdf_path):
         self.root = root
+        self.root.geometry("1000x1000")
         self.root.title("ズーム対応PDFカッター")
         self.pdf_path = pdf_path
 
@@ -31,7 +32,7 @@ class ZoomablePdfCropperApp:
         self.displayed_image = None
         
         # 初期表示サイズ（高さ600pxに合わせる）
-        target_height = 600
+        target_height = 1000
         self.current_scale = target_height / self.original_image.height
         
         # --- 2. GUI配置（スクロールバー対応） ---
