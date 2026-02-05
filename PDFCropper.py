@@ -133,7 +133,7 @@ class ZoomablePdfCropperApp:
         )
 
         new_item = {
-            "rect_id":new_erct,
+            "rect_id":new_rect,
             "text_id":text_id
         }
         self.crop_areas.append(new_item)
