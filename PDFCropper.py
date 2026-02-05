@@ -165,7 +165,7 @@ class ZoomablePdfCropperApp:
             idx = self.rects.index(t_id)
         elif t_id in self.texts:
             idx = self.texts.index(t_id)
-        if target_idx != -1:
+        if idx != -1:
             self.canvas.delete(self.rects[idx])
             self.canvas.delete(self.texts[idx])
             self.rects.pop(idx)
