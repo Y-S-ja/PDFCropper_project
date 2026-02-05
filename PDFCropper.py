@@ -127,6 +127,7 @@ class ZoomablePdfCropperApp:
         text_id = self.canvas.create_text(
             canvas_x, canvas_y,
             text=str(len(self.rects)),
+            fill="red",
             anchor="se"
         )
         self.texts.append(text_id)
