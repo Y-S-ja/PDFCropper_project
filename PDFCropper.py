@@ -5,7 +5,6 @@ import fitz
 from pypdf import PdfReader, PdfWriter
 import ctypes
 # 偏光１
-# 偏光2
 # DPI設定（クッキリ）
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
