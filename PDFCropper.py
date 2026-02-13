@@ -48,7 +48,7 @@ class ZoomablePdfCropperApp:
         tk.Button(self.toolbar, text="－ 縮小", command=lambda: self.zoom(0.8)).pack(side="left", padx=5)
 
         # --- キャンバスとスクロールバーをまとめるフレーム ---
-        self.canvas_frame = tk.Frame(root)
+        self.canvas_frame = tk.Frame(root, borderwidth=2, relief="solid")
         self.canvas_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # 縦スクロールバー
@@ -60,7 +60,7 @@ class ZoomablePdfCropperApp:
         self.h_scroll.pack(side="bottom", fill="x")
 
         # キャンバス作成
-        self.canvas = tk.Canvas(self.canvas_frame, bg="gray", cursor="cross",
+        self.canvas = tk.Canvas(self.canvas_frame, bg="gray", cursor="cross", borderwidth=2, relief="solid",
                                 xscrollcommand=self.h_scroll.set,
                                 yscrollcommand=self.v_scroll.set)
         self.canvas.pack(side="left", fill="both", expand=True)
