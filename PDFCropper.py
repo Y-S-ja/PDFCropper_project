@@ -81,6 +81,7 @@ class ZoomablePdfCropperApp:
         self.canvas.bind("<Button-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_move)
         self.canvas.bind("<Button-3>", self.on_right_click)
+        self.canvas.bind("<MouseWheel>", self.handle_mouse_wheel)
 
     def update_image_display(self):
         # 原本から現在の倍率でリサイズ
@@ -159,6 +160,39 @@ class ZoomablePdfCropperApp:
             # anchor="se" を指定しているので、(x2, y2)が文字の右下角になります
             self.canvas.coords(current_item["text_id"], x2 - 5, y2 - 5)
     
+    def handle_mouse_wheel(self, event):
+        """
+        Windowsのホイール操作を論理的に分岐させる
+        """
+        # 状態（state）を確認するためのビットフラグ
+        # 0x0004 = Controlキー
+        # 0x0001 = Shiftキー
+        is_ctrl = (event.state & 0x0004) != 0
+        is_shift = (event.state & 0x0001) != 0
+
+        # 方向判定（event.deltaが正なら上/奥、負なら下/手前）
+        # Windowsでは120の倍数が入るため、120で割って 1 or -1 に変換
+        delta = event.delta // 120
+
+        if is_ctrl:
+            # 【A】拡大縮小 (ピンチ操作もここに含まれる)
+            pass
+        elif is_shift:
+            # 【B】左右スクロール
+            self.scroll_x(delta)
+        else:
+            # 【C】上下スクロール
+            self.scroll_y(delta)
+
+    def scroll_x(self, delta):
+        """左右にスクロール（Shift + Wheel）"""
+        # deltaが正（奥へ回す）のとき、画面を左へ（コンテンツを右へ）動かす
+        self.canvas.xview_scroll(-1 * delta, "units")
+
+    def scroll_y(self, delta):
+        """上下にスクロール（Wheelのみ）"""
+        self.canvas.yview_scroll(-1 * delta, "units")
+
     # 右クリックで個別削除
     def on_right_click(self, event):
         # スクロール対応座標
