@@ -193,13 +193,13 @@ class ZoomablePdfCropperApp:
             self.canvas.itemconfig(area['text_id'], text=str(i + 1))
 
     def clear_rects(self):
-        for item in self.rects + self.texts:
-            self.canvas.delete(item)
-        self.rects = []
-        self.texts = []
+        for item in self.crop_areas:
+            self.canvas.delete(item['rect_id'])
+            self.canvas.delete(item['text_id'])
+        self.crop_areas = []
 
     def save_all_clips(self):
-        if not self.rects:
+        if not self.crop_areas:
             messagebox.showwarning("枠を1つ以上描いてください")
             return
 
