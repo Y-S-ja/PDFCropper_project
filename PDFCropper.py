@@ -4,7 +4,7 @@ from PIL import Image, ImageTk
 import fitz
 from pypdf import PdfReader, PdfWriter
 import ctypes
-# 偏光１
+
 # DPI設定（クッキリ）
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
