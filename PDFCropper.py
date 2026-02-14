@@ -224,8 +224,8 @@ class ZoomablePdfCropperApp:
         writer = PdfWriter()
 
         for page_in in reader.pages:
-            for r_id in self.rects:
-                coords = self.canvas.coords(r_id)
+            for area in self.crop_areas:
+                coords = self.canvas.coords(area['rect_id'])
                 px1 = min(coords[0], coords[2]) * scale_x
                 px2 = max(coords[0], coords[2]) * scale_x
                 # Y軸反転
