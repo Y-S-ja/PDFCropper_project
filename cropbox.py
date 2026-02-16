@@ -10,10 +10,11 @@ from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 # --- 1. スマートな枠（アイテム）クラス ---
 class myCropBox(QGraphicsRectItem):
     HANDLE_SIZE = 10.0  # ハンドルのサイズ
-    HANDLE_TOP_LEFT = 1
-    HANDLE_TOP_RIGHT = 2
-    HANDLE_BOTTOM_LEFT = 3
-    HANDLE_BOTTOM_RIGHT = 4
+    # ハンドル定数をビットフラグに変更 (1枚目: 0=Left, 1=Right / 2枚目: 0=Top, 2=Bottom)
+    HANDLE_TOP_LEFT = 0     # 00
+    HANDLE_TOP_RIGHT = 1    # 01
+    HANDLE_BOTTOM_LEFT = 2  # 10
+    HANDLE_BOTTOM_RIGHT = 3 # 11
 
     def __init__(self, rect):
         super().__init__(rect)
@@ -117,7 +118,7 @@ class myCropBox(QGraphicsRectItem):
     def mousePressEvent(self, event):
         # クリックした場所が「ハンドル」の上なら変形モードへ
         handle = self.get_handle_at(event.pos())
-        if handle:
+        if handle is not None:
             self.active_handle = handle
             # self.is_resizing = True
             event.accept()
@@ -127,41 +128,21 @@ class myCropBox(QGraphicsRectItem):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self.active_handle:
+        if self.active_handle is not None:
             self.prepareGeometryChange()
             rect = self.rect()
             pos = event.pos()
             
-            # 現在のハンドルに合わせて頂点を動かす
-            if self.active_handle == self.HANDLE_TOP_LEFT:
-                rect.setTopLeft(pos)
-            elif self.active_handle == self.HANDLE_TOP_RIGHT:
-                rect.setTopRight(pos)
-            elif self.active_handle == self.HANDLE_BOTTOM_LEFT:
-                rect.setBottomLeft(pos)
-            elif self.active_handle == self.HANDLE_BOTTOM_RIGHT:
-                rect.setBottomRight(pos)
-
-            # --- 0をまたいだ時のハンドル入れ替えロジック ---
-            # 左右が逆転した場合
-            if rect.width() < 0:
-                swap_map = {
-                    self.HANDLE_TOP_LEFT: self.HANDLE_TOP_RIGHT,
-                    self.HANDLE_TOP_RIGHT: self.HANDLE_TOP_LEFT,
-                    self.HANDLE_BOTTOM_LEFT: self.HANDLE_BOTTOM_RIGHT,
-                    self.HANDLE_BOTTOM_RIGHT: self.HANDLE_BOTTOM_LEFT
-                }
-                self.active_handle = swap_map.get(self.active_handle, self.active_handle)
+            # ビットフラグを使って頂点を更新 (1bit目が1ならRight, 2bit目が1ならBottom)
+            if self.active_handle & 1: rect.setRight(pos.x())
+            else: rect.setLeft(pos.x())
             
-            # 上下が逆転した場合
-            if rect.height() < 0:
-                swap_map = {
-                    self.HANDLE_TOP_LEFT: self.HANDLE_BOTTOM_LEFT,
-                    self.HANDLE_BOTTOM_LEFT: self.HANDLE_TOP_LEFT,
-                    self.HANDLE_TOP_RIGHT: self.HANDLE_BOTTOM_RIGHT,
-                    self.HANDLE_BOTTOM_RIGHT: self.HANDLE_TOP_RIGHT
-                }
-                self.active_handle = swap_map.get(self.active_handle, self.active_handle)
+            if self.active_handle & 2: rect.setBottom(pos.y())
+            else: rect.setTop(pos.y())
+
+            # --- 0をまたいだ時の反転ロジック (XORでビットを反転させるだけ) ---
+            if rect.width() < 0:  self.active_handle ^= 1 # 左右反転
+            if rect.height() < 0: self.active_handle ^= 2 # 上下反転
 
             # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
             self.setRect(rect.normalized())
