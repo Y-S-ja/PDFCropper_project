@@ -168,7 +168,7 @@ class PdfGraphicsView(QGraphicsView):
             self.scene.addItem(self.current_rect)
             
             # ドラッグモードを一時オフ（範囲選択と干渉しないように）
-            self.setDragMode(QGraphicsView.NoDrag)
+            # self.setDragMode(QGraphicsView.NoDrag)
         else:
             super().mousePressEvent(event)
 
@@ -223,7 +223,7 @@ class PdfGraphicsView(QGraphicsView):
             
             self.start_pos = None
             self.current_rect = None
-            self.setDragMode(QGraphicsView.NoDrag) # 手の形に戻さない
+            # self.setDragMode(QGraphicsView.NoDrag) # 手の形に戻さない
         self.update_scene_limit()
         super().mouseReleaseEvent(event)
 
