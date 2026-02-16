@@ -93,7 +93,10 @@ class myCropBox(QGraphicsRectItem):
         
         # 選択されている時だけハンドルを描画
         if self.isSelected():
-            painter.setPen(QPen(QColor(0, 120, 215), 1))
+            # ハンドルもズームで太さが変わらないようにする
+            h_pen = QPen(QColor(0, 120, 215), 3)
+            h_pen.setCosmetic(True)
+            painter.setPen(h_pen)
             painter.setBrush(Qt.white)
             # 各ハンドルの矩形を描画
             for h_rect in self.get_handle_rects().values():

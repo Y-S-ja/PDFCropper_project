@@ -203,7 +203,9 @@ class PdfGraphicsView(QGraphicsView):
                 self.scene.removeItem(self.new_rect)
             else:
                 # 確定したらリストに入れて、色は青に変える
-                self.new_rect.setPen(QPen(QColor(0, 120, 215), 2))
+                pen = QPen(QColor(0, 120, 215), 3)
+                pen.setCosmetic(True) # ズームしても太さが変わらない設定
+                self.new_rect.setPen(pen)
                 self.new_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
                 
                 # 識別タグを追加（削除時にこれを目印にする）
