@@ -120,10 +120,30 @@ class myCropBox(QGraphicsRectItem):
             elif self.active_handle == self.HANDLE_BOTTOM_RIGHT:
                 rect.setBottomRight(pos)
 
-            # 0を跨いでも図形が壊れないように「正規化」する
-            # ただし単純にnormalized()するとハンドルが入れ替わるので注意が必要ですが、
-            # 直感的な操作のためにここではセットします
-            self.setRect(rect)
+            # --- 0をまたいだ時のハンドル入れ替えロジック ---
+            # 左右が逆転した場合
+            if rect.width() < 0:
+                swap_map = {
+                    self.HANDLE_TOP_LEFT: self.HANDLE_TOP_RIGHT,
+                    self.HANDLE_TOP_RIGHT: self.HANDLE_TOP_LEFT,
+                    self.HANDLE_BOTTOM_LEFT: self.HANDLE_BOTTOM_RIGHT,
+                    self.HANDLE_BOTTOM_RIGHT: self.HANDLE_BOTTOM_LEFT
+                }
+                self.active_handle = swap_map.get(self.active_handle, self.active_handle)
+            
+            # 上下が逆転した場合
+            if rect.height() < 0:
+                swap_map = {
+                    self.HANDLE_TOP_LEFT: self.HANDLE_BOTTOM_LEFT,
+                    self.HANDLE_BOTTOM_LEFT: self.HANDLE_TOP_LEFT,
+                    self.HANDLE_TOP_RIGHT: self.HANDLE_BOTTOM_RIGHT,
+                    self.HANDLE_BOTTOM_RIGHT: self.HANDLE_TOP_RIGHT
+                }
+                self.active_handle = swap_map.get(self.active_handle, self.active_handle)
+
+            # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
+            self.setRect(rect.normalized())
+            
             # 変形中もキャンバスを広げる
             if self.scene() and self.scene().views():
                 self.scene().views()[0].update_scene_limit()
