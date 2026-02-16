@@ -166,9 +166,6 @@ class PdfGraphicsView(QGraphicsView):
             # 枠を作成してシーンに追加
             self.current_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
             self.scene.addItem(self.current_rect)
-            
-            # ドラッグモードを一時オフ（範囲選択と干渉しないように）
-            # self.setDragMode(QGraphicsView.NoDrag)
         else:
             super().mousePressEvent(event)
 
@@ -218,12 +215,10 @@ class PdfGraphicsView(QGraphicsView):
                 # 中央寄せの簡易計算
                 self.centerBadge(text)
                 
-                # 枠オブジェクトそのものをリストに保存
                 self.rects.append(self.current_rect)
             
             self.start_pos = None
             self.current_rect = None
-            # self.setDragMode(QGraphicsView.NoDrag) # 手の形に戻さない
         self.update_scene_limit()
         super().mouseReleaseEvent(event)
 
