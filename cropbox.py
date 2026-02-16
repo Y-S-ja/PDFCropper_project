@@ -95,7 +95,6 @@ class myCropBox(QGraphicsRectItem):
             for h_rect in self.get_handle_rects().values():
                 painter.drawRect(h_rect)
 
-    # --- 修正2: 4隅すべてのハンドルを判定する ---
     def get_handle_at(self, pos):
         """指定された座標にあるハンドルのIDを返す"""
         for handle_id, rect in self.get_handle_rects().items():
