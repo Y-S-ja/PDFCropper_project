@@ -41,15 +41,19 @@ class myCropBox(QGraphicsRectItem):
     #                     view.update_scene_limit(force_physical=False)
     #     return super().itemChange(change, value)
     
-    def boundingRect(self):
-        # ハンドルが外側にはみ出すため、その分だけ領域を広げて報告する
-        margin = self.HANDLE_SIZE
-        return self.rect().adjusted(-margin, -margin, margin, margin)
+    def get_current_scale(self):
+        """現在のビューのズーム倍率を取得する"""
+        if self.scene() and self.scene().views():
+            # 最初のビューの現在のスケーリング（m11）を返す
+            return self.scene().views()[0].transform().m11()
+        return 1.0
 
     def get_handle_rects(self):
-        """全てのハンドルの現在の矩形座標を辞書で返す"""
+        """全てのハンドルの現在の矩形座標を辞書で返す（ズームに応じてサイズを補正）"""
         r = self.rect()
-        s = self.HANDLE_SIZE
+        scale = self.get_current_scale()
+        # 画面上で常に一定のサイズ（HANDLE_SIZE）に見えるように逆算する
+        s = self.HANDLE_SIZE / scale
         s2 = s / 2
         return {
             self.HANDLE_TOP_LEFT: QRectF(r.left()-s2, r.top()-s2, s, s),
@@ -57,6 +61,13 @@ class myCropBox(QGraphicsRectItem):
             self.HANDLE_BOTTOM_LEFT: QRectF(r.left()-s2, r.bottom()-s2, s, s),
             self.HANDLE_BOTTOM_RIGHT: QRectF(r.right()-s2, r.bottom()-s2, s, s),
         }
+
+    def boundingRect(self):
+        # ハンドルの中心が頂点にあるため、実際にはみ出すのはサイズの半分。
+        # 余計な「空き地」を作らないよう、正確なマージンを設定する。
+        scale = self.get_current_scale()
+        margin = (self.HANDLE_SIZE / scale) / 2
+        return self.rect().adjusted(-margin, -margin, margin, margin)
 
     def shape(self):
         """正確な当たり判定の形を定義。
