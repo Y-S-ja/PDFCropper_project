@@ -162,7 +162,8 @@ class PdfGraphicsView(QGraphicsView):
         if event.button() == Qt.LeftButton:
             item = self.itemAt(event.position().toPoint())
             self.start_pos = self.mapToScene(event.position().toPoint())
-            
+            while item and not isinstance(item, myCropBox):
+                item = item.parentItem()
             if item and isinstance(item, myCropBox):
                 # 枠をクリックしたなら、移動または変形
                 self.current_rect = None
