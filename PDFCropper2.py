@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
-import cropbox
+from ignore.cropbox import *
 
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
@@ -164,9 +164,7 @@ class PdfGraphicsView(QGraphicsView):
             self.start_pos = self.mapToScene(event.position().toPoint())
             
             # 枠を作成してシーンに追加
-            self.current_rect = QGraphicsRectItem()
-            self.current_rect.setPen(QPen(QColor(0, 120, 215), 2, Qt.DashLine))
-            self.current_rect.setBrush(QBrush(QColor(0, 120, 215, 20)))
+            self.current_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
             self.scene.addItem(self.current_rect)
             
             # ドラッグモードを一時オフ（範囲選択と干渉しないように）
