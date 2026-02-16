@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
                              QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel)
 from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve
-from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
+from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 
 # --- 1. スマートな枠（アイテム）クラス ---
 class myCropBox(QGraphicsRectItem):
@@ -61,7 +61,6 @@ class myCropBox(QGraphicsRectItem):
     def shape(self):
         """正確な当たり判定の形を定義。
         中央の矩形 ＋ 各ハンドルの矩形のみを統合して正確な形状を作る。"""
-        from PySide6.QtGui import QPainterPath
         path = QPainterPath()
         # 1. メインの矩形部分を追加
         path.addRect(self.rect())
