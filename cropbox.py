@@ -74,6 +74,9 @@ class myCropBox(QGraphicsRectItem):
         """正確な当たり判定の形を定義。
         中央の矩形 ＋ 各ハンドルの矩形のみを統合して正確な形状を作る。"""
         path = QPainterPath()
+        # 重なり部分が「穴あき」にならないようにルールを変更
+        path.setFillRule(Qt.WindingFill)
+        
         # 1. メインの矩形部分を追加
         path.addRect(self.rect())
         # 2. 選択中なら、各ハンドルの矩形部分だけをピンポイントで追加
