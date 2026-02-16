@@ -107,9 +107,9 @@ class myCropBox(QGraphicsRectItem):
         # マウスが四隅の近くにあるかチェックしてカーソルを変える
         handle_id = self.get_handle_at(event.pos())
         if handle_id:
-            if handle_id==1 or handle_id==4:
+            if handle_id==0 or handle_id==3:
                 self.setCursor(Qt.SizeFDiagCursor)
-            if handle_id==2 or handle_id==3:
+            if handle_id==1 or handle_id==2:
                 self.setCursor(Qt.SizeBDiagCursor)
         else:
             self.setCursor(Qt.SizeAllCursor)
