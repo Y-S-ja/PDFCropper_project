@@ -134,15 +134,19 @@ class myCropBox(QGraphicsRectItem):
             pos = event.pos()
             
             # ビットフラグを使って頂点を更新 (1bit目が1ならRight, 2bit目が1ならBottom)
+            # self.active_handleが01, 11なら条件式は01を返す
+            # self.active_handleが00, 10なら条件式は00を返す
             if self.active_handle & 1: rect.setRight(pos.x())
             else: rect.setLeft(pos.x())
             
+            # self.active_handleが10, 11なら条件式は10を返す
+            # self.active_handleが00, 01なら条件式は00を返す
             if self.active_handle & 2: rect.setBottom(pos.y())
             else: rect.setTop(pos.y())
 
             # --- 0をまたいだ時の反転ロジック (XORでビットを反転させるだけ) ---
-            if rect.width() < 0:  self.active_handle ^= 1 # 左右反転
-            if rect.height() < 0: self.active_handle ^= 2 # 上下反転
+            if rect.width() < 0:  self.active_handle ^= 1 # 左右反転、1ビット目を反転させる
+            if rect.height() < 0: self.active_handle ^= 2 # 上下反転、2ビット目を反転させる
 
             # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
             self.setRect(rect.normalized())
