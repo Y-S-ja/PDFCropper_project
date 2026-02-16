@@ -45,11 +45,12 @@ class PdfGraphicsView(QGraphicsView):
         # print("update_scene_limit")
         items_rect = self.scene.itemsBoundingRect()
         if items_rect.isNull():
+            # print("line 48, items_rect is null")
             self.canvas_rect = QRectF(0, 0, 800, 600)
         else:
             margin = 500
             self.canvas_rect = items_rect.adjusted(-margin, -margin, margin, margin)
-            # print("adjusted")
+            # print("line 53, adjusted")
         self.scene.setSceneRect(self.canvas_rect)
     
     def drawForeground(self, painter, rect):
