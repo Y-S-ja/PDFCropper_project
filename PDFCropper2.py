@@ -69,6 +69,8 @@ class PdfGraphicsView(QGraphicsView):
         font = text.font()
         font.setPointSize(18)
         text.setFont(font)
+        # 案内テキストであることを識別するためのタグを付ける
+        text.setData(0, "intro_text")
         
         # 中央寄せ
         r = text.boundingRect()
@@ -142,36 +144,54 @@ class PdfGraphicsView(QGraphicsView):
         else:
             super().wheelEvent(event)
 
-    # --- 範囲選択のロジック ---
     def mousePressEvent(self, event):
-        # 右クリックなら削除判定
+        item = self.itemAt(event.position().toPoint())
+        
+        # --- 判定フェーズ：クリックされたものが何かを特定する ---
+        target_cropbox = None
+        is_intro_text = False
+        
+        temp = item
+        while temp:
+            if isinstance(temp, myCropBox):
+                target_cropbox = temp
+                break
+            if temp.data(0) == "intro_text":
+                is_intro_text = True
+                break
+            temp = temp.parentItem()
+        
+        # --- 右クリック：削除 ---
         if event.button() == Qt.RightButton:
-            item = self.itemAt(event.position().toPoint())
-            if item:
-                # バッジやテキストをクリックした可能性も考慮して親を辿る
-                target = item
-                while target and target.data(0) != "selection_rect":
-                    target = target.parentItem()
-                
-                if target in self.rects:
-                    self.rects.remove(target)
-                    self.scene.removeItem(target)
-                    self.update_numbers() # 番号を詰め直す
-                    return # イベント終了
-        # 左クリックなら
-        if event.button() == Qt.LeftButton:
-            item = self.itemAt(event.position().toPoint())
+            if target_cropbox and target_cropbox in self.rects:
+                print("Right-clicked: CropBox (Deleting)")
+                self.rects.remove(target_cropbox)
+                self.scene.removeItem(target_cropbox)
+                self.update_numbers()
+                return
+            elif is_intro_text:
+                print("Right-clicked: Intro Text (Ignoring)")
+            else:
+                print(f"Right-clicked: Background (item={item})")
+            super().mousePressEvent(event)
+
+        # --- 左クリック：操作 or 新規作成 ---
+        elif event.button() == Qt.LeftButton:
             self.start_pos = self.mapToScene(event.position().toPoint())
-            while item and not isinstance(item, myCropBox):
-                item = item.parentItem()
-            if item and isinstance(item, myCropBox):
-                # 枠をクリックしたなら、移動または変形
+            
+            if target_cropbox:
+                print("Left-clicked: CropBox (Resizing/Moving)")
                 self.new_rect = None
                 super().mousePressEvent(event)
+            elif is_intro_text:
+                print("Left-clicked: Intro Text (Ignoring)")
+                # ここで案内テキストを消したい場合は self.scene.removeItem(item) などをする
             else:
-                # 枠以外なら、枠を作成してシーンに追加
+                # 何もない場所なら新規作成
+                print(f"Left-clicked: Background (Creating new box, item={item})")
                 self.new_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
                 self.scene.addItem(self.new_rect)
+        
         else:
             super().mousePressEvent(event)
 
