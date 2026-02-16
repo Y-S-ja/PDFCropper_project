@@ -160,12 +160,14 @@ class PdfGraphicsView(QGraphicsView):
                     return # イベント終了
         
         if event.button() == Qt.LeftButton:
-            # シーン上の座標（画像上の絶対位置）を取得
+            item = self.itemAt(event.position().toPoint())
             self.start_pos = self.mapToScene(event.position().toPoint())
-            
-            # 枠を作成してシーンに追加
-            self.current_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
-            self.scene.addItem(self.current_rect)
+            if item and isinstance(item, myCropBox):
+                super().mousePressEvent(event)
+            else:
+                # 枠を作成してシーンに追加
+                self.current_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
+                self.scene.addItem(self.current_rect)
         else:
             super().mousePressEvent(event)
 
@@ -177,7 +179,8 @@ class PdfGraphicsView(QGraphicsView):
             # 四角形の形を更新
             rect = QRectF(self.start_pos, current_pos).normalized()
             self.current_rect.setRect(rect)
-        super().mouseMoveEvent(event)
+        else:
+            super().mouseMoveEvent(event)
     
     # 中央寄せの簡易計算
     def centerBadge(self, text):
