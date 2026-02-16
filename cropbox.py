@@ -89,7 +89,7 @@ class myCropBox(QGraphicsRectItem):
             if handle_id==2 or handle_id==3:
                 self.setCursor(Qt.SizeBDiagCursor)
         else:
-            self.setCursor(Qt.ArrowCursor)
+            self.setCursor(Qt.SizeAllCursor)
         super().hoverMoveEvent(event)
 
     def mousePressEvent(self, event):
