@@ -28,7 +28,7 @@ class myCropBox(QGraphicsRectItem):
         )
         # マウスの動きを監視する設定（カーソル変更のため）
         self.setAcceptHoverEvents(True)
-        self.is_resizing = False
+        # self.is_resizing = False
         self.active_handle = None
     
     def itemChange(self, change, value):
@@ -131,7 +131,7 @@ class myCropBox(QGraphicsRectItem):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        self.is_resizing = False
+        # self.is_resizing = False
         # 最後に形を整える（幅や高さがマイナスの状態を直す）
         self.setRect(self.rect().normalized())
         super().mouseReleaseEvent(event)
