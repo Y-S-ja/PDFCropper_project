@@ -47,7 +47,7 @@ class PdfGraphicsView(QGraphicsView):
         if items_rect.isNull():
             self.canvas_rect = QRectF(0, 0, 800, 600)
         else:
-            margin = 1000
+            margin = 500
             self.canvas_rect = items_rect.adjusted(-margin, -margin, margin, margin)
             # print("adjusted")
         self.scene.setSceneRect(self.canvas_rect)
