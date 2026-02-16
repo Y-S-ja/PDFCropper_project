@@ -145,8 +145,10 @@ class myCropBox(QGraphicsRectItem):
             self.setRect(rect.normalized())
             
             # 変形中もキャンバスを広げる
-            if self.scene() and self.scene().views():
-                self.scene().views()[0].update_scene_limit()
+            # if self.scene() and self.scene().views():
+            #     for view in self.scene().views():
+            #         if hasattr(view, "update_scene_limit"):
+            #             view.update_scene_limit(force_physical=False)
         else:
             super().mouseMoveEvent(event)
 
