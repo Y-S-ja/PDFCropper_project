@@ -46,6 +46,31 @@ class myCropBox(QGraphicsRectItem):
         margin = self.HANDLE_SIZE
         return self.rect().adjusted(-margin, -margin, margin, margin)
 
+    def get_handle_rects(self):
+        """全てのハンドルの現在の矩形座標を辞書で返す"""
+        r = self.rect()
+        s = self.HANDLE_SIZE
+        s2 = s / 2
+        return {
+            self.HANDLE_TOP_LEFT: QRectF(r.left()-s2, r.top()-s2, s, s),
+            self.HANDLE_TOP_RIGHT: QRectF(r.right()-s2, r.top()-s2, s, s),
+            self.HANDLE_BOTTOM_LEFT: QRectF(r.left()-s2, r.bottom()-s2, s, s),
+            self.HANDLE_BOTTOM_RIGHT: QRectF(r.right()-s2, r.bottom()-s2, s, s),
+        }
+
+    def shape(self):
+        """正確な当たり判定の形を定義。
+        中央の矩形 ＋ 各ハンドルの矩形のみを統合して正確な形状を作る。"""
+        from PySide6.QtGui import QPainterPath
+        path = QPainterPath()
+        # 1. メインの矩形部分を追加
+        path.addRect(self.rect())
+        # 2. 選択中なら、各ハンドルの矩形部分だけをピンポイントで追加
+        if self.isSelected():
+            for h_rect in self.get_handle_rects().values():
+                path.addRect(h_rect)
+        return path
+
     def paint(self, painter, option, widget):
         # 標準の四角を描画
         # super().paint(painter, option, widget)
@@ -58,24 +83,14 @@ class myCropBox(QGraphicsRectItem):
         if self.isSelected():
             painter.setPen(QPen(QColor(0, 120, 215), 1))
             painter.setBrush(Qt.white)
-            r = self.rect()
-            # 四隅にハンドルを描く
-            for pt in [r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight()]:
-                painter.drawRect(QRectF(pt.x() - self.HANDLE_SIZE/2, 
-                                        pt.y() - self.HANDLE_SIZE/2, 
-                                        self.HANDLE_SIZE, self.HANDLE_SIZE))
+            # 各ハンドルの矩形を描画
+            for h_rect in self.get_handle_rects().values():
+                painter.drawRect(h_rect)
 
     # --- 修正2: 4隅すべてのハンドルを判定する ---
     def get_handle_at(self, pos):
-        r = self.rect()
-        s = self.HANDLE_SIZE
-        handles = {
-            self.HANDLE_TOP_LEFT: QRectF(r.topLeft().x()-s, r.top()-s, s*2, s*2),
-            self.HANDLE_TOP_RIGHT: QRectF(r.right()-s, r.top()-s, s*2, s*2),
-            self.HANDLE_BOTTOM_LEFT: QRectF(r.left()-s, r.bottom()-s, s*2, s*2),
-            self.HANDLE_BOTTOM_RIGHT: QRectF(r.right()-s, r.bottom()-s, s*2, s*2),
-        }
-        for handle_id, rect in handles.items():
+        """指定された座標にあるハンドルのIDを返す"""
+        for handle_id, rect in self.get_handle_rects().items():
             if rect.contains(pos):
                 return handle_id
         return None
