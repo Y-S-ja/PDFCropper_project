@@ -29,7 +29,7 @@ class PdfGraphicsView(QGraphicsView):
         self.viewport().setCursor(Qt.CrossCursor)
         
         self.pdf_item = None      # PDF画像
-        self.current_rect = None  # ドラッグ中の枠
+        self.new_rect = None  # ドラッグ中の枠
         self.rects = []           # 確定した枠（QGraphicsRectItem）のリスト
         self.start_pos = None
 
@@ -166,24 +166,24 @@ class PdfGraphicsView(QGraphicsView):
                 item = item.parentItem()
             if item and isinstance(item, myCropBox):
                 # 枠をクリックしたなら、移動または変形
-                self.current_rect = None
+                self.new_rect = None
                 super().mousePressEvent(event)
             else:
                 # 枠以外なら、枠を作成してシーンに追加
-                self.current_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
-                self.scene.addItem(self.current_rect)
+                self.new_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
+                self.scene.addItem(self.new_rect)
         else:
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self.start_pos and self.current_rect:
+        if self.start_pos and self.new_rect:
             # 新規枠作成
             # 現在のマウス位置（シーン座標）
             current_pos = self.mapToScene(event.position().toPoint())
             
             # 四角形の形を更新
             rect = QRectF(self.start_pos, current_pos).normalized()
-            self.current_rect.setRect(rect)
+            self.new_rect.setRect(rect)
         else:
             # 移動と変形
             super().mouseMoveEvent(event)
@@ -194,26 +194,26 @@ class PdfGraphicsView(QGraphicsView):
         text.setPos((self.badge_size - brect.width())/2, (self.badge_size - brect.height())/2)
 
     def mouseReleaseEvent(self, event):
-        if self.start_pos and self.current_rect:
+        if self.start_pos and self.new_rect:
             # 新規枠作成
-            rect = self.current_rect.rect()
+            rect = self.new_rect.rect()
             
             # 【重要】小さすぎる枠（クリックミス等）は無視して削除する
             if rect.width() < 5 or rect.height() < 5:
-                self.scene.removeItem(self.current_rect)
+                self.scene.removeItem(self.new_rect)
             else:
                 # 確定したらリストに入れて、色は青に変える
-                self.current_rect.setPen(QPen(QColor(0, 120, 215), 2))
-                self.current_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
+                self.new_rect.setPen(QPen(QColor(0, 120, 215), 2))
+                self.new_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
                 
                 # 識別タグを追加（削除時にこれを目印にする）
-                self.current_rect.setData(0, "selection_rect")
+                self.new_rect.setData(0, "selection_rect")
                 
                 # --- 番号表示 ---
                 index = len(self.rects) + 1
                 
-                # 親を current_rect にすることで、枠と一緒に移動・削除される
-                badge = QGraphicsRectItem(0, 0, self.badge_size, self.badge_size, parent=self.current_rect)
+                # 親を new_rect にすることで、枠と一緒に移動・削除される
+                badge = QGraphicsRectItem(0, 0, self.badge_size, self.badge_size, parent=self.new_rect)
                 badge.setBrush(QBrush(QColor(0, 120, 215)))
                 badge.setPen(Qt.NoPen)
                 badge.setPos(rect.topLeft())
@@ -225,10 +225,10 @@ class PdfGraphicsView(QGraphicsView):
                 # 中央寄せの簡易計算
                 self.centerBadge(text)
                 
-                self.rects.append(self.current_rect)
+                self.rects.append(self.new_rect)
             
             self.start_pos = None
-            self.current_rect = None
+            self.new_rect = None
         self.update_scene_limit()
         super().mouseReleaseEvent(event)
 
@@ -252,7 +252,7 @@ class PdfGraphicsView(QGraphicsView):
                 self.scene.removeItem(item)
         # データリストもクリア
         self.rects = []
-        self.current_rect = None
+        self.new_rect = None
 
 class MainWindow(QMainWindow):
     def __init__(self):
