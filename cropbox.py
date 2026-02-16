@@ -31,15 +31,15 @@ class myCropBox(QGraphicsRectItem):
         # self.is_resizing = False
         self.active_handle = None
     
-    def itemChange(self, change, value):
-        # 位置が変わった時に通知する設定がされている場合
-        if change == QGraphicsRectItem.ItemPositionHasChanged:
-            # アイテムが動いたら「見た目のキャンバス範囲」を広げる（物理的な壁はまだ動かさない）
-            if self.scene() and self.scene().views():
-                for view in self.scene().views():
-                    if hasattr(view, "update_scene_limit"):
-                        view.update_scene_limit(force_physical=False)
-        return super().itemChange(change, value)
+    # def itemChange(self, change, value):
+    #     # 位置が変わった時に通知する設定がされている場合
+    #     if change == QGraphicsRectItem.ItemPositionHasChanged:
+    #         # アイテムが動いたら「見た目のキャンバス範囲」を広げる（物理的な壁はまだ動かさない）
+    #         if self.scene() and self.scene().views():
+    #             for view in self.scene().views():
+    #                 if hasattr(view, "update_scene_limit"):
+    #                     view.update_scene_limit(force_physical=False)
+    #     return super().itemChange(change, value)
     
     def boundingRect(self):
         # 本来の四角形よりハンドルの半分サイズ分だけ外側まで「自分の領域」とする

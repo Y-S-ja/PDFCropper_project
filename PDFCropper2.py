@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
-from ignore.cropbox import *
+from cropbox import *
 
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
@@ -42,14 +42,14 @@ class PdfGraphicsView(QGraphicsView):
 
     def update_scene_limit(self):
         """キャンバス領域を更新。force_physical=Trueの場合のみ、物理的な座標壁(sceneRect)を書き換える"""
-        print("update_scene_limit")
+        # print("update_scene_limit")
         items_rect = self.scene.itemsBoundingRect()
         if items_rect.isNull():
             self.canvas_rect = QRectF(0, 0, 800, 600)
         else:
             margin = 1000
             self.canvas_rect = items_rect.adjusted(-margin, -margin, margin, margin)
-            print("adjusted")
+            # print("adjusted")
         self.scene.setSceneRect(self.canvas_rect)
     
     def drawForeground(self, painter, rect):
@@ -158,14 +158,17 @@ class PdfGraphicsView(QGraphicsView):
                     self.scene.removeItem(target)
                     self.update_numbers() # 番号を詰め直す
                     return # イベント終了
-        
+        # 左クリックなら
         if event.button() == Qt.LeftButton:
             item = self.itemAt(event.position().toPoint())
             self.start_pos = self.mapToScene(event.position().toPoint())
+            
             if item and isinstance(item, myCropBox):
+                # 枠をクリックしたなら、移動または変形
+                self.current_rect = None
                 super().mousePressEvent(event)
             else:
-                # 枠を作成してシーンに追加
+                # 枠以外なら、枠を作成してシーンに追加
                 self.current_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
                 self.scene.addItem(self.current_rect)
         else:
@@ -173,6 +176,7 @@ class PdfGraphicsView(QGraphicsView):
 
     def mouseMoveEvent(self, event):
         if self.start_pos and self.current_rect:
+            # 新規枠作成
             # 現在のマウス位置（シーン座標）
             current_pos = self.mapToScene(event.position().toPoint())
             
@@ -180,6 +184,7 @@ class PdfGraphicsView(QGraphicsView):
             rect = QRectF(self.start_pos, current_pos).normalized()
             self.current_rect.setRect(rect)
         else:
+            # 移動と変形
             super().mouseMoveEvent(event)
     
     # 中央寄せの簡易計算
@@ -189,6 +194,7 @@ class PdfGraphicsView(QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         if self.start_pos and self.current_rect:
+            # 新規枠作成
             rect = self.current_rect.rect()
             
             # 【重要】小さすぎる枠（クリックミス等）は無視して削除する
