@@ -77,6 +77,8 @@ class PdfGraphicsView(QGraphicsView):
         r = text.boundingRect()
         text.setPos((self.canvas_rect.width() - r.width())/2, (self.canvas_rect.height() - r.height())/2)
 
+        self.update_scene_limit()
+
     def load_pdf_page(self, file_path):
         if not os.path.exists(file_path):
             print(f"❌ ファイルが見つかりません: {file_path}")
@@ -134,6 +136,7 @@ class PdfGraphicsView(QGraphicsView):
     #     # [追加] 出ていく時も親クラスに教えてあげる
     #     super().dragLeaveEvent(event)
 
+    # 拡大縮小の倍率の限度を設定
     def wheelEvent(self, event):
         if event.modifiers() == Qt.ControlModifier:
             # 4. 【ズーム機能】たったこれだけ！
