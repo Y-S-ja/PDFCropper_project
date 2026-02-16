@@ -106,11 +106,11 @@ class myCropBox(QGraphicsRectItem):
 
     def mouseMoveEvent(self, event):
         if self.active_handle:
-            # 描画更新を予約（残像防止に念押し）
             self.prepareGeometryChange()
-            # 変形ロジック（右下を動かす例：シンプルにするため）
             rect = self.rect()
             pos = event.pos()
+            
+            # 現在のハンドルに合わせて頂点を動かす
             if self.active_handle == self.HANDLE_TOP_LEFT:
                 rect.setTopLeft(pos)
             elif self.active_handle == self.HANDLE_TOP_RIGHT:
