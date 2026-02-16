@@ -42,7 +42,7 @@ class myCropBox(QGraphicsRectItem):
     #     return super().itemChange(change, value)
     
     def boundingRect(self):
-        # 本来の四角形よりハンドルの半分サイズ分だけ外側まで「自分の領域」とする
+        # ハンドルが外側にはみ出すため、その分だけ領域を広げて報告する
         margin = self.HANDLE_SIZE
         return self.rect().adjusted(-margin, -margin, margin, margin)
 
@@ -72,8 +72,6 @@ class myCropBox(QGraphicsRectItem):
         return path
 
     def paint(self, painter, option, widget):
-        # 標準の四角を描画
-        # super().paint(painter, option, widget)
         # 標準の四角を描画
         painter.setPen(self.pen())
         painter.setBrush(self.brush())
