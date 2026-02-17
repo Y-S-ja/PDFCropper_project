@@ -23,6 +23,9 @@ class PdfGraphicsView(QGraphicsView):
         
         # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        # キャンバスが画面より小さい時に中央に寄せる設定
+        self.setAlignment(Qt.AlignCenter)
+        
         # ドラッグでスクロールできるようにする設定をオフ（最初は普通のカーソルにする）
         self.setDragMode(QGraphicsView.NoDrag)
         # ビューポートのカーソルを十字（範囲選択っぽく）または標準に設定
@@ -106,6 +109,8 @@ class PdfGraphicsView(QGraphicsView):
         self.scale(0.4, 0.4)
 
         self.update_scene_limit()
+        # 読み込み直後に、ビューの中心をキャンバスの中央に合わせる
+        self.centerOn(self.scene.itemsBoundingRect().center())
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
