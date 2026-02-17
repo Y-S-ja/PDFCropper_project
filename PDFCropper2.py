@@ -141,14 +141,21 @@ class PdfGraphicsView(QGraphicsView):
     #     # [追加] 出ていく時も親クラスに教えてあげる
     #     super().dragLeaveEvent(event)
 
-    # 拡大縮小の倍率の限度を設定
     def wheelEvent(self, event):
         if event.modifiers() == Qt.ControlModifier:
-            # 4. 【ズーム機能】たったこれだけ！
-            # 画像をリサイズするのではなく、ビューの「倍率」を変える
+            # 現在のズーム倍率を取得 (m11 は X方向のスケール)
+            current_scale = self.transform().m11()
+            
             angle = event.angleDelta().y()
             factor = 1.2 if angle > 0 else 0.8
-            self.scale(factor, factor)
+            
+            # ズーム後の倍率を計算
+            new_scale = current_scale * factor
+            
+            # --- 倍率制限 (0.1倍 〜 2.0倍) ---
+            if 0.1 <= new_scale <= 2.0:
+                self.scale(factor, factor)
+            
             event.accept()
         else:
             super().wheelEvent(event)
