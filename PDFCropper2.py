@@ -4,7 +4,7 @@ import fitz
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsSimpleTextItem,
-    QGraphicsItem
+    QGraphicsItem, QTabWidget
 )
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
@@ -330,12 +330,9 @@ class MainWindow(QMainWindow):
 
         self.view.fileDropped.connect(self.load_new_pdf) # 追加：Viewへのドロップを接続
 
-        layout = QVBoxLayout()
-        layout.addWidget(self.view)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+        self.tab_widget = QTabWidget()
+        self.tab_widget.addTab(self.view, "PDF View")
+        self.setCentralWidget(self.tab_widget)
 
         self.target_pdf = None
 
