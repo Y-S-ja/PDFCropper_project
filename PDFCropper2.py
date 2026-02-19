@@ -302,6 +302,8 @@ class MainWindow(QMainWindow):
         self.view = PdfGraphicsView()
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
 
+        # カスタムメニューバーを使用
+        # self.setMenuBar(HoverMenuBar(self))
         menu_bar = self.menuBar()
 
         # ファイルメニュー

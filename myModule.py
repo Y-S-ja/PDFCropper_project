@@ -4,9 +4,10 @@ import fitz
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
                              QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel,
-                             QGraphicsSimpleTextItem, QGraphicsItem)
-from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve
+                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu)
+from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
+from PySide6 import QtGui
 
 # --- 1. スマートな枠（アイテム）クラス ---
 class myCropBox(QGraphicsRectItem):
@@ -187,3 +188,60 @@ class myBadge(QGraphicsRectItem):
     def set_number(self, index):
         self.text_item.setText(str(index))
         self.update_text_pos()
+
+class HoverMenuBar(QMenuBar):
+    """ホバーで展開・クローズを制御するカスタムメニューバー"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._is_clicked = False
+        self._active_hover_menu = None
+
+    def addMenu(self, title):
+        menu = super().addMenu(title)
+        # メニュー自体にイベントフィルターを設置して、マウスの出入りを監視する
+        menu.installEventFilter(self)
+        return menu
+
+    def eventFilter(self, obj, event):
+        # QMenu自体へのイベントを監視
+        if isinstance(obj, QMenu):
+            if event.type() == QEvent.Enter:
+                # 既にアクティブなホバーメニューがあれば、まずそちらを扱う（入れ替わり）
+                pass
+            elif event.type() == QEvent.Leave:
+                # マウスがメニューから出た時、クリック状態でなければ閉じる
+                if not self._is_clicked and obj.isVisible():
+                    # マウスの現在の位置がメニューバーの項目上にあるか確認
+                    view_pos = self.mapFromGlobal(QtGui.QCursor.pos())
+                    action = self.actionAt(view_pos)
+                    # もし移動先が別のメニュー項目でないなら、今のを閉じる
+                    if not action or action.menu() != obj:
+                        obj.hide()
+        return super().eventFilter(obj, event)
+
+    def mousePressEvent(self, event):
+        # メニューバーがクリックされたら「クリックモード」をONにする
+        self._is_clicked = True
+        super().mousePressEvent(event)
+
+    def leaveEvent(self, event):
+        # メニュー全体からマウスが離れたら、クリック状態をリセットする
+        # (ただし、メニューが展開されている間は leaveEvent は来ない仕様)
+        super().leaveEvent(event)
+
+    def mouseMoveEvent(self, event):
+        # ホバー中にメニューを展開させる
+        if not self._is_clicked:
+            action = self.actionAt(event.pos())
+            if action and action.menu():
+                if self._active_hover_menu and self._active_hover_menu != action.menu():
+                    self._active_hover_menu.hide()
+                
+                self._active_hover_menu = action.menu()
+                self._active_hover_menu.show()
+        super().mouseMoveEvent(event)
+
+    def hideEvent(self, event):
+        # 何らかの理由でメニューが閉じるとき、クリック状態をリセット
+        self._is_clicked = False
+        super().hideEvent(event)
