@@ -31,17 +31,7 @@ class myCropBox(QGraphicsRectItem):
         self.setAcceptHoverEvents(True)
         # self.is_resizing = False
         self.active_handle = None
-    
-    # def itemChange(self, change, value):
-    #     # 位置が変わった時に通知する設定がされている場合
-    #     if change == QGraphicsRectItem.ItemPositionHasChanged:
-    #         # アイテムが動いたら「見た目のキャンバス範囲」を広げる（物理的な壁はまだ動かさない）
-    #         if self.scene() and self.scene().views():
-    #             for view in self.scene().views():
-    #                 if hasattr(view, "update_scene_limit"):
-    #                     view.update_scene_limit(force_physical=False)
-    #     return super().itemChange(change, value)
-    
+        
     def get_current_scale(self):
         """現在のビューのズーム倍率を取得する"""
         if self.scene() and self.scene().views():
@@ -157,11 +147,6 @@ class myCropBox(QGraphicsRectItem):
             # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
             self.setRect(rect.normalized())
             
-            # 変形中もキャンバスを広げる
-            # if self.scene() and self.scene().views():
-            #     for view in self.scene().views():
-            #         if hasattr(view, "update_scene_limit"):
-            #             view.update_scene_limit(force_physical=False)
         else:
             super().mouseMoveEvent(event)
 
