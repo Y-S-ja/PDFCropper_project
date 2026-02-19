@@ -313,6 +313,10 @@ class MainWindow(QMainWindow):
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
         
+        add_tab_action = file_menu.addAction("タブを追加")
+        add_tab_action.setShortcut("Ctrl+T")
+        add_tab_action.triggered.connect(self.add_new_tab)
+        
         save_action = file_menu.addAction("保存")
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.process_crop)
@@ -335,6 +339,18 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tab_widget)
 
         self.target_pdf = None
+
+    def current_view(self):
+        """現在のアクティブなタブにあるビューを返す"""
+        return self.tab_widget.currentWidget()
+
+    def add_new_tab(self):
+        """新しいタブを追加する"""
+        new_view = PdfGraphicsView()
+        new_view.fileDropped.connect(self.load_new_pdf)
+        index = self.tab_widget.addTab(new_view, f"無題 {self.tab_widget.count() + 1}")
+        self.tab_widget.setCurrentIndex(index)
+        return new_view
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "PDFを開く", "", "PDF Files (*.pdf)")
