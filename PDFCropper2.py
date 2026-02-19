@@ -299,15 +299,29 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("QGraphicsView PDFツール")
         self.resize(1000, 800)
 
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu("ファイル")
-        open_action = file_menu.addAction("PDFを開く")
-        open_action.triggered.connect(self.open_file)
-        save_action = file_menu.addAction("保存")
-        save_action.triggered.connect(self.process_crop)
-
         self.view = PdfGraphicsView()
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
+
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("ファイル")
+        
+        open_action = file_menu.addAction("PDFを開く")
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.open_file)
+        
+        save_action = file_menu.addAction("保存")
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.process_crop)
+
+        file_menu.addSeparator()
+        exit_action = file_menu.addAction("終了")
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+
+        edit_menu = menu_bar.addMenu("編集")
+        clear_action = edit_menu.addAction("選択範囲をクリア")
+        clear_action.setShortcut("Ctrl+Shift+X")
+        clear_action.triggered.connect(self.view.clear_selections)
 
         self.view.fileDropped.connect(self.load_new_pdf) # 追加：Viewへのドロップを接続
 
