@@ -40,6 +40,10 @@ class PdfGraphicsView(QGraphicsView):
         self.badge_size = 24
         self.canvas_rect = QRectF(0, 0, 800, 600)
         self.scene.setSceneRect(self.canvas_rect)
+
+        self.field_rect = QGraphicsRectItem(QRectF(0, 0, 800, 600))
+        self.field_rect.setPos(0, 0)
+        self.scene.addItem(self.field_rect)
         
         # 初期メッセージを表示
         self.show_intro_message()
@@ -71,6 +75,10 @@ class PdfGraphicsView(QGraphicsView):
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(self.canvas_rect)
+    
+    def center_A_on_B(self, A, B):
+        br = A.boundingRect()
+        A.setPos((B.rect().width() - br.width())/2, (B.rect().height() - br.height())/2)
 
     def show_intro_message(self):
         """起動時のメッセージを表示"""
@@ -82,12 +90,7 @@ class PdfGraphicsView(QGraphicsView):
         text.setFont(font)
         # 案内テキストであることを識別するためのタグを付ける
         text.setData(self.TAG_NAME, "intro_text")
-        
-        # 中央寄せ
-        r = text.boundingRect()
-        text.setPos((self.canvas_rect.width() - r.width())/2, (self.canvas_rect.height() - r.height())/2)
-
-        self.update_scene_limit()
+        self.center_A_on_B(text, self.field_rect)
 
     def load_pdf_page(self, file_path):
         if not os.path.exists(file_path):
