@@ -44,6 +44,12 @@ class PdfGraphicsView(QGraphicsView):
         # 初期メッセージを表示
         self.show_intro_message()
 
+    def detectItemByTag(self, tag):
+        for item in self.scene.items():
+            if item.data(self.TAG_NAME) == tag:
+                return item
+        return None
+
     def update_scene_limit(self):
         """キャンバス領域を更新。force_physical=Trueの場合のみ、物理的な座標壁(sceneRect)を書き換える"""
         # print("update_scene_limit")
@@ -224,6 +230,12 @@ class PdfGraphicsView(QGraphicsView):
         else:
             # 移動と変形
             super().mouseMoveEvent(event)
+            target = self.detectItemByTag("selection_rect")
+            # if target:
+                # print(f"line 267, self.cropbox pos: {target.pos()}")
+            target = self.detectItemByTag("selection_rect")
+            # if target:
+                # print(f"line 267, self.cropbox pos: {target.pos()}")
     
     # 中央寄せの簡易計算
     def centerBadge(self, text):
