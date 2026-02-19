@@ -224,9 +224,17 @@ class PdfGraphicsView(QGraphicsView):
             # 現在のマウス位置（シーン座標）
             current_pos = self.mapToScene(event.position().toPoint())
             
-            # 四角形の形を更新
-            rect = QRectF(self.start_pos, current_pos).normalized()
-            self.new_rect.setRect(rect)
+            # 開始点からの差分でローカルの rect を計算
+            diff = current_pos - self.start_pos
+            rect = QRectF(0, 0, diff.x(), diff.y()).normalized()
+            
+            # もしマイナス方向にドラッグしたら、posの方を調整する（常に左上が基点になるように）
+            actual_top_left = QPointF(
+                min(self.start_pos.x(), current_pos.x()),
+                min(self.start_pos.y(), current_pos.y())
+            )
+            self.new_rect.setPos(actual_top_left)
+            self.new_rect.setRect(QRectF(0, 0, abs(diff.x()), abs(diff.y())))
         else:
             # 移動と変形
             super().mouseMoveEvent(event)
