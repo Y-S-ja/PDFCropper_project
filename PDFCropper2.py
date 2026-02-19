@@ -373,7 +373,9 @@ class MainWindow(QMainWindow):
         base, ext = os.path.splitext(os.path.basename(self.target_pdf))
         default_name = f"{base}_cropped{ext}"
         output_path, _ = QFileDialog.getSaveFileName(self, "保存", default_name, "PDF Files (*.pdf)")
-        if not output_path: return
+        if not output_path: 
+            print("QFileDialog.getSaveFileName() returned empty path")
+            return
 
         try:
             f = self.view.scale_factor
