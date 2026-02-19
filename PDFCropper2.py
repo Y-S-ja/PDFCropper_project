@@ -209,9 +209,10 @@ class PdfGraphicsView(QGraphicsView):
             elif is_intro_text:
                 print("Left-clicked: Intro Text (Ignoring)")
             else:
-                # 何もない場所なら新規作成
-                print(f"Left-clicked: Background (Creating new box, item={item})")
-                self.new_rect = myCropBox(QRectF(self.start_pos, self.start_pos))
+                # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
+                print(f"Left-clicked: Background (Creating new box)")
+                self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
+                self.new_rect.setPos(self.start_pos)
                 self.scene.addItem(self.new_rect)
         
         else:
