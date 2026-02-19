@@ -195,53 +195,78 @@ class HoverMenuBar(QMenuBar):
         super().__init__(parent)
         self._is_clicked = False
         self._active_hover_menu = None
+        self.setMouseTracking(True) # マウス移動を常に監視
 
     def addMenu(self, title):
         menu = super().addMenu(title)
         # メニュー自体にイベントフィルターを設置して、マウスの出入りを監視する
         menu.installEventFilter(self)
         return menu
+        print("DEBUG: addMenu")
 
     def eventFilter(self, obj, event):
         # QMenu自体へのイベントを監視
         if isinstance(obj, QMenu):
-            if event.type() == QEvent.Enter:
-                # 既にアクティブなホバーメニューがあれば、まずそちらを扱う（入れ替わり）
-                pass
-            elif event.type() == QEvent.Leave:
-                # マウスがメニューから出た時、クリック状態でなければ閉じる
-                if not self._is_clicked and obj.isVisible():
-                    # マウスの現在の位置がメニューバーの項目上にあるか確認
-                    view_pos = self.mapFromGlobal(QtGui.QCursor.pos())
-                    action = self.actionAt(view_pos)
-                    # もし移動先が別のメニュー項目でないなら、今のを閉じる
-                    if not action or action.menu() != obj:
-                        obj.hide()
+            if event.type() == QEvent.Leave:
+                # クリックモードでなければ、マウスが完全に外に出たか判定して閉じる
+                if not self._is_clicked:
+                    # 少し遅延させて「別のメニュー項目へ移動中」かどうかを確認する
+                    QTimer.singleShot(50, lambda: self._check_should_hide(obj))
         return super().eventFilter(obj, event)
+        print("eventFilter")
+
+    def _check_should_hide(self, menu):
+        """マウスの位置を確認し、メニューバーにもメニュー自体にもいなければ閉じる"""
+        if self._is_clicked: return
+        
+        # 現在のマウス下のウィジェットを取得
+        pos = QtGui.QCursor.pos()
+        widget = QApplication.widgetAt(pos)
+        
+        # マウスがメニューバー上、またはメニュー自体の上にいないなら閉じる
+        if widget != self and widget != menu and not menu.rect().contains(menu.mapFromGlobal(pos)):
+            menu.hide()
 
     def mousePressEvent(self, event):
-        # メニューバーがクリックされたら「クリックモード」をONにする
-        self._is_clicked = True
+        # 項目がある部分をクリックした時だけクリックモードにする
+        action = self.actionAt(event.position().toPoint())
+        if action:
+            print(f"DEBUG: Clicked on {action.text()} -> Stick mode")
+            self._is_clicked = True
         super().mousePressEvent(event)
-
-    def leaveEvent(self, event):
-        # メニュー全体からマウスが離れたら、クリック状態をリセットする
-        # (ただし、メニューが展開されている間は leaveEvent は来ない仕様)
-        super().leaveEvent(event)
 
     def mouseMoveEvent(self, event):
         # ホバー中にメニューを展開させる
+        print(f"DEBUG: mouseMoveEvent, {self._is_clicked}")
         if not self._is_clicked:
-            action = self.actionAt(event.pos())
+            action = self.actionAt(event.position().toPoint())
             if action and action.menu():
-                if self._active_hover_menu and self._active_hover_menu != action.menu():
-                    self._active_hover_menu.hide()
-                
-                self._active_hover_menu = action.menu()
-                self._active_hover_menu.show()
-        super().mouseMoveEvent(event)
+                menu = action.menu()
+                if not menu.isVisible():
+                    # 他のホバー展開中のメニューがあれば閉じる
+                    if self._active_hover_menu and self._active_hover_menu != menu:
+                        self._active_hover_menu.hide()
+                    
+                    self._active_hover_menu = menu
+                    # 正しい表示位置（項目の左下）を計算
+                    rect = self.actionGeometry(action)
+                    global_pos = self.mapToGlobal(rect.bottomLeft())
+                    
+                    print(f"DEBUG: Hover -> Showing {menu.title()}")
+                    menu.popup(global_pos)
+            elif not action and self._active_hover_menu:
+                # 項目がない場所に移動した場合は少し待って閉じる判定
+                QTimer.singleShot(50, lambda: self._check_should_hide(self._active_hover_menu))
+        super().mouseMoveEvent(event) # self._is_clicked = Trueかつ、QMune表示中にホバリングによるメニュー切り替えができる
 
     def hideEvent(self, event):
-        # 何らかの理由でメニューが閉じるとき、クリック状態をリセット
+        # メニューバーが非表示（ウィンドウ最小化など）になる際のリセット
         self._is_clicked = False
         super().hideEvent(event)
+
+    # 各メニューが閉じられた時にフラグをリセットするための処理を追加
+    def leaveEvent(self, event):
+        print("DEBUG: leaveEvent")
+        if not self._is_clicked and self._active_hover_menu:
+            self._check_should_hide(self._active_hover_menu)
+        super().leaveEvent(event)
