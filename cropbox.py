@@ -168,5 +168,6 @@ class myCropBox(QGraphicsRectItem):
     def mouseReleaseEvent(self, event):
         # self.is_resizing = False
         # 最後に形を整える（幅や高さがマイナスの状態を直す）
-        self.setRect(self.rect().normalized())
+        if self.active_handle is not None:
+            self.setRect(self.rect().normalized())
         super().mouseReleaseEvent(event)
