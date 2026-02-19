@@ -208,7 +208,6 @@ class PdfGraphicsView(QGraphicsView):
                 super().mousePressEvent(event)
             elif is_intro_text:
                 print("Left-clicked: Intro Text (Ignoring)")
-                # ここで案内テキストを消したい場合は self.scene.removeItem(item) などをする
             else:
                 # 何もない場所なら新規作成
                 print(f"Left-clicked: Background (Creating new box, item={item})")
@@ -238,9 +237,6 @@ class PdfGraphicsView(QGraphicsView):
         else:
             # 移動と変形
             super().mouseMoveEvent(event)
-            target = self.detectItemByTag("selection_rect")
-            # if target:
-                # print(f"line 267, self.cropbox pos: {target.pos()}")
             target = self.detectItemByTag("selection_rect")
             # if target:
                 # print(f"line 267, self.cropbox pos: {target.pos()}")
