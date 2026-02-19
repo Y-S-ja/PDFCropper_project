@@ -308,17 +308,10 @@ class MainWindow(QMainWindow):
         self.view = PdfGraphicsView()
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
 
-        self.clear_btn = QPushButton("選択範囲をクリア")
-        self.clear_btn.clicked.connect(self.view.clear_selections)
-        
         self.view.fileDropped.connect(self.load_new_pdf) # 追加：Viewへのドロップを接続
-
-        btn_layout = QHBoxLayout() # ボタンを横に並べる
-        btn_layout.addWidget(self.clear_btn)
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("左ドラッグ: 範囲選択 / 右ドラッグ: 移動 / Ctrl+ホイール: ズーム"))
-        layout.addLayout(btn_layout)
         layout.addWidget(self.view)
 
         container = QWidget()
