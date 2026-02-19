@@ -285,8 +285,9 @@ class PdfGraphicsView(QGraphicsView):
             
             self.start_pos = None
             self.new_rect = None
-        self.update_scene_limit()
+        
         super().mouseReleaseEvent(event)
+        self.update_scene_limit()
 
     def update_numbers(self):
         """残っている枠の番号を1から順に振り直す"""
