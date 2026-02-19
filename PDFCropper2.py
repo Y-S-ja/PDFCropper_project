@@ -300,6 +300,8 @@ class MainWindow(QMainWindow):
 
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("ファイル")
+        open_action = file_menu.addAction("PDFを開く")
+        open_action.triggered.connect(self.open_file)
 
         self.view = PdfGraphicsView()
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
@@ -326,6 +328,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
         self.target_pdf = None
+
+    def open_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "PDFを開く", "", "PDF Files (*.pdf)")
+        if file_path:
+            self.load_new_pdf(file_path)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
