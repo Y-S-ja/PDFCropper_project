@@ -60,7 +60,7 @@ class PdfGraphicsView(QGraphicsView):
         else:
             margin = 500
             self.canvas_rect = items_rect.adjusted(-margin, -margin, margin, margin)
-            # print("line 53, adjusted")
+        
         self.scene.setSceneRect(self.canvas_rect)
     
     def drawForeground(self, painter, rect):
