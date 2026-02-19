@@ -380,27 +380,33 @@ class MainWindow(QMainWindow):
                 break
 
     def load_new_pdf(self, file_path):
-        self.target_pdf = file_path
-        self.view.load_pdf_page(file_path)
-        # ウィンドウタイトルにファイル名を表示
+        view = self.current_view()
+        if not view: return
+        
+        self.target_pdfs[view] = file_path
+        view.load_pdf_page(file_path)
+        # タブの名前をファイル名に変える
+        current_index = self.tab_widget.currentIndex()
+        self.tab_widget.setTabText(current_index, os.path.basename(file_path))
+        # ウィンドウタイトルも更新
         self.setWindowTitle(f"QGraphicsView PDFツール - {os.path.basename(file_path)}")
 
     def process_crop(self):
-        if not self.target_pdf:
+        view = self.current_view()
+        target_pdf = self.target_pdfs.get(view)
+        
+        if not target_pdf:
             QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
             return
-        if not self.view.rects:
-            # メッセージボックスが小さすぎてタイトルが見切れるのを防ぐため、
-            # インスタンス化して幅を確保するか、スペースを追加する
+        if not view.rects:
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Warning)
             msg.setWindowTitle("警告")
-            msg.setText("範囲を選択してください" + " " * 15) # スペースで幅を確保
-            # msg.setStyleSheet("QLabel{min-width: 100px;}")
+            msg.setText("範囲を選択してください" + " " * 15)
             msg.exec()
             return
             
-        base, ext = os.path.splitext(os.path.basename(self.target_pdf))
+        base, ext = os.path.splitext(os.path.basename(target_pdf))
         default_name = f"{base}_cropped{ext}"
         output_path, _ = QFileDialog.getSaveFileName(self, "保存", default_name, "PDF Files (*.pdf)")
         if not output_path: 
@@ -408,12 +414,12 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            f = self.view.scale_factor
-            src_doc = fitz.open(self.target_pdf)
+            f = view.scale_factor
+            src_doc = fitz.open(target_pdf)
             new_doc = fitz.open()
 
             for page_index in range(len(src_doc)):
-                for item in self.view.rects:
+                for item in view.rects:
                     # ハンドルを含まない、純粋な枠の範囲(rect)をシーン座標に変換する
                     s_rect = item.mapToScene(item.rect()).boundingRect()
                     
