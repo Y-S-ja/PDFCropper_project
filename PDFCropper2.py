@@ -302,12 +302,11 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu("ファイル")
         open_action = file_menu.addAction("PDFを開く")
         open_action.triggered.connect(self.open_file)
+        save_action = file_menu.addAction("保存")
+        save_action.triggered.connect(self.process_crop)
 
         self.view = PdfGraphicsView()
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
-
-        self.crop_btn = QPushButton("切り抜いて保存")
-        self.crop_btn.clicked.connect(self.process_crop)
 
         self.clear_btn = QPushButton("選択範囲をクリア")
         self.clear_btn.clicked.connect(self.view.clear_selections)
@@ -316,7 +315,6 @@ class MainWindow(QMainWindow):
 
         btn_layout = QHBoxLayout() # ボタンを横に並べる
         btn_layout.addWidget(self.clear_btn)
-        btn_layout.addWidget(self.crop_btn)
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("左ドラッグ: 範囲選択 / 右ドラッグ: 移動 / Ctrl+ホイール: ズーム"))
