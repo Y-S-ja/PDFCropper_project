@@ -331,7 +331,6 @@ class MainWindow(QMainWindow):
         self.view.fileDropped.connect(self.load_new_pdf) # 追加：Viewへのドロップを接続
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("左ドラッグ: 範囲選択 / 右ドラッグ: 移動 / Ctrl+ホイール: ズーム"))
         layout.addWidget(self.view)
 
         container = QWidget()
