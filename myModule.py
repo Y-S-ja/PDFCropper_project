@@ -33,6 +33,14 @@ class myCropBox(QGraphicsRectItem):
         # self.is_resizing = False
         self.active_handle = None
         
+    def setRect(self, rect):
+        """矩形のサイズが変更されたらバッジの位置も更新する"""
+        super().setRect(rect)
+        # 子要素の中からバッジを探して位置を合わせる
+        for child in self.childItems():
+            if isinstance(child, myBadge):
+                child.setPos(rect.topLeft())
+
     def get_current_scale(self):
         """現在のビューのズーム倍率を取得する"""
         if self.scene() and self.scene().views():
