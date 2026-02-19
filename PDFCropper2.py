@@ -82,7 +82,7 @@ class PdfGraphicsView(QGraphicsView):
 
     def show_intro_message(self):
         """起動時のメッセージを表示"""
-        self.scene.clear()
+        # self.scene.clear()
         text = self.scene.addSimpleText("PDFファイルをここにドラッグ＆ドロップしてください")
         text.setBrush(QBrush(QColor("gray")))
         font = text.font()
