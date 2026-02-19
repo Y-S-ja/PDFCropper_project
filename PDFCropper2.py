@@ -384,10 +384,12 @@ class MainWindow(QMainWindow):
 
             for page_index in range(len(src_doc)):
                 for item in self.view.rects:
-                    rect = item.rect() # アイテムから座標を取得
+                    # ハンドルを含まない、純粋な枠の範囲(rect)をシーン座標に変換する
+                    s_rect = item.mapToScene(item.rect()).boundingRect()
+                    
                     new_doc.insert_pdf(src_doc, from_page=page_index, to_page=page_index)
-                    # RectFの座標をPDF座標に変換
-                    pdf_rect = fitz.Rect(rect.left()*f, rect.top()*f, rect.right()*f, rect.bottom()*f)
+                    # シーン座標をPDFのピクセル座標に変換
+                    pdf_rect = fitz.Rect(s_rect.left()*f, s_rect.top()*f, s_rect.right()*f, s_rect.bottom()*f)
                     new_doc[-1].set_cropbox(pdf_rect)
 
             new_doc.save(output_path)
