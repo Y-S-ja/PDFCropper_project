@@ -291,6 +291,7 @@ class PdfGraphicsView(QGraphicsView):
         # データリストもクリア
         self.rects = []
         self.new_rect = None
+        self.update_scene_limit()
 
 class MainWindow(QMainWindow):
     def __init__(self):
