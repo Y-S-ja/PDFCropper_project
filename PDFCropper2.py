@@ -35,6 +35,7 @@ class PdfGraphicsView(QGraphicsView):
         self.new_rect = None  # ドラッグ中の枠
         self.rects = []           # 確定した枠（QGraphicsRectItem）のリスト
         self.start_pos = None
+        self.TAG_NAME = 0
 
         self.badge_size = 24
         self.canvas_rect = QRectF(0, 0, 800, 600)
@@ -74,7 +75,7 @@ class PdfGraphicsView(QGraphicsView):
         font.setPointSize(18)
         text.setFont(font)
         # 案内テキストであることを識別するためのタグを付ける
-        text.setData(0, "intro_text")
+        text.setData(self.TAG_NAME, "intro_text")
         
         # 中央寄せ
         r = text.boundingRect()
@@ -172,7 +173,7 @@ class PdfGraphicsView(QGraphicsView):
             if isinstance(temp, myCropBox):
                 target_cropbox = temp
                 break
-            if temp.data(0) == "intro_text":
+            if temp.data(self.TAG_NAME) == "intro_text":
                 is_intro_text = True
                 break
             temp = temp.parentItem()
@@ -286,7 +287,7 @@ class PdfGraphicsView(QGraphicsView):
     def clear_selections(self):
         # シーン内の "selection_rect" タグが付いたアイテムだけを削除
         for item in list(self.scene.items()):
-            if item.data(0) == "selection_rect":
+            if item.data(self.TAG_NAME) == "selection_rect":
                 self.scene.removeItem(item)
         # データリストもクリア
         self.rects = []
