@@ -303,6 +303,8 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
 
         menu_bar = self.menuBar()
+
+        # ファイルメニュー
         file_menu = menu_bar.addMenu("ファイル")
         
         open_action = file_menu.addAction("PDFを開く")
@@ -318,6 +320,7 @@ class MainWindow(QMainWindow):
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
 
+        # 編集メニュー
         edit_menu = menu_bar.addMenu("編集")
         clear_action = edit_menu.addAction("選択範囲をクリア")
         clear_action.setShortcut("Ctrl+Shift+X")
