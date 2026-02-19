@@ -241,11 +241,6 @@ class PdfGraphicsView(QGraphicsView):
         else:
             # 移動と変形
             super().mouseMoveEvent(event)
-    
-    # 中央寄せの簡易計算
-    def centerBadge(self, text):
-        brect = text.boundingRect()
-        text.setPos((self.badge_size - brect.width())/2, (self.badge_size - brect.height())/2)
 
     def mouseReleaseEvent(self, event):
         if self.start_pos and self.new_rect:
@@ -269,17 +264,8 @@ class PdfGraphicsView(QGraphicsView):
                 index = len(self.rects) + 1
                 
                 # 親を new_rect にすることで、枠と一緒に移動・削除される
-                badge = QGraphicsRectItem(0, 0, self.badge_size, self.badge_size, parent=self.new_rect)
-                badge.setBrush(QBrush(QColor(0, 120, 215)))
-                badge.setPen(Qt.NoPen)
+                badge = myBadge(index, self.badge_size, parent=self.new_rect)
                 badge.setPos(rect.topLeft())
-                # ズームしても大きさが変わらないように設定
-                badge.setFlag(QGraphicsItem.ItemIgnoresTransformations)
-                
-                text = QGraphicsSimpleTextItem(str(index), parent=badge)
-                text.setBrush(QBrush(Qt.white))
-                # 中央寄せの簡易計算
-                self.centerBadge(text)
                 
                 self.rects.append(self.new_rect)
             
@@ -292,15 +278,10 @@ class PdfGraphicsView(QGraphicsView):
     def update_numbers(self):
         """残っている枠の番号を1から順に振り直す"""
         for i, item in enumerate(self.rects):
-            # 子要素（バッジの枠 -> テキスト）を辿って文字を更新
+            # 子要素から myBadge を探して更新
             for child in item.childItems():
-                # QGraphicsRectItem かつ親が自分（item）ならバッジ
-                if isinstance(child, QGraphicsRectItem):
-                    for grandchild in child.childItems():
-                        if isinstance(grandchild, QGraphicsSimpleTextItem):
-                            grandchild.setText(str(i + 1))
-                            # 中央寄せ再計算
-                            self.centerBadge(grandchild)
+                if isinstance(child, myBadge):
+                    child.set_number(i + 1)
 
     def clear_selections(self):
         # シーン内の "selection_rect" タグが付いたアイテムだけを削除

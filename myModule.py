@@ -3,7 +3,8 @@ import os
 import fitz
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
-                             QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel)
+                             QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel,
+                             QGraphicsSimpleTextItem, QGraphicsItem)
 from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 
@@ -156,3 +157,25 @@ class myCropBox(QGraphicsRectItem):
         if self.active_handle is not None:
             self.setRect(self.rect().normalized())
         super().mouseReleaseEvent(event)
+
+class myBadge(QGraphicsRectItem):
+    """切り抜き枠に付与する番号バッジクラス"""
+    def __init__(self, index, size, parent=None):
+        super().__init__(0, 0, size, size, parent=parent)
+        self.setBrush(QBrush(QColor(0, 120, 215)))
+        self.setPen(Qt.NoPen)
+        # ズームしても大きさが変わらないように設定
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        
+        self.text_item = QGraphicsSimpleTextItem(str(index), parent=self)
+        self.text_item.setBrush(QBrush(Qt.white))
+        self.update_text_pos()
+
+    def update_text_pos(self):
+        # バッジ内でのテキスト中央寄せ
+        brect = self.text_item.boundingRect()
+        self.text_item.setPos((self.rect().width() - brect.width())/2, (self.rect().height() - brect.height())/2)
+
+    def set_number(self, index):
+        self.text_item.setText(str(index))
+        self.update_text_pos()
