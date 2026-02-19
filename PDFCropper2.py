@@ -238,9 +238,6 @@ class PdfGraphicsView(QGraphicsView):
         else:
             # 移動と変形
             super().mouseMoveEvent(event)
-            target = self.detectItemByTag("selection_rect")
-            # if target:
-                # print(f"line 267, self.cropbox pos: {target.pos()}")
     
     # 中央寄せの簡易計算
     def centerBadge(self, text):
