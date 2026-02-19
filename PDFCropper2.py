@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
-from cropbox import *
+from myModule import *
 
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
