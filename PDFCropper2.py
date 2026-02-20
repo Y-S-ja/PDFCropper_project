@@ -370,6 +370,10 @@ class MainWindow(QMainWindow):
         if widget in self.target_pdfs:
             del self.target_pdfs[widget]
         self.tab_widget.removeTab(index)
+        
+        # 全てのタブが閉じられたら新しい空のタブを作る
+        if self.tab_widget.count() == 0:
+            self.add_new_tab()
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "PDFを開く", "", "PDF Files (*.pdf)")
