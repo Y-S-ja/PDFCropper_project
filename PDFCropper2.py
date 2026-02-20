@@ -444,14 +444,13 @@ class MainWindow(QMainWindow):
         self.update_window_title()
         view = self.current_view()
         if view:
-            # 現在のビューの選択アイテムを反映
-            items = view.scene.selectedItems()
-            target = items[0] if items and isinstance(items[0], myCropBox) else None
-            self.prop_panel.set_target(target)
             # ビューのシグナルをパネルに接続
             try: view.selectionChanged.disconnect()
             except: pass
             view.selectionChanged.connect(self.prop_panel.set_target)
+            
+            # ビュー側のメソッドを呼んで現在の選択状態をパネルに通知
+            view._on_scene_selection_changed()
         else:
             self.prop_panel.set_target(None)
 
