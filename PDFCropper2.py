@@ -351,6 +351,10 @@ class MainWindow(QMainWindow):
         self.dock.setWidget(self.dock_content)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
 
+        # 表示メニュー
+        view_menu = menu_bar.addMenu("表示")
+        view_menu.addAction(self.dock.toggleViewAction())
+
         # 最初のタブを追加
         self.add_new_tab()
 
