@@ -205,6 +205,8 @@ class PdfGraphicsView(QGraphicsView):
 
         # --- 左クリック：操作 or 新規作成 ---
         elif event.button() == Qt.LeftButton:
+            # いったん選択を解除する（背景クリックで解除するため）
+            self.scene.clearSelection()
             self.start_pos = self.mapToScene(event.position().toPoint())
             
             if target_cropbox:
