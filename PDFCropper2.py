@@ -270,6 +270,9 @@ class PdfGraphicsView(QGraphicsView):
                 badge.setPos(rect.topLeft())
                 
                 self.rects.append(self.new_rect)
+                # 新しく作った枠を選択状態にする（プロパティパネルに即反映される）
+                self.scene.clearSelection()
+                self.new_rect.setSelected(True)
             
             self.start_pos = None
             self.new_rect = None
