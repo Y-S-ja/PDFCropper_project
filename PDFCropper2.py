@@ -448,7 +448,8 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if view:
             # ビューのシグナルをパネルに接続
-            try: view.selectionChanged.disconnect()
+            # 特定の接続先(slot)を指定して解除することで、未接続時の警告を回避
+            try: view.selectionChanged.disconnect(self.prop_panel.set_target)
             except: pass
             view.selectionChanged.connect(self.prop_panel.set_target)
             
