@@ -298,8 +298,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("PDFCropper2")
         self.resize(1000, 800)
-
-        self.view = PdfGraphicsView()
         self.setAcceptDrops(True) # ドラッグ＆ドロップを許可
 
         # カスタムメニューバーを使用
@@ -374,7 +372,7 @@ class MainWindow(QMainWindow):
         new_view.fileDropped.connect(self.load_new_pdf)
         index = self.tab_widget.addTab(new_view, f"無題 {new_num}")
         self.tab_widget.setCurrentIndex(index)
-        self.update_window_title() # 追加
+        self.update_window_title()
         return new_view
 
     def update_window_title(self):
