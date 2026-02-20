@@ -4,7 +4,7 @@ import fitz
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsSimpleTextItem,
-    QGraphicsItem, QTabWidget, QDockWidget
+    QGraphicsItem, QTabWidget, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox
 )
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
@@ -12,6 +12,7 @@ from myModule import *
 
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
+    selectionChanged = Signal(object) # 選択されたアイテム(myCropBox)を通知用
 
     def __init__(self):
         super().__init__()
@@ -20,6 +21,7 @@ class PdfGraphicsView(QGraphicsView):
         self.setBackgroundBrush(QBrush(QColor("lightgray")))
         self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
+        self.scene.selectionChanged.connect(self._on_scene_selection_changed)
         
         # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
@@ -283,6 +285,14 @@ class PdfGraphicsView(QGraphicsView):
                 if isinstance(child, myBadge):
                     child.set_number(i + 1)
 
+    def _on_scene_selection_changed(self):
+        """シーンの選択が変更されたら、選択中の myCropBox をシグナルで飛ばす"""
+        items = self.scene.selectedItems()
+        target = None
+        if items and isinstance(items[0], myCropBox):
+            target = items[0]
+        self.selectionChanged.emit(target)
+
     def clear_selections(self):
         # シーン内の "selection_rect" タグが付いたアイテムだけを削除
         for item in list(self.scene.items()):
@@ -292,6 +302,76 @@ class PdfGraphicsView(QGraphicsView):
         self.rects = []
         self.new_rect = None
         self.update_scene_limit()
+        # プロパティパネル側でも再描画を促すために選択状態をリセット
+        self._on_scene_selection_changed()
+
+class PropertyPanel(QWidget):
+    """QDockWidgetの中身として動作するプロパティ編集パネル"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.current_item = None
+        self._updating = False # ループ防止
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        group = QGroupBox("座標・サイズ設定 (px)")
+        form = QFormLayout(group)
+
+        self.spin_x = self.create_spin()
+        self.spin_y = self.create_spin()
+        self.spin_w = self.create_spin()
+        self.spin_h = self.create_spin()
+
+        form.addRow("X:", self.spin_x)
+        form.addRow("Y:", self.spin_y)
+        form.addRow("幅:", self.spin_w)
+        form.addRow("高さ:", self.spin_h)
+
+        layout.addWidget(group)
+        layout.addStretch()
+
+        # 値が変更された時の接続
+        for spin in [self.spin_x, self.spin_y, self.spin_w, self.spin_h]:
+            spin.valueChanged.connect(self.apply_changes)
+
+        self.setEnabled(False)
+
+    def create_spin(self):
+        spin = QDoubleSpinBox()
+        spin.setRange(-99999, 99999)
+        spin.setDecimals(1)
+        spin.setSingleStep(1.0)
+        return spin
+
+    def set_target(self, item):
+        """編集対象のアイテムをセットし、現在の値をスピンボックスに反映"""
+        self.current_item = item
+        if not item:
+            self.setEnabled(False)
+            return
+
+        self._updating = True
+        self.setEnabled(True)
+        rect = item.rect()
+        pos = item.pos()
+        self.spin_x.setValue(pos.x())
+        self.spin_y.setValue(pos.y())
+        self.spin_w.setValue(rect.width())
+        self.spin_h.setValue(rect.height())
+        self._updating = False
+
+    def apply_changes(self):
+        """スピンボックスの値をアイテムに反映"""
+        if not self.current_item or self._updating:
+            return
+        
+        # アイテムの座標系に合わせて更新
+        new_pos = QPointF(self.spin_x.value(), self.spin_y.value())
+        new_rect = QRectF(0, 0, self.spin_w.value(), self.spin_h.value())
+        
+        self.current_item.setPos(new_pos)
+        self.current_item.setRect(new_rect)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -337,8 +417,8 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.remove_tab)
-        # タブ切り替え時にタイトルを更新
-        self.tab_widget.currentChanged.connect(self.update_window_title)
+        # タブ切り替え時にタイトルとプロパティの接続を更新
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self.tab_widget)
         
         self.target_pdfs = {} # タブごとのパスを管理 {view_object: path}
@@ -346,9 +426,10 @@ class MainWindow(QMainWindow):
         # ドックウィジェット（右側）を追加
         self.dock = QDockWidget("プロパティ", self)
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        # 中身はカラのQWidget
-        self.dock_content = QWidget()
-        self.dock.setWidget(self.dock_content)
+        
+        # プロパティパネルを作成してドックにセット
+        self.prop_panel = PropertyPanel()
+        self.dock.setWidget(self.prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
 
         # 表示メニュー
@@ -357,6 +438,23 @@ class MainWindow(QMainWindow):
 
         # 最初のタブを追加
         self.add_new_tab()
+
+    def _on_tab_changed(self, index):
+        """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
+        self.update_window_title()
+        view = self.current_view()
+        if view:
+            # 現在のビューの選択アイテムを反映
+            items = view.scene.selectedItems()
+            target = items[0] if items and isinstance(items[0], myCropBox) else None
+            self.prop_panel.set_target(target)
+            # ビューのシグナルをパネルに接続
+            try: view.selectionChanged.disconnect()
+            except: pass
+            view.selectionChanged.connect(self.prop_panel.set_target)
+        else:
+            self.prop_panel.set_target(None)
+
 
     def current_view(self):
         """現在のアクティブなタブにあるビューを返す"""
