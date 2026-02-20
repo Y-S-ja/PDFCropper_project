@@ -296,7 +296,7 @@ class PdfGraphicsView(QGraphicsView):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("QGraphicsView PDFツール")
+        self.setWindowTitle("PDFCropper2")
         self.resize(1000, 800)
 
         self.view = PdfGraphicsView()
@@ -339,6 +339,8 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.remove_tab)
+        # タブ切り替え時にタイトルを更新
+        self.tab_widget.currentChanged.connect(self.update_window_title)
         self.setCentralWidget(self.tab_widget)
         
         self.target_pdfs = {} # タブごとのパスを管理 {view_object: path}
@@ -356,7 +358,17 @@ class MainWindow(QMainWindow):
         new_view.fileDropped.connect(self.load_new_pdf)
         index = self.tab_widget.addTab(new_view, f"無題 {self.tab_widget.count() + 1}")
         self.tab_widget.setCurrentIndex(index)
+        self.update_window_title() # 追加
         return new_view
+
+    def update_window_title(self):
+        """現在のタブの名前に基づいてウィンドウタイトルを更新する"""
+        index = self.tab_widget.currentIndex()
+        if index != -1:
+            tab_text = self.tab_widget.tabText(index)
+            self.setWindowTitle(f"PDFCropper2 - {tab_text}")
+        else:
+            self.setWindowTitle("PDFCropper2")
 
     def close_current_tab(self):
         """現在のタブを閉じる"""
@@ -412,7 +424,7 @@ class MainWindow(QMainWindow):
         current_index = self.tab_widget.currentIndex()
         self.tab_widget.setTabText(current_index, os.path.basename(file_path))
         # ウィンドウタイトルも更新
-        self.setWindowTitle(f"QGraphicsView PDFツール - {os.path.basename(file_path)}")
+        self.update_window_title()
 
     def process_crop(self):
         view = self.current_view()
