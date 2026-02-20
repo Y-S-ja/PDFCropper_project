@@ -345,7 +345,8 @@ class PropertyPanel(QWidget):
         layout.addWidget(group)
         layout.addStretch()
 
-        # 値が変更された時の接続
+        # イベント接続
+        self.list_widget.itemClicked.connect(self._on_item_clicked)
         for spin in [self.spin_x, self.spin_y, self.spin_w, self.spin_h]:
             spin.valueChanged.connect(self.apply_changes)
 
@@ -357,10 +358,31 @@ class PropertyPanel(QWidget):
         spin.setDecimals(1)
         spin.setSingleStep(1.0)
         return spin
+        
+    def update_list(self, rects):
+        """ビュー内の枠リストを反映する"""
+        self._updating = True
+        self.list_widget.clear()
+        for i, rect in enumerate(rects):
+            item = QListWidgetItem(f"枠 {i+1}")
+            item.setData(Qt.UserRole, rect) # アイテムに実際のオブジェクトを紐付ける
+            self.list_widget.addItem(item)
+        self._updating = False
+        # 現在の選択状態も同期させる
+        self.sync_list_selection()
+
+    def _on_item_clicked(self, list_item):
+        """リストがクリックされたら、シーン上のアイテムを選択する"""
+        target_rect = list_item.data(Qt.UserRole)
+        if target_rect and target_rect.scene():
+            target_rect.scene().clearSelection()
+            target_rect.setSelected(True)
 
     def set_target(self, item):
         """編集対象のアイテムをセットし、現在の値をスピンボックスに反映"""
         self.current_item = item
+        self.sync_list_selection() # リスト側の選択も合わせる
+
         if not item:
             self.setEnabled(False)
             return
@@ -373,6 +395,20 @@ class PropertyPanel(QWidget):
         self.spin_y.setValue(pos.y())
         self.spin_w.setValue(rect.width())
         self.spin_h.setValue(rect.height())
+        self._updating = False
+
+    def sync_list_selection(self):
+        """シーンの選択状態をリストのハイライトに同期させる"""
+        if self._updating: return
+        self._updating = True
+        self.list_widget.clearSelection()
+        if self.current_item:
+            for i in range(self.list_widget.count()):
+                list_item = self.list_widget.item(i)
+                if list_item.data(Qt.UserRole) == self.current_item:
+                    list_item.setSelected(True)
+                    self.list_widget.setCurrentItem(list_item)
+                    break
         self._updating = False
 
     def apply_changes(self):
