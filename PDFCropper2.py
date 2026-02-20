@@ -337,8 +337,11 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.addTab(self.view, "PDF View")
         self.setCentralWidget(self.tab_widget)
-
-        self.target_pdf = None
+        
+        self.target_pdfs = {} # タブごとのパスを管理 {view_object: path}
+        
+        # 最初のタブを追加
+        self.add_new_tab()
 
     def current_view(self):
         """現在のアクティブなタブにあるビューを返す"""
