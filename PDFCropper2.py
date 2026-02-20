@@ -499,22 +499,23 @@ class MainWindow(QMainWindow):
         self.update_window_title()
         view = self.current_view()
         if view:
-            # ビューのシグナルをパネルに接続
-            # 特定の接続先(slot)を指定して解除することで、未接続時の警告を回避
-            try: 
-                view.selectionChanged.disconnect(self.prop_panel.set_target)
-                view.rectsChanged.disconnect(self.prop_panel.update_list)
-            except: pass
-            
-            view.selectionChanged.connect(self.prop_panel.set_target)
-            view.rectsChanged.connect(self.prop_panel.update_list)
-            
             # 初期状態を反映
             self.prop_panel.update_list(view.rects)
             view._on_scene_selection_changed()
         else:
             self.prop_panel.set_target(None)
             self.prop_panel.update_list([])
+
+    def _handle_selection_changed(self, item):
+        """信号の送信元が現在のタブの場合のみパネルを更新する"""
+        if self.sender() == self.current_view():
+            self.prop_panel.set_target(item)
+
+    def _handle_rects_changed(self, rects):
+        """信号の送信元が現在のタブの場合のみパネルを更新する"""
+        if self.sender() == self.current_view():
+            self.prop_panel.update_list(rects)
+
 
 
     def current_view(self):
@@ -541,6 +542,10 @@ class MainWindow(QMainWindow):
             
         new_view = PdfGraphicsView()
         new_view.fileDropped.connect(self.load_new_pdf)
+        # 信号を一度だけ中継用メソッドに接続する（disconnect不要にするため）
+        new_view.selectionChanged.connect(self._handle_selection_changed)
+        new_view.rectsChanged.connect(self._handle_rects_changed)
+
         index = self.tab_widget.addTab(new_view, f"無題 {new_num}")
         self.tab_widget.setCurrentIndex(index)
         self.update_window_title()
