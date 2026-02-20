@@ -295,6 +295,8 @@ class PdfGraphicsView(QGraphicsView):
             current_state = self.get_snapshot()
             if current_state != self.pre_action_state:
                 self.push_undo(self.pre_action_state)
+                # 操作が終了し、かつ変化があったのでパネルに数値を反映する
+                self._on_scene_selection_changed()
             self.pre_action_state = None
 
         super().mouseReleaseEvent(event)
