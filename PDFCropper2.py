@@ -330,9 +330,7 @@ class MainWindow(QMainWindow):
         edit_menu = menu_bar.addMenu("編集")
         clear_action = edit_menu.addAction("選択範囲をクリア")
         clear_action.setShortcut("Ctrl+Shift+X")
-        clear_action.triggered.connect(self.view.clear_selections)
-
-        self.view.fileDropped.connect(self.load_new_pdf) # 追加：Viewへのドロップを接続
+        clear_action.triggered.connect(lambda: self.current_view().clear_selections() if self.current_view() else None)
 
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
