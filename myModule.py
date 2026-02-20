@@ -41,6 +41,23 @@ class myCropBox(QGraphicsRectItem):
         for child in self.childItems():
             if isinstance(child, myBadge):
                 child.setPos(rect.topLeft())
+        # サイズ変更を通知
+        self._notify_geometry_changed()
+
+    def itemChange(self, change, value):
+        """アイテムの状態変化（移動など）を検知"""
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            self._notify_geometry_changed()
+        return super().itemChange(change, value)
+
+    def _notify_geometry_changed(self):
+        """シーンとビューを通じて、座標やサイズが変わったことを通知する"""
+        scene = self.scene()
+        if scene:
+            for view in scene.views():
+                # PdfGraphicsView が持っているカスタムシグナルを再利用
+                if hasattr(view, "selectionChanged") and self.isSelected():
+                    view.selectionChanged.emit(self)
 
     def get_current_scale(self):
         """現在のビューのズーム倍率を取得する"""
