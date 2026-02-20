@@ -353,10 +353,26 @@ class MainWindow(QMainWindow):
         return self.tab_widget.currentWidget()
 
     def add_new_tab(self):
-        """新しいタブを追加する"""
+        """新しいタブを追加する。空いている最小の番号を割り振る"""
+        # 現在使用されている「無題 X」の番号をすべて取得
+        used_numbers = set()
+        for i in range(self.tab_widget.count()):
+            text = self.tab_widget.tabText(i)
+            if text.startswith("無題 "):
+                try:
+                    num = int(text.split(" ")[1])
+                    used_numbers.add(num)
+                except (IndexError, ValueError):
+                    pass
+        
+        # 1から順に確認して空いている最小の番号を探す
+        new_num = 1
+        while new_num in used_numbers:
+            new_num += 1
+            
         new_view = PdfGraphicsView()
         new_view.fileDropped.connect(self.load_new_pdf)
-        index = self.tab_widget.addTab(new_view, f"無題 {self.tab_widget.count() + 1}")
+        index = self.tab_widget.addTab(new_view, f"無題 {new_num}")
         self.tab_widget.setCurrentIndex(index)
         self.update_window_title() # 追加
         return new_view
