@@ -351,7 +351,7 @@ class PropertyPanel(QWidget):
         layout.addStretch()
 
         # イベント接続
-        self.list_widget.itemClicked.connect(self._on_item_clicked)
+        self.list_widget.currentItemChanged.connect(self._on_list_selection_changed)
         for spin in [self.spin_x, self.spin_y, self.spin_w, self.spin_h]:
             spin.valueChanged.connect(self.apply_changes)
 
@@ -376,18 +376,31 @@ class PropertyPanel(QWidget):
         # 現在の選択状態も同期させる
         self.sync_list_selection()
 
-    def _on_item_clicked(self, list_item):
-        """リストがクリックされたら、シーン上のアイテムを選択する"""
-        target_rect = list_item.data(Qt.UserRole)
-        if target_rect and target_rect.scene():
-            target_rect.scene().clearSelection()
-            target_rect.setSelected(True)
+    def _on_list_selection_changed(self, current, previous):
+        """リストの選択が変更されたら、即座にパネルを更新し、シーン上のアイテムも選択する"""
+        if self._updating or not current:
+            return
+            
+        target_rect = current.data(Qt.UserRole)
+        if target_rect:
+            # 1. シグナルを待たずに即座にプロパティ値を反映
+            self.set_target(target_rect)
+            
+            # 2. シーン側の選択も合わせる
+            if target_rect.scene():
+                # シグナルのループを防ぐため、一時的にシーンの信号を止めるか、
+                # すでに選択済みなら何もしない
+                if not target_rect.isSelected():
+                    target_rect.scene().clearSelection()
+                    target_rect.setSelected(True)
 
     def set_target(self, item):
         """編集対象のアイテムをセットし、現在の値をスピンボックスに反映"""
-        self.current_item = item
-        self.sync_list_selection() # リスト側の選択も合わせる
-
+        # アイテムが「切り替わった」時だけリストのハイライトを更新（重い処理を避ける）
+        if self.current_item != item:
+            self.current_item = item
+            self.sync_list_selection() 
+        
         if not item:
             self.setEnabled(False)
             return
