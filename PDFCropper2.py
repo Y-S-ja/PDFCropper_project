@@ -14,6 +14,7 @@ from myModule import *
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
     selectionChanged = Signal(object) # 選択されたアイテム(myCropBox)を通知用
+    rectsChanged = Signal(list)       # 枠のリストが変更されたことを通知用
 
     def __init__(self):
         super().__init__()
@@ -103,6 +104,7 @@ class PdfGraphicsView(QGraphicsView):
         # 前の画像や枠をクリア
         self.scene.clear()
         self.rects = []
+        self.rectsChanged.emit(self.rects)
         
         # PDF読み込み（高解像度で1回だけ作る）
         doc = fitz.open(file_path)
@@ -197,6 +199,7 @@ class PdfGraphicsView(QGraphicsView):
                 self.rects.remove(target_cropbox)
                 self.scene.removeItem(target_cropbox)
                 self.update_numbers()
+                self.rectsChanged.emit(self.rects)
                 return
             elif is_intro_text:
                 print("Right-clicked: Intro Text (Ignoring)")
@@ -273,6 +276,7 @@ class PdfGraphicsView(QGraphicsView):
                 badge.setPos(rect.topLeft())
                 
                 self.rects.append(self.new_rect)
+                self.rectsChanged.emit(self.rects)
                 # 新しく作った枠を選択状態にする（プロパティパネルに即反映される）
                 self.scene.clearSelection()
                 self.new_rect.setSelected(True)
@@ -306,6 +310,7 @@ class PdfGraphicsView(QGraphicsView):
                 self.scene.removeItem(item)
         # データリストもクリア
         self.rects = []
+        self.rectsChanged.emit(self.rects)
         self.new_rect = None
         self.update_scene_limit()
         # プロパティパネル側でも再描画を促すために選択状態をリセット
@@ -496,14 +501,20 @@ class MainWindow(QMainWindow):
         if view:
             # ビューのシグナルをパネルに接続
             # 特定の接続先(slot)を指定して解除することで、未接続時の警告を回避
-            try: view.selectionChanged.disconnect(self.prop_panel.set_target)
+            try: 
+                view.selectionChanged.disconnect(self.prop_panel.set_target)
+                view.rectsChanged.disconnect(self.prop_panel.update_list)
             except: pass
-            view.selectionChanged.connect(self.prop_panel.set_target)
             
-            # ビュー側のメソッドを呼んで現在の選択状態をパネルに通知
+            view.selectionChanged.connect(self.prop_panel.set_target)
+            view.rectsChanged.connect(self.prop_panel.update_list)
+            
+            # 初期状態を反映
+            self.prop_panel.update_list(view.rects)
             view._on_scene_selection_changed()
         else:
             self.prop_panel.set_target(None)
+            self.prop_panel.update_list([])
 
 
     def current_view(self):
