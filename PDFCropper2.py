@@ -40,6 +40,8 @@ class PdfGraphicsView(QGraphicsView):
         self.rects = []           # 確定した枠（QGraphicsRectItem）のリスト
         self.start_pos = None
         self.TAG_NAME = 0
+        self.undo_stack = [] # Undo履歴スタック
+        self.pre_action_state = None # アクション開始前の状態保持用
 
         self.badge_size = 24
         self.canvas_rect = QRectF(0, 0, 800, 600)
@@ -195,6 +197,7 @@ class PdfGraphicsView(QGraphicsView):
         # --- 右クリック：削除 ---
         if event.button() == Qt.RightButton:
             if target_cropbox and target_cropbox in self.rects:
+                self.push_undo() # 削除前に現在の状態を保存
                 print("Right-clicked: CropBox (Deleting)")
                 self.rects.remove(target_cropbox)
                 self.scene.removeItem(target_cropbox)
@@ -209,6 +212,9 @@ class PdfGraphicsView(QGraphicsView):
 
         # --- 左クリック：操作 or 新規作成 ---
         elif event.button() == Qt.LeftButton:
+            # アクション開始前のスナップショットを撮っておく
+            self.pre_action_state = self.get_snapshot()
+            
             # いったん選択を解除する（背景クリックで解除するため）
             self.scene.clearSelection()
             self.start_pos = self.mapToScene(event.position().toPoint())
@@ -284,6 +290,13 @@ class PdfGraphicsView(QGraphicsView):
             self.start_pos = None
             self.new_rect = None
         
+        # もしアクション前後で状態が変わっていればUndoスタックに積む
+        if self.pre_action_state is not None:
+            current_state = self.get_snapshot()
+            if current_state != self.pre_action_state:
+                self.push_undo(self.pre_action_state)
+            self.pre_action_state = None
+
         super().mouseReleaseEvent(event)
         self.update_scene_limit()
 
@@ -303,7 +316,69 @@ class PdfGraphicsView(QGraphicsView):
             target = items[0]
         self.selectionChanged.emit(target)
 
+    def get_snapshot(self):
+        """現在の全枠の座標と位置のリストを取得（不変なデータとして）"""
+        return [(QPointF(item.pos()), QRectF(item.rect())) for item in self.rects]
+
+    def push_undo(self, state=None):
+        """現在の状態または指定された状態をUndoスタックに保存する"""
+        if state is None:
+            state = self.get_snapshot()
+            
+        self.undo_stack.append(state)
+        # 履歴上限
+        if len(self.undo_stack) > 50:
+            self.undo_stack.pop(0)
+
+    def undo(self):
+        """ひとつ前の状態に戻す"""
+        if not self.undo_stack:
+            return
+        
+        state = self.undo_stack.pop()
+        
+        # ハイブリッド更新：個数が同じなら座標とサイズだけを書き換える（チラつき防止＆選択維持）
+        if len(state) == len(self.rects):
+            for i, (pos, rect) in enumerate(state):
+                item = self.rects[i]
+                item.setPos(pos)
+                item.setRect(rect)
+        else:
+            # 個数が違う（追加や削除）場合は、全作成しなおす
+            # 1. 現在の全アイテムをシーンから除去
+            for item in self.rects:
+                self.scene.removeItem(item)
+            self.rects.clear()
+
+            # 2. 保存されていた状態からアイテムを再作成
+            for pos, rect in state:
+                box = myCropBox(rect)
+                box.setPos(pos)
+                
+                # スタイル設定
+                pen = QPen(QColor(0, 120, 215), 3)
+                pen.setCosmetic(True)
+                box.setPen(pen)
+                box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+                box.setData(0, "selection_rect")
+                
+                self.scene.addItem(box)
+                self.rects.append(box)
+                
+                # バッジ（番号）の追加
+                badge = myBadge(len(self.rects), self.badge_size, parent=box)
+                badge.setPos(rect.topLeft())
+
+        # 3. 各種表示の更新
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+        self._on_scene_selection_changed() # プロパティパネルの更新用
+
     def clear_selections(self):
+        # クリア前に状態を保存
+        if self.rects:
+            self.push_undo()
+            
         # シーン内の "selection_rect" タグが付いたアイテムだけを削除
         for item in list(self.scene.items()):
             if item.data(self.TAG_NAME) == "selection_rect":
@@ -478,6 +553,13 @@ class MainWindow(QMainWindow):
 
         # 編集メニュー
         edit_menu = menu_bar.addMenu("編集")
+        
+        undo_action = edit_menu.addAction("元に戻す")
+        undo_action.setShortcut("Ctrl+Z")
+        undo_action.triggered.connect(lambda: self.current_view().undo() if self.current_view() else None)
+        
+        edit_menu.addSeparator()
+        
         clear_action = edit_menu.addAction("選択範囲をクリア")
         clear_action.setShortcut("Ctrl+Shift+X")
         clear_action.triggered.connect(lambda: self.current_view().clear_selections() if self.current_view() else None)
