@@ -4,7 +4,7 @@ import fitz
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsSimpleTextItem,
-    QGraphicsItem, QTabWidget
+    QGraphicsItem, QTabWidget, QDockWidget
 )
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
@@ -343,6 +343,14 @@ class MainWindow(QMainWindow):
         
         self.target_pdfs = {} # タブごとのパスを管理 {view_object: path}
         
+        # ドックウィジェット（右側）を追加
+        self.dock = QDockWidget("プロパティ", self)
+        self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        # 中身はカラのQWidget
+        self.dock_content = QWidget()
+        self.dock.setWidget(self.dock_content)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+
         # 最初のタブを追加
         self.add_new_tab()
 
