@@ -4,7 +4,8 @@ import fitz
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsSimpleTextItem,
-    QGraphicsItem, QTabWidget, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox
+    QGraphicsItem, QTabWidget, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox,
+    QListWidget, QListWidgetItem
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
@@ -320,6 +321,14 @@ class PropertyPanel(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
+
+        # 1. 枠一覧リスト
+        self.list_label = QLabel("切り抜き枠一覧")
+        layout.addWidget(self.list_label)
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget)
+
+        # 2. 座標設定グループ
         group = QGroupBox("座標・サイズ設定 (px)")
         form = QFormLayout(group)
 
