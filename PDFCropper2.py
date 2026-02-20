@@ -335,7 +335,8 @@ class MainWindow(QMainWindow):
         self.view.fileDropped.connect(self.load_new_pdf) # 追加：Viewへのドロップを接続
 
         self.tab_widget = QTabWidget()
-        self.tab_widget.addTab(self.view, "PDF View")
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabCloseRequested.connect(self.remove_tab)
         self.setCentralWidget(self.tab_widget)
         
         self.target_pdfs = {} # タブごとのパスを管理 {view_object: path}
@@ -354,6 +355,13 @@ class MainWindow(QMainWindow):
         index = self.tab_widget.addTab(new_view, f"無題 {self.tab_widget.count() + 1}")
         self.tab_widget.setCurrentIndex(index)
         return new_view
+
+    def remove_tab(self, index):
+        """指定したインデックスのタブを閉じる"""
+        widget = self.tab_widget.widget(index)
+        if widget in self.target_pdfs:
+            del self.target_pdfs[widget]
+        self.tab_widget.removeTab(index)
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "PDFを開く", "", "PDF Files (*.pdf)")
