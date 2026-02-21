@@ -535,6 +535,9 @@ class MainWindow(QMainWindow):
         
         view_menu.addAction(self.preview_dock.toggleViewAction())
 
+        # ドックの初期サイズ設定
+        self.resizeDocks([self.dock, self.preview_dock], [300, 300], Qt.Vertical)
+
         # 最初のタブを追加
         self.add_new_tab()
 
