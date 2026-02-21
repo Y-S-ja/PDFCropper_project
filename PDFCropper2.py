@@ -513,6 +513,9 @@ class MainWindow(QMainWindow):
         
         
         # ドックウィジェット（右側）を追加
+        # ドックウィジェットのタブ位置を上部に設定
+        self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
+        
         self.dock = QDockWidget("プロパティ", self)
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         
