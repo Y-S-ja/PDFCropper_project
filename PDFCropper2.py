@@ -418,7 +418,7 @@ class PdfGraphicsView(QGraphicsView):
         self.push_undo() # 並び替え前に状態を保存
         self.rects = new_order_objs
         self.update_numbers()
-        self.rectsChanged.emit(self.rects)
+        
 
 
 class PropertyPanel(QWidget):
