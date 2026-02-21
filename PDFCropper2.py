@@ -311,8 +311,10 @@ class PdfGraphicsView(QGraphicsView):
         self.update_scene_limit()
 
     def update_numbers(self):
-        """残っている枠の番号を1から順に振り直す"""
+        """残っている枠の番号を1から順に振り直す。また、切り抜き順に合わせてZValue（重なり順）も更新する。"""
         for i, item in enumerate(self.rects):
+            # 重なり順を更新（後の番号ほど上に表示されるようにする）
+            item.setZValue(i)
             # 子要素から myBadge を探して更新
             for child in item.childItems():
                 if isinstance(child, myBadge):
