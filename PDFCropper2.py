@@ -5,10 +5,10 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPixmapItem, QGraphicsSimpleTextItem,
     QGraphicsItem, QTabWidget, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox,
-    QListWidget, QListWidgetItem
+    QListWidget, QListWidgetItem, QScrollArea, QFrame
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
-from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush
+from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QAction
 from myModule import *
 
 class PdfGraphicsView(QGraphicsView):
@@ -597,6 +597,60 @@ class PropertyPanel(QWidget):
         self.current_item.setPos(new_pos)
         self.current_item.setRect(new_rect)
 
+
+class PreviewPanel(QWidget):
+    """切り抜かれた状態の画像を一覧表示するパネル"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+        self.RECT_NUM = Qt.UserRole + 1
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.container = QWidget()
+        self.container_layout = QVBoxLayout(self.container)
+        self.container_layout.setAlignment(Qt.AlignTop)
+        self.scroll.setWidget(self.container)
+        layout.addWidget(self.scroll)
+
+    def update_previews(self, view):
+        """指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する"""
+        while self.container_layout.count():
+            item = self.container_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+        
+        if not view or not view.pdf_doc or not view.rects: return
+
+        page = view.pdf_doc[0] 
+        f = view.scale_factor
+        for box in view.rects:
+            rect = box.mapToScene(box.rect()).boundingRect()
+            # 画面上の座標(ピクセル)をPDFの座標(ポイント)に変換
+            fitz_rect = fitz.Rect(rect.left()*f, rect.top()*f, rect.right()*f, rect.bottom()*f)
+            if fitz_rect.is_empty: continue
+            
+            pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
+            img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+            
+            item_widget = QWidget()
+            item_vbox = QVBoxLayout(item_widget)
+            
+            label_title = QLabel(f"枠 {box.data(self.RECT_NUM)}")
+            label_title.setStyleSheet("font-weight: bold;")
+            item_vbox.addWidget(label_title)
+            
+            label_img = QLabel()
+            label_img.setPixmap(QPixmap.fromImage(img).scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
+            item_vbox.addWidget(label_img)
+            
+            line = QFrame(); line.setFrameShape(QFrame.HLine); line.setFrameShadow(QFrame.Sunken)
+            item_vbox.addWidget(line)
+            self.container_layout.addWidget(item_widget)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -671,6 +725,15 @@ class MainWindow(QMainWindow):
         view_menu = menu_bar.addMenu("表示")
         view_menu.addAction(self.dock.toggleViewAction())
 
+        # プレビュー用のドックを追加
+        self.preview_dock = QDockWidget("切り抜きプレビュー", self)
+        self.preview_panel = PreviewPanel()
+        self.preview_dock.setWidget(self.preview_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
+        
+        # 最初はプロパティとプレビューを上下に並べる
+        view_menu.addAction(self.preview_dock.toggleViewAction())
+
         # 最初のタブを追加
         self.add_new_tab()
 
@@ -681,10 +744,12 @@ class MainWindow(QMainWindow):
         if view:
             # 初期状態を反映
             self.prop_panel.update_list(view.rects)
+            self.preview_panel.update_previews(view)
             view._on_scene_selection_changed()
         else:
             self.prop_panel.set_target(None)
             self.prop_panel.update_list([])
+            self.preview_panel.update_previews(None)
 
     def _handle_selection_changed(self, item):
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
@@ -693,16 +758,17 @@ class MainWindow(QMainWindow):
 
     def _handle_rects_changed(self, rects):
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
-        if self.sender() == self.current_view():
+        view = self.current_view()
+        if self.sender() == view:
             self.prop_panel.update_list(rects)
+            self.preview_panel.update_previews(view)
 
     def _handle_reorder(self, new_order):
         """ドックでの並び替えを現在のビューに反映する"""
         view = self.current_view()
         if view:
             view.reorder_rects(new_order)
-
-
+            self.preview_panel.update_previews(view)
 
     def current_view(self):
         """現在のアクティブなタブにあるビューを返す"""
