@@ -39,7 +39,10 @@ class PdfGraphicsView(QGraphicsView):
         self.new_rect = None  # ドラッグ中の枠
         self.rects = []           # 確定した枠（QGraphicsRectItem）のリスト
         self.start_pos = None
-        self.TAG_NAME = 0
+        self.TAG_NAME = Qt.UserRole
+        self.RECT_NUM = Qt.UserRole + 1
+
+        self.rect_count = 0
         self.undo_stack = [] # Undo履歴スタック
         self.pre_action_state = None # アクション開始前の状態保持用
 
@@ -274,7 +277,9 @@ class PdfGraphicsView(QGraphicsView):
                 self.new_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
                 
                 # 識別タグを追加（削除時にこれを目印にする）
-                self.new_rect.setData(0, "selection_rect")
+                self.new_rect.setData(self.TAG_NAME, "selection_rect")
+                self.rect_count += 1
+                self.new_rect.setData(self.RECT_NUM, self.rect_count)
                 
                 # --- 番号表示 ---
                 index = len(self.rects) + 1
@@ -415,6 +420,8 @@ class PropertyPanel(QWidget):
         self.current_item = None
         self._updating = False # ループ防止
         self.init_ui()
+        self.connnectedRect = Qt.UserRole
+        self.RECT_NUM = Qt.UserRole + 1
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -467,8 +474,8 @@ class PropertyPanel(QWidget):
         self._updating = True
         self.list_widget.clear()
         for i, rect in enumerate(rects):
-            item = QListWidgetItem(f"枠 {i+1}")
-            item.setData(Qt.UserRole, rect) # アイテムに実際のオブジェクトを紐付ける
+            item = QListWidgetItem(f"枠 {rect.data(self.RECT_NUM)}")
+            item.setData(self.connnectedRect, rect) # アイテムに実際のオブジェクトを紐付ける
             self.list_widget.addItem(item)
         self._updating = False
         # 現在の選択状態も同期させる
@@ -481,7 +488,7 @@ class PropertyPanel(QWidget):
         new_order = []
         for i in range(self.list_widget.count()):
             list_item = self.list_widget.item(i)
-            new_order.append(list_item.data(Qt.UserRole))
+            new_order.append(list_item.data(self.connnectedRect))
         
         self.orderChanged.emit(new_order)
 
@@ -490,7 +497,7 @@ class PropertyPanel(QWidget):
         if self._updating or not current:
             return
             
-        target_rect = current.data(Qt.UserRole)
+        target_rect = current.data(self.connnectedRect)
         if target_rect:
             # 1. シグナルを待たずに即座にプロパティ値を反映
             self.set_target(target_rect)
@@ -532,7 +539,7 @@ class PropertyPanel(QWidget):
         if self.current_item:
             for i in range(self.list_widget.count()):
                 list_item = self.list_widget.item(i)
-                if list_item.data(Qt.UserRole) == self.current_item:
+                if list_item.data(self.connnectedRect) == self.current_item:
                     list_item.setSelected(True)
                     self.list_widget.setCurrentItem(list_item)
                     break
