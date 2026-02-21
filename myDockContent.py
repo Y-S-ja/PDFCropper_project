@@ -195,9 +195,29 @@ class PreviewPanel(QWidget):
             item_vbox.addWidget(label_title)
             
             label_img = QLabel()
-            label_img.setPixmap(QPixmap.fromImage(img).scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
+            full_pix = QPixmap.fromImage(img)
+            label_img._full_pix = full_pix # 高解像度版をキャッシュしておく
+            label_img.setPixmap(full_pix.scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
             item_vbox.addWidget(label_img)
             
             line = QFrame(); line.setFrameShape(QFrame.HLine); line.setFrameShadow(QFrame.Sunken)
             item_vbox.addWidget(line)
             self.container_layout.addWidget(item_widget)
+
+    def resizeEvent(self, event):
+        """ドックの幅が変わった際に、表示中のプレビュー画像をリサイズして追従させる"""
+        super().resizeEvent(event)
+        
+        # コンテナ内の各アイテム（QLabel）を探してリサイズする
+        # PDFからの再生成は重いため、保持しているQPixmapをスケーリングするだけに留める
+        new_width = max(50, self.width() - 40)
+        
+        for i in range(self.container_layout.count()):
+            item = self.container_layout.itemAt(i)
+            widget = item.widget()
+            if widget:
+                # 子要素の中から画像を保持しているラベルを探す
+                for label in widget.findChildren(QLabel):
+                    if hasattr(label, "_full_pix"):
+                        scaled_pix = label._full_pix.scaledToWidth(new_width, Qt.SmoothTransformation)
+                        label.setPixmap(scaled_pix)
