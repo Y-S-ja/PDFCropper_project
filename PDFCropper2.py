@@ -376,7 +376,10 @@ class PdfGraphicsView(QGraphicsView):
                 pen.setCosmetic(True)
                 box.setPen(pen)
                 box.setBrush(QBrush(QColor(0, 120, 215, 40)))
-                box.setData(0, "selection_rect")
+                
+                # タグと固有IDを復元
+                box.setData(self.TAG_NAME, "selection_rect")
+                box.setData(self.RECT_NUM, res_id)
                 
                 self.scene.addItem(box)
                 self.rects.append(box)
