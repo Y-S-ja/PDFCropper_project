@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QListWidget, QGroupBox, QFormLayout, 
     QDoubleSpinBox, QListWidgetItem, QScrollArea, QFrame
 )
-from PySide6.QtCore import Qt, Signal, QPointF, QRectF
+from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
 from PySide6.QtGui import QImage, QPixmap
 
 class PropertyPanel(QWidget):
@@ -156,6 +156,11 @@ class PreviewPanel(QWidget):
         super().__init__(parent)
         self.init_ui()
         self.RECT_NUM = Qt.UserRole + 1
+        
+        # リサイズイベントのデバウンス（遅延実行）用タイマー
+        self.resize_timer = QTimer(self)
+        self.resize_timer.setSingleShot(True)
+        self.resize_timer.timeout.connect(self._do_delayed_resize)
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -205,11 +210,12 @@ class PreviewPanel(QWidget):
             self.container_layout.addWidget(item_widget)
 
     def resizeEvent(self, event):
-        """ドックの幅が変わった際に、表示中のプレビュー画像をリサイズして追従させる"""
+        """ドックの幅が変わった際、即座にタイマーを回して変更終了を待つ"""
         super().resizeEvent(event)
-        
-        # コンテナ内の各アイテム（QLabel）を探してリサイズする
-        # PDFからの再生成は重いため、保持しているQPixmapをスケーリングするだけに留める
+        self.resize_timer.start(100)
+
+    def _do_delayed_resize(self):
+        """ドラッグが止まった後に一括で画像をリサイズする"""
         new_width = max(50, self.width() - 40)
         
         for i in range(self.container_layout.count()):
