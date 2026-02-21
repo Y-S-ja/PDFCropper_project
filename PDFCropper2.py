@@ -215,8 +215,6 @@ class PdfGraphicsView(QGraphicsView):
             # アクション開始前のスナップショットを撮っておく
             self.pre_action_state = self.get_snapshot()
             
-            # いったん選択を解除する（背景クリックで解除するため）
-            self.scene.clearSelection()
             self.start_pos = self.mapToScene(event.position().toPoint())
             
             if target_cropbox:
@@ -226,6 +224,7 @@ class PdfGraphicsView(QGraphicsView):
             elif is_intro_text:
                 print("Left-clicked: Intro Text (Ignoring)")
             else:
+                self.scene.clearSelection()
                 # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
                 print(f"Left-clicked: Background (Creating new box)")
                 self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
