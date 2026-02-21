@@ -31,13 +31,34 @@ class myCropBox(QGraphicsRectItem):
         )
         # マウスの動きを監視する設定（カーソル変更のため）
         self.setAcceptHoverEvents(True)
-        # self.is_resizing = False
         self.active_handle = None
         
+        # --- ハンドル（小四角）を子アイテムとして作成 ---
+        self.handle_items = {}
+        for h_id in [self.HANDLE_TOP_LEFT, self.HANDLE_TOP_RIGHT, 
+                     self.HANDLE_BOTTOM_LEFT, self.HANDLE_BOTTOM_RIGHT]:
+            h_item = QGraphicsRectItem(-self.HANDLE_SIZE/2, -self.HANDLE_SIZE/2, 
+                                       self.HANDLE_SIZE, self.HANDLE_SIZE, parent=self)
+            h_item.setBrush(Qt.white)
+            pen = QPen(QColor(0, 120, 215), 3)
+            pen.setCosmetic(True)
+            h_item.setPen(pen)
+            h_item.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+            h_item.setZValue(2) # ハンドルは最前面 (badgeより上)
+            h_item.hide()
+            self.handle_items[h_id] = h_item
+        
     def setRect(self, rect):
-        """矩形のサイズが変更されたらバッジの位置も更新する"""
+        """矩形のサイズが変更されたらハンドルとバッジの位置も更新する"""
         super().setRect(rect)
-        # 子要素の中からバッジを探して位置を合わせる
+        # 1. ハンドルの位置を更新
+        if hasattr(self, 'handle_items'):
+            self.handle_items[self.HANDLE_TOP_LEFT].setPos(rect.topLeft())
+            self.handle_items[self.HANDLE_TOP_RIGHT].setPos(rect.topRight())
+            self.handle_items[self.HANDLE_BOTTOM_LEFT].setPos(rect.bottomLeft())
+            self.handle_items[self.HANDLE_BOTTOM_RIGHT].setPos(rect.bottomRight())
+
+        # 2. 子要素の中からバッジを探して位置を合わせる
         for child in self.childItems():
             if isinstance(child, myBadge):
                 child.setPos(rect.topLeft())
@@ -91,16 +112,10 @@ class myCropBox(QGraphicsRectItem):
         painter.setBrush(self.brush())
         painter.drawRect(self.rect())
         
-        # 選択されている時だけハンドルを描画
-        if self.isSelected():
-            # ハンドルもズームで太さが変わらないようにする
-            h_pen = QPen(QColor(0, 120, 215), 3)
-            h_pen.setCosmetic(True)
-            painter.setPen(h_pen)
-            painter.setBrush(Qt.white)
-            # 各ハンドルの矩形を描画
-            for h_rect in self.get_handle_rects().values():
-                painter.drawRect(h_rect)
+        # 選択状態に合わせてハンドルの表示/非表示を切り替える
+        is_sel = self.isSelected()
+        for h_item in self.handle_items.values():
+            h_item.setVisible(is_sel)
 
     def get_handle_at(self, pos):
         """指定された座標にあるハンドルのIDを返す"""
@@ -175,6 +190,7 @@ class myBadge(QGraphicsRectItem):
         self.setPen(Qt.NoPen)
         # ズームしても大きさが変わらないように設定
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self.setZValue(1) # バッジは枠(Z=0)より上、ハンドル(Z=2)より下
         
         self.text_item = QGraphicsSimpleTextItem(str(index), parent=self)
         self.text_item.setBrush(QBrush(Qt.white))
