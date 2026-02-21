@@ -221,7 +221,7 @@ class PdfGraphicsView(QGraphicsView):
             self.start_pos = self.mapToScene(event.position().toPoint())
             
             if target_cropbox:
-                print("Left-clicked: CropBox (Resizing/Moving)")
+                print(f"Left-clicked: CropBox {target_cropbox.data(self.RECT_NUM)} (Resizing/Moving)")
                 self.new_rect = None
                 super().mousePressEvent(event)
             elif is_intro_text:
