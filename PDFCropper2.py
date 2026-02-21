@@ -512,14 +512,12 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tab_widget)
         
         
-        # ドックウィジェット（右側）を追加
+        # ドックウィジェット
         # ドックウィジェットのタブ位置を上部に設定
         self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
-        
+        # プロパティパネル
         self.dock = QDockWidget("プロパティ", self)
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        
-        # プロパティパネルを作成してドックにセット
         self.prop_panel = PropertyPanel()
         self.prop_panel.orderChanged.connect(self._handle_reorder)
         self.dock.setWidget(self.prop_panel)
@@ -535,7 +533,6 @@ class MainWindow(QMainWindow):
         self.preview_dock.setWidget(self.preview_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
         
-        # 最初はプロパティとプレビューを上下に並べる
         view_menu.addAction(self.preview_dock.toggleViewAction())
 
         # 最初のタブを追加
