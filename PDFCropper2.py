@@ -44,6 +44,7 @@ class PdfGraphicsView(QGraphicsView):
 
         self.rect_count = 0
         self.undo_stack = [] # Undo履歴スタック
+        self.redo_stack = [] # Redo履歴スタック
         self.pre_action_state = None # アクション開始前の状態保持用
 
         self.badge_size = 24
@@ -335,6 +336,9 @@ class PdfGraphicsView(QGraphicsView):
             state = self.get_snapshot()
             
         self.undo_stack.append(state)
+        # 新しい操作が行われたので、Redoスタックをクリアする
+        self.redo_stack.clear()
+        
         # 履歴上限
         if len(self.undo_stack) > 50:
             self.undo_stack.pop(0)
@@ -344,8 +348,27 @@ class PdfGraphicsView(QGraphicsView):
         if not self.undo_stack:
             return
         
-        state = self.undo_stack.pop()
+        # 現在の状態をRedo用に保存
+        current_state = self.get_snapshot()
+        self.redo_stack.append(current_state)
         
+        state = self.undo_stack.pop()
+        self._restore_state(state)
+
+    def redo(self):
+        """戻した操作をやり直す"""
+        if not self.redo_stack:
+            return
+            
+        # 現在の状態をUndo用に保存
+        current_state = self.get_snapshot()
+        self.undo_stack.append(current_state)
+        
+        state = self.redo_stack.pop()
+        self._restore_state(state)
+
+    def _restore_state(self, state):
+        """指定されたスナップショットから状態を復元する（共通処理）"""
         # IDをキーにした現在のアイテムの辞書を作成
         current_items = {item.data(self.RECT_NUM): item for item in self.rects}
         
@@ -608,6 +631,10 @@ class MainWindow(QMainWindow):
         undo_action = edit_menu.addAction("元に戻す")
         undo_action.setShortcut("Ctrl+Z")
         undo_action.triggered.connect(lambda: self.current_view().undo() if self.current_view() else None)
+
+        redo_action = edit_menu.addAction("やり直し")
+        redo_action.setShortcuts(["Ctrl+Shift+Z", "Ctrl+Y"])
+        redo_action.triggered.connect(lambda: self.current_view().redo() if self.current_view() else None)
         
         edit_menu.addSeparator()
         
