@@ -326,8 +326,8 @@ class PdfGraphicsView(QGraphicsView):
         self.selectionChanged.emit(target)
 
     def get_snapshot(self):
-        """現在の全枠の座標と位置のリストを取得（不変なデータとして）"""
-        return [(QPointF(item.pos()), QRectF(item.rect())) for item in self.rects]
+        """座標、サイズ、および固有IDを含めたスナップショットを取る"""
+        return [(item.data(self.RECT_NUM), QPointF(item.pos()), QRectF(item.rect())) for item in self.rects]
 
     def push_undo(self, state=None):
         """現在の状態または指定された状態をUndoスタックに保存する"""
@@ -340,18 +340,25 @@ class PdfGraphicsView(QGraphicsView):
             self.undo_stack.pop(0)
 
     def undo(self):
-        """ひとつ前の状態に戻す"""
+        """ひとつ前の状態に戻す（並び順も含む）"""
         if not self.undo_stack:
             return
         
         state = self.undo_stack.pop()
         
-        # ハイブリッド更新：個数が同じなら座標とサイズだけを書き換える（チラつき防止＆選択維持）
+        # IDをキーにした現在のアイテムの辞書を作成
+        current_items = {item.data(self.RECT_NUM): item for item in self.rects}
+        
+        # ハイブリッド更新：個数が同じなら座標・サイズの上書きと並び順の復元
         if len(state) == len(self.rects):
-            for i, (pos, rect) in enumerate(state):
-                item = self.rects[i]
-                item.setPos(pos)
-                item.setRect(rect)
+            new_rects_list = []
+            for res_id, pos, rect in state:
+                item = current_items.get(res_id)
+                if item:
+                    item.setPos(pos)
+                    item.setRect(rect)
+                    new_rects_list.append(item)
+            self.rects = new_rects_list
         else:
             # 個数が違う（追加や削除）場合は、全作成しなおす
             # 1. 現在の全アイテムをシーンから除去
@@ -360,7 +367,7 @@ class PdfGraphicsView(QGraphicsView):
             self.rects.clear()
 
             # 2. 保存されていた状態からアイテムを再作成
-            for pos, rect in state:
+            for res_id, pos, rect in state:
                 box = myCropBox(rect)
                 box.setPos(pos)
                 
