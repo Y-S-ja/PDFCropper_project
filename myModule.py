@@ -114,11 +114,17 @@ class myCropBox(QGraphicsRectItem):
         painter.setPen(self.pen())
         painter.setBrush(self.brush())
         painter.drawRect(self.rect())
+
+    def itemChange(self, change, value):
+        """選択状態が変わった瞬間にハンドルの表示・非表示を切り替える"""
+        if change == QGraphicsItem.ItemSelectedChange:
+            # value は新しく設定される選択状態 (bool)
+            is_sel = bool(value)
+            if hasattr(self, 'handle_items'):
+                for h_item in self.handle_items.values():
+                    h_item.setVisible(is_sel)
         
-        # 選択状態に合わせてハンドルの表示/非表示を切り替える
-        is_sel = self.isSelected()
-        for h_item in self.handle_items.values():
-            h_item.setVisible(is_sel)
+        return super().itemChange(change, value)
 
     def get_handle_at(self, pos):
         """指定された座標にあるハンドルのIDを返す"""
