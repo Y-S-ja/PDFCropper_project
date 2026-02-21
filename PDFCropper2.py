@@ -42,6 +42,8 @@ class PdfGraphicsView(QGraphicsView):
         self.TAG_NAME = Qt.UserRole
         self.RECT_NUM = Qt.UserRole + 1
 
+        self.pdf_path = None      # PDFファイルのパス
+        self.pdf_doc = None       # PDFドキュメントオブジェクト
         self.rect_count = 0
         self.undo_stack = [] # Undo履歴スタック
         self.redo_stack = [] # Redo履歴スタック
@@ -113,8 +115,11 @@ class PdfGraphicsView(QGraphicsView):
         self.rectsChanged.emit(self.rects)
         
         # PDF読み込み（高解像度で1回だけ作る）
-        doc = fitz.open(file_path)
-        page = doc[0]
+        if self.pdf_doc:
+            self.pdf_doc.close()
+        self.pdf_doc = fitz.open(file_path)
+        self.pdf_path = file_path
+        page = self.pdf_doc[0]
         pix = page.get_pixmap(matrix=fitz.Matrix(3, 3)) # 3倍高画質
         img_data = pix.tobytes("png")
         pixmap = QPixmap.fromImage(QImage.fromData(img_data))
@@ -651,7 +656,6 @@ class MainWindow(QMainWindow):
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self.tab_widget)
         
-        self.target_pdfs = {} # タブごとのパスを管理 {view_object: path}
         
         # ドックウィジェット（右側）を追加
         self.dock = QDockWidget("プロパティ", self)
@@ -750,9 +754,6 @@ class MainWindow(QMainWindow):
 
     def remove_tab(self, index):
         """指定したインデックスのタブを閉じる"""
-        widget = self.tab_widget.widget(index)
-        if widget in self.target_pdfs:
-            del self.target_pdfs[widget]
         self.tab_widget.removeTab(index)
         
         # 全てのタブが閉じられたら新しい空のタブを作る
@@ -790,7 +791,6 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if not view: return
         
-        self.target_pdfs[view] = file_path
         view.load_pdf_page(file_path)
         # タブの名前をファイル名に変える
         current_index = self.tab_widget.currentIndex()
@@ -800,7 +800,8 @@ class MainWindow(QMainWindow):
 
     def process_crop(self):
         view = self.current_view()
-        target_pdf = self.target_pdfs.get(view)
+        if not view: return
+        target_pdf = view.pdf_path
         
         if not target_pdf:
             QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
