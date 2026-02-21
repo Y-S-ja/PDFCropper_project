@@ -395,8 +395,21 @@ class PdfGraphicsView(QGraphicsView):
         # プロパティパネル側でも再描画を促すために選択状態をリセット
         self._on_scene_selection_changed()
 
+    def reorder_rects(self, new_order_objs):
+        """プロパティパネルでの並び替えを反映する"""
+        if self.rects == new_order_objs:
+            return
+            
+        self.push_undo() # 並び替え前に状態を保存
+        self.rects = new_order_objs
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+
+
 class PropertyPanel(QWidget):
     """QDockWidgetの中身として動作するプロパティ編集パネル"""
+    orderChanged = Signal(list) # 並び順変更をメインウィンドウに知らせる用
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_item = None
@@ -407,9 +420,14 @@ class PropertyPanel(QWidget):
         layout = QVBoxLayout(self)
 
         # 1. 枠一覧リスト
-        self.list_label = QLabel("切り抜き枠一覧")
+        self.list_label = QLabel("切り抜き枠一覧 (ドラッグで順序変更)")
         layout.addWidget(self.list_label)
         self.list_widget = QListWidget()
+        
+        # ドラッグ＆ドロップによる並び替えを有効化
+        self.list_widget.setDragDropMode(QListWidget.InternalMove)
+        self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
+        
         layout.addWidget(self.list_widget)
 
         # 2. 座標設定グループ
@@ -445,6 +463,7 @@ class PropertyPanel(QWidget):
         
     def update_list(self, rects):
         """ビュー内の枠リストを反映する"""
+        if self._updating: return
         self._updating = True
         self.list_widget.clear()
         for i, rect in enumerate(rects):
@@ -454,6 +473,17 @@ class PropertyPanel(QWidget):
         self._updating = False
         # 現在の選択状態も同期させる
         self.sync_list_selection()
+
+    def _on_rows_moved(self, parent, start, end, destination, row):
+        """ドラッグで順番が入れ替わったら、新しいオブジェクトリストを通知する"""
+        if self._updating: return
+        
+        new_order = []
+        for i in range(self.list_widget.count()):
+            list_item = self.list_widget.item(i)
+            new_order.append(list_item.data(Qt.UserRole))
+        
+        self.orderChanged.emit(new_order)
 
     def _on_list_selection_changed(self, current, previous):
         """リストの選択が変更されたら、即座にパネルを更新し、シーン上のアイテムも選択する"""
@@ -583,6 +613,7 @@ class MainWindow(QMainWindow):
         
         # プロパティパネルを作成してドックにセット
         self.prop_panel = PropertyPanel()
+        self.prop_panel.orderChanged.connect(self._handle_reorder)
         self.dock.setWidget(self.prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
 
@@ -614,6 +645,12 @@ class MainWindow(QMainWindow):
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
         if self.sender() == self.current_view():
             self.prop_panel.update_list(rects)
+
+    def _handle_reorder(self, new_order):
+        """ドックでの並び替えを現在のビューに反映する"""
+        view = self.current_view()
+        if view:
+            view.reorder_rects(new_order)
 
 
 
