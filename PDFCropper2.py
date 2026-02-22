@@ -449,6 +449,76 @@ class PdfGraphicsView(QGraphicsView):
         self.push_undo() # 並び替え前に状態を保存
         self.rects = new_order_objs
         self.update_numbers()
+
+    def add_template_boxes(self, rects_list):
+        """複数の矩形を一気にテンプレートとして追加する（Undo対応）"""
+        if not rects_list: return
+        
+        self.push_undo()
+        
+        for qrect in rects_list:
+            box = myCropBox(qrect)
+            # スタイル設定
+            pen = QPen(QColor(0, 120, 215), 3)
+            pen.setCosmetic(True)
+            box.setPen(pen)
+            box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+            
+            box.setData(self.TAG_NAME, "selection_rect")
+            self.rect_count += 1
+            box.setData(self.RECT_NUM, self.rect_count)
+            
+            self.scene.addItem(box)
+            self.rects.append(box)
+            
+            # バッジの追加
+            badge = myBadge(len(self.rects), self.badge_size, parent=box)
+            badge.setPos(qrect.topLeft())
+            
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+        self._on_scene_selection_changed()
+
+    def add_template_2v(self):
+        """2分割（縦）テンプレート：左右に並べる"""
+        if not self.pdf_item: return
+        
+        # ページの画像サイズを取得
+        canvas_rect = self.pdf_item.pixmap().rect()
+        w = canvas_rect.width()
+        h = canvas_rect.height()
+        
+        # 左右に分割
+        rect_left = QRectF(0, 0, w/2, h)
+        rect_right = QRectF(w/2, 0, w/2, h)
+        
+        self.add_template_boxes([rect_left, rect_right])
+
+    def add_template_2h(self):
+        """2分割（横）テンプレート：上下に並べる"""
+        if not self.pdf_item: return
+        canvas_rect = self.pdf_item.pixmap().rect()
+        w = canvas_rect.width()
+        h = canvas_rect.height()
+        
+        rect_top = QRectF(0, 0, w, h/2)
+        rect_bottom = QRectF(0, h/2, w, h/2)
+        self.add_template_boxes([rect_top, rect_bottom])
+
+    def add_template_4(self):
+        """4分割テンプレート：田の字型"""
+        if not self.pdf_item: return
+        canvas_rect = self.pdf_item.pixmap().rect()
+        w = canvas_rect.width()
+        h = canvas_rect.height()
+        
+        rects = [
+            QRectF(0, 0, w/2, h/2),     # 左上
+            QRectF(w/2, 0, w/2, h/2),   # 右上
+            QRectF(0, h/2, w/2, h/2),   # 左下
+            QRectF(w/2, h/2, w/2, h/2)  # 右下
+        ]
+        self.add_template_boxes(rects)
         
 
 
@@ -540,6 +610,36 @@ class MainWindow(QMainWindow):
 
         # 最初のタブを追加
         self.add_new_tab()
+
+        # テンプレート用ツールバー
+        self.template_toolbar = self.addToolBar("テンプレート")
+        
+        btn_2v = QPushButton("2分割(縦)")
+        btn_2v.clicked.connect(self._apply_template_2v)
+        self.template_toolbar.addWidget(btn_2v)
+        
+        btn_2h = QPushButton("2分割(横)")
+        btn_2h.clicked.connect(self._apply_template_2h)
+        self.template_toolbar.addWidget(btn_2h)
+        
+        btn_4 = QPushButton("4分割")
+        btn_4.clicked.connect(self._apply_template_4)
+        self.template_toolbar.addWidget(btn_4)
+
+    def _apply_template_2v(self):
+        view = self.current_view()
+        if view:
+            view.add_template_2v()
+
+    def _apply_template_2h(self):
+        view = self.current_view()
+        if view:
+            view.add_template_2h()
+
+    def _apply_template_4(self):
+        view = self.current_view()
+        if view:
+            view.add_template_4()
 
     def _on_tab_changed(self, index):
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
