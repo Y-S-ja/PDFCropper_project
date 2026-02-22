@@ -181,33 +181,42 @@ class PreviewPanel(QWidget):
         
         if not view or not view.pdf_doc or not view.rects: return
 
-        page = view.pdf_doc[0] 
         f = view.scale_factor
-        for box in view.rects:
-            rect = box.mapToScene(box.rect()).boundingRect()
-            # 画面上の座標(ピクセル)をPDFの座標(ポイント)に変換
-            fitz_rect = fitz.Rect(rect.left()*f, rect.top()*f, rect.right()*f, rect.bottom()*f)
-            if fitz_rect.is_empty: continue
+        for page_index in range(len(view.pdf_doc)):
+            page = view.pdf_doc[page_index]
             
-            pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
-            img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
-            
-            item_widget = QWidget()
-            item_vbox = QVBoxLayout(item_widget)
-            
-            label_title = QLabel(f"枠 {box.data(self.RECT_NUM)}")
-            label_title.setStyleSheet("font-weight: bold;")
-            item_vbox.addWidget(label_title)
-            
-            label_img = QLabel()
-            full_pix = QPixmap.fromImage(img)
-            label_img._full_pix = full_pix # 高解像度版をキャッシュしておく
-            label_img.setPixmap(full_pix.scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
-            item_vbox.addWidget(label_img)
-            
-            line = QFrame(); line.setFrameShape(QFrame.HLine); line.setFrameShadow(QFrame.Sunken)
-            item_vbox.addWidget(line)
-            self.container_layout.addWidget(item_widget)
+            # ページ区切りのヘッダーを追加
+            page_header = QLabel(f"--- ページ {page_index + 1} ---")
+            page_header.setStyleSheet("font-weight: bold; color: white; background-color: #666; padding: 4px; margin-top: 10px;")
+            page_header.setAlignment(Qt.AlignCenter)
+            self.container_layout.addWidget(page_header)
+
+            for box in view.rects:
+                rect = box.mapToScene(box.rect()).boundingRect()
+                # 画面上の座標(ピクセル)をPDFの座標(ポイント)に変換
+                fitz_rect = fitz.Rect(rect.left()*f, rect.top()*f, rect.right()*f, rect.bottom()*f)
+                if fitz_rect.is_empty: continue
+                
+                pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
+                img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+                
+                item_widget = QWidget()
+                item_vbox = QVBoxLayout(item_widget)
+                item_vbox.setContentsMargins(5, 5, 5, 5)
+                
+                label_title = QLabel(f"枠 {box.data(self.RECT_NUM)}")
+                label_title.setStyleSheet("font-weight: bold;")
+                item_vbox.addWidget(label_title)
+                
+                label_img = QLabel()
+                full_pix = QPixmap.fromImage(img)
+                label_img._full_pix = full_pix # 高解像度版をキャッシュしておく
+                label_img.setPixmap(full_pix.scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
+                item_vbox.addWidget(label_img)
+                
+                line = QFrame(); line.setFrameShape(QFrame.HLine); line.setFrameShadow(QFrame.Sunken)
+                item_vbox.addWidget(line)
+                self.container_layout.addWidget(item_widget)
 
     def resizeEvent(self, event):
         """ドックの幅が変わった際、即座にタイマーを回して変更終了を待つ"""
