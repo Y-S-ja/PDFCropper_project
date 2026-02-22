@@ -4,13 +4,15 @@ import fitz
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
                              QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel,
-                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu)
-from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent
+                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu, QGraphicsObject)
+from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 from PySide6 import QtGui
 
 # --- 1. スマートな枠（アイテム）クラス ---
-class myCropBox(QGraphicsRectItem):
+class myCropBox(QGraphicsObject):
+    geometryChanged = Signal(object) # 自身(item)を渡す
+    
     HANDLE_SIZE = 10.0  # ハンドルのサイズ
     # ハンドル定数をビットフラグに変更 (1枚目: 0=Left, 1=Right / 2枚目: 0=Top, 2=Bottom)
     HANDLE_TOP_LEFT = 0     # 00
@@ -19,19 +21,21 @@ class myCropBox(QGraphicsRectItem):
     HANDLE_BOTTOM_RIGHT = 3 # 11
 
     def __init__(self, rect):
-        super().__init__(rect)
-        self.setPen(QPen(QColor(0, 120, 215), 2, Qt.DashLine))
-        self.setBrush(QBrush(QColor(0, 120, 215, 20)))
+        super().__init__()
+        self._rect = rect
+        self.pen_style = QPen(QColor(0, 120, 215), 2, Qt.DashLine)
+        self.brush_style = QBrush(QColor(0, 120, 215, 20))
         
         # フラグ設定: 移動可能、選択可能、フォーカス可能にする
         self.setFlags(
-            QGraphicsRectItem.ItemIsMovable |
-            QGraphicsRectItem.ItemIsSelectable |
-            QGraphicsRectItem.ItemSendsGeometryChanges
+            QGraphicsItem.ItemIsMovable |
+            QGraphicsItem.ItemIsSelectable |
+            QGraphicsItem.ItemSendsGeometryChanges
         )
         # マウスの動きを監視する設定（カーソル変更のため）
         self.setAcceptHoverEvents(True)
         self.active_handle = None
+        self._block_sync = False # 循環防止用
         
         # --- ハンドル（小四角）を子アイテムとして作成 ---
         self.handle_items = {}
@@ -51,9 +55,13 @@ class myCropBox(QGraphicsRectItem):
         # 初期位置をハンドルに反映させるために明示的に呼び出す
         self.setRect(rect)
         
+    def rect(self):
+        return self._rect
+
     def setRect(self, rect):
         """矩形のサイズが変更されたらハンドルとバッジの位置も更新する"""
-        super().setRect(rect)
+        self._rect = rect
+        self.prepareGeometryChange()
         # 1. ハンドルの位置を更新
         if hasattr(self, 'handle_items'):
             self.handle_items[self.HANDLE_TOP_LEFT].setPos(rect.topLeft())
@@ -65,6 +73,14 @@ class myCropBox(QGraphicsRectItem):
         for child in self.childItems():
             if isinstance(child, myBadge):
                 child.setPos(rect.topLeft())
+        
+        if not self._block_sync:
+            self.geometryChanged.emit(self)
+
+    def pen(self): return self.pen_style
+    def setPen(self, pen): self.pen_style = pen; self.update()
+    def brush(self): return self.brush_style
+    def setBrush(self, brush): self.brush_style = brush; self.update()
 
     def get_current_scale(self):
         """現在のビューのズーム倍率を取得する"""
@@ -123,6 +139,10 @@ class myCropBox(QGraphicsRectItem):
             if hasattr(self, 'handle_items'):
                 for h_item in self.handle_items.values():
                     h_item.setVisible(is_sel)
+        
+        if change == QGraphicsItem.ItemPositionChange and not self._block_sync:
+            # 位置座標が変わる時に信号を出す
+            self.geometryChanged.emit(self)
         
         return super().itemChange(change, value)
 
