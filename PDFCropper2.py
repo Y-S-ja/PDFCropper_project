@@ -457,7 +457,13 @@ class PdfGraphicsView(QGraphicsView):
         self.push_undo()
         
         for qrect in rects_list:
-            box = myCropBox(qrect)
+            # 座標表示と同期させるため、位置は setPos、矩形自体は (0,0) 起点で作成する
+            pos = qrect.topLeft()
+            size_rect = QRectF(0, 0, qrect.width(), qrect.height())
+            
+            box = myCropBox(size_rect)
+            box.setPos(pos)
+            
             # スタイル設定
             pen = QPen(QColor(0, 120, 215), 3)
             pen.setCosmetic(True)
@@ -473,7 +479,7 @@ class PdfGraphicsView(QGraphicsView):
             
             # バッジの追加
             badge = myBadge(len(self.rects), self.badge_size, parent=box)
-            badge.setPos(qrect.topLeft())
+            badge.setPos(size_rect.topLeft())
             
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
