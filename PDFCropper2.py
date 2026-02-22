@@ -41,6 +41,7 @@ class PdfGraphicsView(QGraphicsView):
         self.start_pos = None
         self.TAG_NAME = Qt.UserRole
         self.RECT_NUM = Qt.UserRole + 1
+        self.GROUP_ID = Qt.UserRole + 2 # グループ同期用のID
 
         self.pdf_path = None      # PDFファイルのパス
         self.pdf_doc = None       # PDFドキュメントオブジェクト
@@ -48,6 +49,9 @@ class PdfGraphicsView(QGraphicsView):
         self.undo_stack = [] # Undo履歴スタック
         self.redo_stack = [] # Redo履歴スタック
         self.pre_action_state = None # アクション開始前の状態保持用
+
+        self.sync_size = True     # サイズ同期フラグ
+        self.sync_symmetry = True # 対称性同期フラグ
 
         self.badge_size = 24
         self.canvas_rect = QRectF(0, 0, 800, 600)
@@ -282,10 +286,12 @@ class PdfGraphicsView(QGraphicsView):
                 self.new_rect.setPen(pen)
                 self.new_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
                 
-                # 識別タグを追加（削除時にこれを目印にする）
                 self.new_rect.setData(self.TAG_NAME, "selection_rect")
                 self.rect_count += 1
                 self.new_rect.setData(self.RECT_NUM, self.rect_count)
+                
+                # 同期信号の接続
+                self.new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
                 
                 # --- 番号表示 ---
                 index = len(self.rects) + 1
@@ -412,6 +418,8 @@ class PdfGraphicsView(QGraphicsView):
                 box.setData(self.TAG_NAME, "selection_rect")
                 box.setData(self.RECT_NUM, res_id)
                 
+                box.geometryChanged.connect(self._handle_item_geometry_changed)
+
                 self.scene.addItem(box)
                 self.rects.append(box)
                 
@@ -450,11 +458,75 @@ class PdfGraphicsView(QGraphicsView):
         self.rects = new_order_objs
         self.update_numbers()
 
+    def _handle_item_geometry_changed(self, item):
+        """アイテムの座標やサイズが変わった時に呼ばれる"""
+        if not self.sync_size and not self.sync_symmetry:
+            return
+            
+        group_id = item.data(self.GROUP_ID)
+        if group_id is None:
+            return
+            
+        self._sync_group(item, group_id)
+
+    def _sync_group(self, source_item, group_id):
+        """同じグループの他のアイテムを同期させる"""
+        # source_item: 変形などの変更がなされたitem
+        # 循環参照防止
+        for rect in self.rects:
+            if rect == source_item: continue
+            if rect.data(self.GROUP_ID) == group_id:
+                rect._block_sync = True
+                
+                # 1. サイズ同期
+                if self.sync_size:
+                    rect.setRect(source_item.rect())
+                
+                # 2. 対称性（位置）同期
+                if self.sync_symmetry:
+                    if not self.pdf_item: continue
+                    canvas_rect = self.pdf_item.pixmap().rect()
+                    cw = canvas_rect.width()
+                    ch = canvas_rect.height()
+                    cx = cw / 2
+                    cy = ch / 2
+                    
+                    s_pos = source_item.pos()
+                    s_rect = source_item.rect()
+                    s_center = QPointF(s_pos.x() + s_rect.width()/2, s_pos.y() + s_rect.height()/2)
+                    
+                    t_pos = rect.pos()
+                    t_rect = rect.rect()
+                    t_center = QPointF(t_pos.x() + t_rect.width()/2, t_pos.y() + t_rect.height()/2)
+                    
+                    new_pos = QPointF(t_pos)
+                    
+                    # X軸の対称性：中心線をまたいでいる場合にミラーリング
+                    if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
+                        new_pos.setX(cw - (s_pos.x() + s_rect.width()))
+                    else:
+                        # 同じ側にある場合は単純にXを追従（サイズが同じなら整列される）
+                        new_pos.setX(s_pos.x())
+                        
+                    # Y軸の対称性：中心線をまたいでいる場合にミラーリング
+                    if (s_center.y() < cy and t_center.y() > cy) or (s_center.y() > cy and t_center.y() < cy):
+                        new_pos.setY(ch - (s_pos.y() + s_rect.height()))
+                    else:
+                        new_pos.setY(s_pos.y())
+                    
+                    rect.setPos(new_pos)
+
+                rect._block_sync = False
+
     def add_template_boxes(self, rects_list):
         """複数の矩形を一気にテンプレートとして追加する（Undo対応）"""
         if not rects_list: return
         
         self.push_undo()
+        
+        # グループIDを生成（現在の時刻などをベースにユニークな値にする）
+        import time
+        group_id = int(time.time() * 1000)
         
         for qrect in rects_list:
             # 座標表示と同期させるため、位置は setPos、矩形自体は (0,0) 起点で作成する
@@ -473,7 +545,11 @@ class PdfGraphicsView(QGraphicsView):
             box.setData(self.TAG_NAME, "selection_rect")
             self.rect_count += 1
             box.setData(self.RECT_NUM, self.rect_count)
+            box.setData(self.GROUP_ID, group_id) # グループIDを付与
             
+            # 同期信号の接続
+            box.geometryChanged.connect(self._handle_item_geometry_changed)
+
             self.scene.addItem(box)
             self.rects.append(box)
             
@@ -596,6 +672,8 @@ class MainWindow(QMainWindow):
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.prop_panel = PropertyPanel()
         self.prop_panel.orderChanged.connect(self._handle_reorder)
+        self.prop_panel.syncSizeChanged.connect(self._handle_sync_size_changed)
+        self.prop_panel.syncSymmetryChanged.connect(self._handle_sync_symmetry_changed)
         self.dock.setWidget(self.prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
 
@@ -654,6 +732,7 @@ class MainWindow(QMainWindow):
         if view:
             # 初期状態を反映
             self.prop_panel.update_list(view.rects)
+            self.prop_panel.update_sync_settings(view.sync_size, view.sync_symmetry)
             self.preview_panel.update_previews(view)
             view._on_scene_selection_changed()
         else:
@@ -679,6 +758,16 @@ class MainWindow(QMainWindow):
         if view:
             view.reorder_rects(new_order)
             self.preview_panel.update_previews(view)
+
+    def _handle_sync_size_changed(self, enabled):
+        view = self.current_view()
+        if view:
+            view.sync_size = enabled
+
+    def _handle_sync_symmetry_changed(self, enabled):
+        view = self.current_view()
+        if view:
+            view.sync_symmetry = enabled
 
     def current_view(self):
         """現在のアクティブなタブにあるビューを返す"""
