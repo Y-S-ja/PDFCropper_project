@@ -185,10 +185,23 @@ class myCropBox(QGraphicsRectItem):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        # self.is_resizing = False
-        # 最後に形を整える（幅や高さがマイナスの状態を直す）
+        # 変形完了時に、矩形の左上のズレを pos に吸収させて (0,0) 起点に戻す
         if self.active_handle is not None:
-            self.setRect(self.rect().normalized())
+            norm_rect = self.rect().normalized()
+            delta = norm_rect.topLeft()
+            
+            if delta != QPointF(0, 0):
+                # 位置と矩形を同時に更新するため、一時的に信号を止める
+                self._block_sync = True
+                self.setPos(self.pos() + delta)
+                self.setRect(QRectF(0, 0, norm_rect.width(), norm_rect.height()))
+                self._block_sync = False
+                # 最終的な状態を一括で通知
+                self.geometryChanged.emit(self)
+            else:
+                self.setRect(norm_rect)
+
+        self.active_handle = None
         super().mouseReleaseEvent(event)
 
 class myBadge(QGraphicsRectItem):
