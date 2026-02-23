@@ -507,8 +507,37 @@ class PdfGraphicsView(QGraphicsView):
                     
                     # ソース枠の現在の見た目上の範囲をシーン座標で取得
                     s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+
+                    # --- 中心線による移動制限 (Clamping) ---
+                    # ソースアイテムが属する領域を判定し、境界を越えないようにする
+                    s_new_scene_tl = s_scene_rect.topLeft()
                     
-                    # X軸の対称性：中心線をまたいでいる場合にミラーリング
+                    # X軸の制限
+                    if s_center.x() < cx: # ソースは本来左半分
+                        if s_scene_rect.right() > cx:
+                            s_new_scene_tl.setX(cx - s_scene_rect.width())
+                    elif s_center.x() > cx: # ソースは本来右半分
+                        if s_scene_rect.left() < cx:
+                            s_new_scene_tl.setX(cx)
+                            
+                    # Y軸の制限
+                    if s_center.y() < cy: # ソースは本来上半分
+                        if s_scene_rect.bottom() > cy:
+                            s_new_scene_tl.setY(cy - s_scene_rect.height())
+                    elif s_center.y() > cy: # ソースは本来下半分
+                        if s_scene_rect.top() < cy:
+                            s_new_scene_tl.setY(cy)
+
+                    # 制限を適用（ソース枠そのものを補正）
+                    if s_new_scene_tl != s_scene_rect.topLeft():
+                        source_item._block_sync = True
+                        source_item.setPos(s_new_scene_tl - s_rect.topLeft())
+                        source_item._block_sync = False
+                        # 補正後の矩形情報を再取得
+                        s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+
+                    # --- 同期位置の計算 ---
+                    # X方向の対称位置
                     if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
                         target_scene_tl.setX(cw - s_scene_rect.right())
                     else:
@@ -520,9 +549,8 @@ class PdfGraphicsView(QGraphicsView):
                     else:
                         target_scene_tl.setY(s_scene_rect.top())
                     
-                    # 見た目上の左上から、内部的な rect().topLeft() 分を差し引いて pos をセットする
-                    # これにより、ドラッグ中で座標が未正規化でも、見た目の位置が正しく同期される
-                    rect.setPos(target_scene_tl - s_rect.topLeft())
+                    # ターゲット枠への適用（ターゲット自身の内部オフセットを差し引く）
+                    rect.setPos(target_scene_tl - t_rect.topLeft())
 
                 rect._block_sync = False
 
