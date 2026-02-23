@@ -502,22 +502,27 @@ class PdfGraphicsView(QGraphicsView):
                     t_center_local = t_rect.center()
                     t_center = rect.mapToScene(t_center_local)
                     
-                    new_pos = QPointF(t_pos)
+                    # ターゲットが置かれるべき「見た目上の」左上を求める
+                    target_scene_tl = QPointF()
+                    
+                    # ソース枠の現在の見た目上の範囲をシーン座標で取得
+                    s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
                     
                     # X軸の対称性：中心線をまたいでいる場合にミラーリング
                     if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
-                        new_pos.setX(cw - (s_pos.x() + s_rect.width()))
+                        target_scene_tl.setX(cw - s_scene_rect.right())
                     else:
-                        # 同じ側にある場合は単純にXを追従（サイズが同じなら整列される）
-                        new_pos.setX(s_pos.x())
+                        target_scene_tl.setX(s_scene_rect.left())
                         
-                    # Y軸の対称性：中心線をまたいでいる場合にミラーリング
+                    # Y方向の対称位置
                     if (s_center.y() < cy and t_center.y() > cy) or (s_center.y() > cy and t_center.y() < cy):
-                        new_pos.setY(ch - (s_pos.y() + s_rect.height()))
+                        target_scene_tl.setY(ch - s_scene_rect.bottom())
                     else:
-                        new_pos.setY(s_pos.y())
+                        target_scene_tl.setY(s_scene_rect.top())
                     
-                    rect.setPos(new_pos)
+                    # 見た目上の左上から、内部的な rect().topLeft() 分を差し引いて pos をセットする
+                    # これにより、ドラッグ中で座標が未正規化でも、見た目の位置が正しく同期される
+                    rect.setPos(target_scene_tl - s_rect.topLeft())
 
                 rect._block_sync = False
 
