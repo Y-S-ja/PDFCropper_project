@@ -493,11 +493,14 @@ class PdfGraphicsView(QGraphicsView):
                     
                     s_pos = source_item.pos()
                     s_rect = source_item.rect()
-                    s_center = QPointF(s_pos.x() + s_rect.width()/2, s_pos.y() + s_rect.height()/2)
+                    # 矩形の中心点をシーン座標で取得（resize中も正確に計算するため）
+                    s_center_local = s_rect.center()
+                    s_center = source_item.mapToScene(s_center_local)
                     
                     t_pos = rect.pos()
                     t_rect = rect.rect()
-                    t_center = QPointF(t_pos.x() + t_rect.width()/2, t_pos.y() + t_rect.height()/2)
+                    t_center_local = t_rect.center()
+                    t_center = rect.mapToScene(t_center_local)
                     
                     new_pos = QPointF(t_pos)
                     
