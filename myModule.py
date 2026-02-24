@@ -4,7 +4,8 @@ import fitz
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
                              QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel,
-                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu, QGraphicsObject)
+                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu,
+                             QGraphicsObject, QGraphicsPixmapItem)
 from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 from PySide6 import QtGui
@@ -125,6 +126,14 @@ class myCropBox(QGraphicsObject):
                 path.addRect(h_rect)
         return path
 
+    def get_bg_rect(self):
+        """シーン内のPixmapアイテム（PDF背景）の矩形を取得する"""
+        if self.scene():
+            for item in self.scene().items():
+                if isinstance(item, QGraphicsPixmapItem):
+                    return item.boundingRect()
+        return None
+
     def paint(self, painter, option, widget):
         # 標準の四角を描画
         painter.setPen(self.pen())
@@ -181,7 +190,17 @@ class myCropBox(QGraphicsObject):
         if self.active_handle is not None:
             self.prepareGeometryChange()
             rect = self.rect()
-            pos = event.pos()
+            # pos = event.pos()
+            
+            # マウス位置をシーン座標で取得し、PDF内に制限
+            bg_rect = self.get_bg_rect()
+            scene_pos = self.mapToScene(event.pos())
+            if bg_rect:
+                scene_pos.setX(max(bg_rect.left(), min(scene_pos.x(), bg_rect.right())))
+                scene_pos.setY(max(bg_rect.top(), min(scene_pos.y(), bg_rect.bottom())))
+            
+            # ローカル座標に戻す
+            pos = self.mapFromScene(scene_pos)
             
             # ビットフラグを使って頂点を更新 (1bit目が1ならRight, 2bit目が1ならBottom)
             # self.active_handleが01, 11なら条件式は01を返す
