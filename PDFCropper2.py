@@ -230,18 +230,16 @@ class PdfGraphicsView(QGraphicsView):
                 print(f"Left-clicked: CropBox {target_cropbox.data(self.RECT_NUM)} (Resizing/Moving)")
                 self.new_rect = None
                 super().mousePressEvent(event)
-            elif is_intro_text:
-                print("Left-clicked: Intro Text (Ignoring)")
-                self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
-                self.new_rect.setPos(self.start_pos)
-                self.scene.addItem(self.new_rect)
             else:
                 self.scene.clearSelection()
                 # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
-                print(f"Left-clicked: Background (Creating new box)")
                 self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
                 self.new_rect.setPos(self.start_pos)
                 self.scene.addItem(self.new_rect)
+                if is_intro_text:
+                    print("Left-clicked: Intro Text (Ignoring)")
+                else:
+                    print(f"Left-clicked: Background (Creating new box)")
         
         else:
             super().mousePressEvent(event)
