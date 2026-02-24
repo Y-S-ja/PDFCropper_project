@@ -150,18 +150,19 @@ class myCropBox(QGraphicsObject):
                     h_item.setVisible(is_sel)
         
         if change == QGraphicsItem.ItemPositionChange and self.scene():
-            # 移動制限：PDFの範囲内に収める
+            # 1. 移動制限：PDFの範囲内に収める
             new_pos = value
             bg_rect = self.get_bg_rect()
             if bg_rect:
                 rect = self.rect()
                 x = max(bg_rect.left(), min(new_pos.x(), bg_rect.right() - rect.width()))
                 y = max(bg_rect.top(), min(new_pos.y(), bg_rect.bottom() - rect.height()))
-                return QPointF(x, y)
+                return QPointF(x, y) # ここは補正値を返す必要があるため return して良い
 
-        if change == QGraphicsItem.ItemPositionChange and not self._block_sync:
-            # 位置座標が変わる時に信号を出す
-            self.geometryChanged.emit(self)
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            # 2. 確定後の座標を同期させる
+            if not getattr(self, '_block_sync', False):
+                self.geometryChanged.emit(self)
         
         return super().itemChange(change, value)
 
