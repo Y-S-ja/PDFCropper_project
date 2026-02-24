@@ -4,7 +4,8 @@ import fitz
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
                              QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel,
-                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu)
+                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu, 
+                             QGraphicsPixmapItem)
 from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 from PySide6 import QtGui
@@ -109,6 +110,14 @@ class myCropBox(QGraphicsRectItem):
                 path.addRect(h_rect)
         return path
 
+    def get_bg_rect(self):
+        """シーン内のPixmapアイテム（PDF背景）の矩形を取得する"""
+        if self.scene():
+            for item in self.scene().items():
+                if isinstance(item, QGraphicsPixmapItem):
+                    return item.boundingRect()
+        return None
+
     def paint(self, painter, option, widget):
         # 標準の四角を描画
         painter.setPen(self.pen())
@@ -124,6 +133,16 @@ class myCropBox(QGraphicsRectItem):
                 for h_item in self.handle_items.values():
                     h_item.setVisible(is_sel)
         
+        if change == QGraphicsItem.ItemPositionChange and self.scene():
+            # 移動制限：PDFの範囲内に収める
+            new_pos = value
+            bg_rect = self.get_bg_rect()
+            if bg_rect:
+                rect = self.rect()
+                x = max(bg_rect.left(), min(new_pos.x(), bg_rect.right() - rect.width()))
+                y = max(bg_rect.top(), min(new_pos.y(), bg_rect.bottom() - rect.height()))
+                return QPointF(x, y)
+
         return super().itemChange(change, value)
 
     def get_handle_at(self, pos):
@@ -172,7 +191,17 @@ class myCropBox(QGraphicsRectItem):
         if self.active_handle is not None:
             self.prepareGeometryChange()
             rect = self.rect()
-            pos = event.pos()
+            # pos = event.pos()
+            
+            # マウス位置をシーン座標で取得し、PDF内に制限
+            bg_rect = self.get_bg_rect()
+            scene_pos = self.mapToScene(event.pos())
+            if bg_rect:
+                scene_pos.setX(max(bg_rect.left(), min(scene_pos.x(), bg_rect.right())))
+                scene_pos.setY(max(bg_rect.top(), min(scene_pos.y(), bg_rect.bottom())))
+            
+            # ローカル座標に戻す
+            pos = self.mapFromScene(scene_pos)
             
             # ビットフラグを使って頂点を更新 (1bit目が1ならRight, 2bit目が1ならBottom)
             # self.active_handleが01, 11なら条件式は01を返す

@@ -50,6 +50,7 @@ class PdfGraphicsView(QGraphicsView):
         self.pre_action_state = None # アクション開始前の状態保持用
 
         self.badge_size = 24
+        self.margin = 100
         self.canvas_rect = QRectF(0, 0, 800, 600)
         self.scene.setSceneRect(self.canvas_rect)
 
@@ -67,17 +68,11 @@ class PdfGraphicsView(QGraphicsView):
         return None
 
     def update_scene_limit(self):
-        """キャンバス領域を更新。force_physical=Trueの場合のみ、物理的な座標壁(sceneRect)を書き換える"""
-        # print("update_scene_limit")
-        items_rect = self.scene.itemsBoundingRect()
-        if items_rect.isNull():
-            # print("line 48, items_rect is null")
-            self.canvas_rect = QRectF(0, 0, 800, 600)
+        """シーンの範囲を現在のアイテム（主にPDF）に合わせる"""
+        if hasattr(self, 'pdf_item') and self.pdf_item:
+            self.scene.setSceneRect(self.pdf_item.boundingRect().adjusted(-self.margin, -self.margin, self.margin, self.margin))
         else:
-            margin = 500
-            self.canvas_rect = items_rect.adjusted(-margin, -margin, margin, margin)
-        
-        self.scene.setSceneRect(self.canvas_rect)
+            self.scene.setSceneRect(QRectF(0, 0, 800, 600))
     
     def drawForeground(self, painter, rect):
         """キャンバス領域（canvas_rect）に枠線を描画"""
@@ -86,8 +81,8 @@ class PdfGraphicsView(QGraphicsView):
             pen.setCosmetic(True)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
-            painter.drawRect(self.canvas_rect)
-    
+            painter.drawRect(self.scene.sceneRect())
+
     def center_A_on_B(self, A, B):
         br = A.boundingRect()
         A.setPos((B.rect().width() - br.width())/2, (B.rect().height() - br.height())/2)
@@ -136,7 +131,7 @@ class PdfGraphicsView(QGraphicsView):
 
         self.update_scene_limit()
         # 読み込み直後に、ビューの中心をキャンバスの中央に合わせる
-        self.centerOn(self.scene.itemsBoundingRect().center())
+        self.centerOn(self.pdf_item.boundingRect().center())
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -185,6 +180,19 @@ class PdfGraphicsView(QGraphicsView):
             event.accept()
         else:
             super().wheelEvent(event)
+
+    def get_pdf_rect(self):
+        """PDF画像のシーン座標での矩形を返す"""
+        if hasattr(self, 'pdf_item') and self.pdf_item:
+            return self.pdf_item.boundingRect()
+        return self.sceneRect()
+
+    def clamp_pos(self, pos):
+        """座標をPDFの範囲内に収める"""
+        r = self.get_pdf_rect()
+        x = max(r.left(), min(pos.x(), r.right()))
+        y = max(r.top(), min(pos.y(), r.bottom()))
+        return QPointF(x, y)
 
     def mousePressEvent(self, event):
         item = self.itemAt(event.position().toPoint())
@@ -247,8 +255,8 @@ class PdfGraphicsView(QGraphicsView):
     def mouseMoveEvent(self, event):
         if self.start_pos and self.new_rect:
             # 新規枠作成
-            # 現在のマウス位置（シーン座標）
-            current_pos = self.mapToScene(event.position().toPoint())
+            # 現在のマウス位置（シーン座標）をPDF内に制限
+            current_pos = self.clamp_pos(self.mapToScene(event.position().toPoint()))
             
             # 開始点からの差分でローカルの rect を計算
             diff = current_pos - self.start_pos
