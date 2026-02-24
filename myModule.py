@@ -132,6 +132,12 @@ class myCropBox(QGraphicsRectItem):
             if hasattr(self, 'handle_items'):
                 for h_item in self.handle_items.values():
                     h_item.setVisible(is_sel)
+            
+            # 選択されている枠を最前面に持ってくる
+            if is_sel:
+                self.setZValue(1000)
+            else:
+                self.setZValue(0)
         
         if change == QGraphicsItem.ItemPositionChange and self.scene():
             # 移動制限：PDFの範囲内に収める
