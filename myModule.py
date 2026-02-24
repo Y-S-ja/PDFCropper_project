@@ -134,6 +134,12 @@ class myCropBox(QGraphicsRectItem):
         return None
 
     def hoverMoveEvent(self, event):
+        # 選択されていない時はハンドル判定を行わない（カーソルを変えない）
+        if not self.isSelected():
+            self.setCursor(Qt.SizeAllCursor)
+            super().hoverMoveEvent(event)
+            return
+
         # マウスが四隅の近くにあるかチェックしてカーソルを変える
         handle_id = self.get_handle_at(event.pos())
         if handle_id is not None:
@@ -146,11 +152,16 @@ class myCropBox(QGraphicsRectItem):
         super().hoverMoveEvent(event)
 
     def mousePressEvent(self, event):
+        # 選択されていない時はハンドル判定を行わない（まず選択させる）
+        if not self.isSelected():
+            self.active_handle = None
+            super().mousePressEvent(event)
+            return
+
         # クリックした場所が「ハンドル」の上なら変形モードへ
         handle = self.get_handle_at(event.pos())
         if handle is not None:
             self.active_handle = handle
-            # self.is_resizing = True
             event.accept()
         else:
             # self.is_resizing = False
@@ -197,7 +208,7 @@ class myCropBox(QGraphicsRectItem):
                 self.setRect(QRectF(0, 0, norm_rect.width(), norm_rect.height()))
                 self._block_sync = False
                 # 最終的な状態を一括で通知
-                self.geometryChanged.emit(self)
+                # self.geometryChanged.emit(self)
             else:
                 self.setRect(norm_rect)
 
