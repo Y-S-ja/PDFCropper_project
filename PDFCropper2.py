@@ -562,23 +562,22 @@ class PdfGraphicsView(QGraphicsView):
 
                 rect._block_sync = False
 
-    def add_template_boxes(self, rects_list):
-        """複数の矩形を一気にテンプレートとして追加する（Undo対応）"""
-        if not rects_list: return
-        
+    def add_template_boxes(self, data_list):
+        """複数の矩形と制限領域をセットで追加する"""
+        if not data_list: return
         self.push_undo()
         
         # グループIDを生成（現在の時刻などをベースにユニークな値にする）
         import time
         group_id = int(time.time() * 1000)
         
-        for qrect in rects_list:
-            # 座標表示と同期させるため、位置は setPos、矩形自体は (0,0) 起点で作成する
+        for qrect, allowed_rect in data_list:
             pos = qrect.topLeft()
             size_rect = QRectF(0, 0, qrect.width(), qrect.height())
             
             box = myCropBox(size_rect)
             box.setPos(pos)
+            box.allowed_rect = allowed_rect # ここでエリア制限を設定
             
             # スタイル設定
             pen = QPen(QColor(0, 120, 215), 3)
@@ -589,7 +588,7 @@ class PdfGraphicsView(QGraphicsView):
             box.setData(self.TAG_NAME, "selection_rect")
             self.rect_count += 1
             box.setData(self.RECT_NUM, self.rect_count)
-            box.setData(self.GROUP_ID, group_id) # グループIDを付与
+            box.setData(self.GROUP_ID, group_id)
             
             # 同期信号の接続
             box.geometryChanged.connect(self._handle_item_geometry_changed)
@@ -606,7 +605,7 @@ class PdfGraphicsView(QGraphicsView):
         self._on_scene_selection_changed()
 
     def add_template_2v(self):
-        """2分割（縦）テンプレート：左右に並べる"""
+        """2分割（縦）テンプレート"""
         if not self.pdf_item: return
         
         # ページの画像サイズを取得
@@ -614,37 +613,40 @@ class PdfGraphicsView(QGraphicsView):
         w = canvas_rect.width()
         h = canvas_rect.height()
         
-        # 左右に分割
-        rect_left = QRectF(0, 0, w/2, h)
-        rect_right = QRectF(w/2, 0, w/2, h)
-        
-        self.add_template_boxes([rect_left, rect_right])
+        # (初期位置, 制限領域)
+        data = [
+            (QRectF(0, 0, w/2, h), QRectF(0, 0, w/2, h)),
+            (QRectF(w/2, 0, w/2, h), QRectF(w/2, 0, w/2, h))
+        ]
+        self.add_template_boxes(data)
 
     def add_template_2h(self):
-        """2分割（横）テンプレート：上下に並べる"""
+        """2分割（横）テンプレート"""
         if not self.pdf_item: return
         canvas_rect = self.pdf_item.pixmap().rect()
         w = canvas_rect.width()
         h = canvas_rect.height()
         
-        rect_top = QRectF(0, 0, w, h/2)
-        rect_bottom = QRectF(0, h/2, w, h/2)
-        self.add_template_boxes([rect_top, rect_bottom])
+        data = [
+            (QRectF(0, 0, w, h/2), QRectF(0, 0, w, h/2)),
+            (QRectF(0, h/2, w, h/2), QRectF(0, h/2, w, h/2))
+        ]
+        self.add_template_boxes(data)
 
     def add_template_4(self):
-        """4分割テンプレート：田の字型"""
+        """4分割テンプレート"""
         if not self.pdf_item: return
-        canvas_rect = self.pdf_item.pixmap().rect()
-        w = canvas_rect.width()
-        h = canvas_rect.height()
+        r = self.pdf_item.pixmap().rect()
+        w, h = r.width(), r.height()
+        cx, cy = w/2, h/2
         
-        rects = [
-            QRectF(0, 0, w/2, h/2),     # 左上
-            QRectF(w/2, 0, w/2, h/2),   # 右上
-            QRectF(0, h/2, w/2, h/2),   # 左下
-            QRectF(w/2, h/2, w/2, h/2)  # 右下
+        data = [
+            (QRectF(0, 0, cx, cy), QRectF(0, 0, cx, cy)),
+            (QRectF(cx, 0, cx, cy), QRectF(cx, 0, cx, cy)),
+            (QRectF(0, cy, cx, cy), QRectF(0, cy, cx, cy)),
+            (QRectF(cx, cy, cx, cy), QRectF(cx, cy, cx, cy))
         ]
-        self.add_template_boxes(rects)
+        self.add_template_boxes(data)
         
 
 

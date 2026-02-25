@@ -37,6 +37,7 @@ class myCropBox(QGraphicsObject):
         self.setAcceptHoverEvents(True)
         self.active_handle = None
         self._block_sync = False # 循環防止用
+        self.allowed_rect = None # 移動・変形を制限する領域 (NoneならPDF全体)
         
         # --- ハンドル（小四角）を子アイテムとして作成 ---
         self.handle_items = {}
@@ -127,7 +128,10 @@ class myCropBox(QGraphicsObject):
         return path
 
     def get_bg_rect(self):
-        """シーン内のPixmapアイテム（PDF背景）の矩形を取得する"""
+        """制限領域を取得する（個別設定があればそれを優先、なければPDF背景）"""
+        if self.allowed_rect is not None:
+            return self.allowed_rect
+            
         if self.scene():
             for item in self.scene().items():
                 if isinstance(item, QGraphicsPixmapItem):
