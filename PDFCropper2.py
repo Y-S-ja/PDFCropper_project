@@ -280,6 +280,8 @@ class PdfGraphicsView(QGraphicsView):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        
         if self.start_pos and self.new_rect:
             # 新規枠作成
             rect = self.new_rect.rect()
@@ -327,7 +329,6 @@ class PdfGraphicsView(QGraphicsView):
                 self.rectsChanged.emit(self.rects)
             self.pre_action_state = None
 
-        super().mouseReleaseEvent(event)
         self.update_scene_limit()
 
     def update_numbers(self):
