@@ -480,7 +480,6 @@ class PdfGraphicsView(QGraphicsView):
     def _sync_group(self, source_item, group_id):
         """同じグループの他のアイテムを同期させる"""
         # source_item: 変形などの変更がなされたitem
-        # 循環参照防止
         for rect in self.rects:
             if rect == source_item: continue
             if rect.data(self.GROUP_ID) == group_id:
@@ -499,65 +498,30 @@ class PdfGraphicsView(QGraphicsView):
                     cx = cw / 2
                     cy = ch / 2
                     
-                    s_pos = source_item.pos()
                     s_rect = source_item.rect()
-                    # 矩形の中心点をシーン座標で取得（resize中も正確に計算するため）
-                    s_center_local = s_rect.center()
-                    s_center = source_item.mapToScene(s_center_local)
+                    s_center = source_item.mapToScene(s_rect.center())
                     
-                    t_pos = rect.pos()
                     t_rect = rect.rect()
-                    t_center_local = t_rect.center()
-                    t_center = rect.mapToScene(t_center_local)
+                    t_center = rect.mapToScene(t_rect.center())
                     
-                    # ターゲットが置かれるべき「見た目上の」左上を求める
+                    # ソースの見た目上の範囲をシーン座標で取得
+                    s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+                    
                     target_scene_tl = QPointF()
                     
-                    # ソース枠の現在の見た目上の範囲をシーン座標で取得
-                    s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
-
-                    # --- 中心線による移動制限 (Clamping) ---
-                    # ソースアイテムが属する領域を判定し、境界を越えないようにする
-                    s_new_scene_tl = s_scene_rect.topLeft()
-                    
-                    # X軸の制限
-                    if s_center.x() < cx: # ソースは本来左半分
-                        if s_scene_rect.right() > cx:
-                            s_new_scene_tl.setX(cx - s_scene_rect.width())
-                    elif s_center.x() > cx: # ソースは本来右半分
-                        if s_scene_rect.left() < cx:
-                            s_new_scene_tl.setX(cx)
-                            
-                    # Y軸の制限
-                    if s_center.y() < cy: # ソースは本来上半分
-                        if s_scene_rect.bottom() > cy:
-                            s_new_scene_tl.setY(cy - s_scene_rect.height())
-                    elif s_center.y() > cy: # ソースは本来下半分
-                        if s_scene_rect.top() < cy:
-                            s_new_scene_tl.setY(cy)
-
-                    # 制限を適用（ソース枠そのものを補正）
-                    if s_new_scene_tl != s_scene_rect.topLeft():
-                        source_item._block_sync = True
-                        source_item.setPos(s_new_scene_tl - s_rect.topLeft())
-                        source_item._block_sync = False
-                        # 補正後の矩形情報を再取得
-                        s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
-
-                    # --- 同期位置の計算 ---
-                    # X方向の対称位置
+                    # X方向の対称位置（相手が反対側にいる場合のみミラー）
                     if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
                         target_scene_tl.setX(cw - s_scene_rect.right())
                     else:
                         target_scene_tl.setX(s_scene_rect.left())
                         
-                    # Y方向の対称位置
+                    # Y方向の対称位置（相手が反対側にいる場合のみミラー）
                     if (s_center.y() < cy and t_center.y() > cy) or (s_center.y() > cy and t_center.y() < cy):
                         target_scene_tl.setY(ch - s_scene_rect.bottom())
                     else:
                         target_scene_tl.setY(s_scene_rect.top())
                     
-                    # ターゲット枠への適用（ターゲット自身の内部オフセットを差し引く）
+                    # ターゲット枠への適用（自身の内部オフセットを考慮）
                     rect.setPos(target_scene_tl - t_rect.topLeft())
 
                 rect._block_sync = False
