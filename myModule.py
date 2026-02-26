@@ -177,7 +177,7 @@ class myCropBox(QGraphicsObject):
         
         if change == QGraphicsItem.ItemPositionChange and self.scene():
             # 1. 移動制限：PDFの範囲内に収める
-            new_pos = value
+            new_pos = value # cropbox.pos()の移動先
             bg_rect = self.get_bg_rect()
             if bg_rect:
                 rect = self.rect()
