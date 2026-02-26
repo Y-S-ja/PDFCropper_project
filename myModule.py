@@ -13,6 +13,7 @@ from PySide6 import QtGui
 # --- 1. スマートな枠（アイテム）クラス ---
 class myCropBox(QGraphicsObject):
     geometryChanged = Signal(object) # 自身(item)を渡す
+    deltaResized = Signal(object, int, QPointF) # item, handle_id, delta_scene
     
     HANDLE_SIZE = 10.0  # ハンドルのサイズ
     # ハンドル定数をビットフラグに変更 (1枚目: 0=Left, 1=Right / 2枚目: 0=Top, 2=Bottom)
@@ -138,6 +139,26 @@ class myCropBox(QGraphicsObject):
                     return item.boundingRect()
         return None
 
+    def apply_delta(self, handle_id, delta_scene):
+        """外部（同期など）から移動ベクトルを受け取って自身を変形させる"""
+        self.prepareGeometryChange()
+        rect = self.rect()
+        
+        # シーン上の差分をローカルの差分に変換（スケーリングの影響を排除するため）
+        # ただし現在はスケーリングがない前提なので、delta_scene をそのまま使える
+        dx = delta_scene.x()
+        dy = delta_scene.y()
+        
+        if handle_id & 1: rect.setRight(rect.right() + dx)
+        else: rect.setLeft(rect.left() + dx)
+        
+        if handle_id & 2: rect.setBottom(rect.bottom() + dy)
+        else: rect.setTop(rect.top() + dy)
+        
+        # 反転判定は行わず、正規化だけしてセットする
+        # (同期中に handle_id が変わると収拾がつかなくなるため)
+        self.setRect(rect.normalized())
+
     def paint(self, painter, option, widget):
         # 標準の四角を描画
         painter.setPen(self.pen())
@@ -234,6 +255,10 @@ class myCropBox(QGraphicsObject):
 
             # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
             self.setRect(rect.normalized())
+            
+            # 同期用の信号（現在のハンドル状態と移動ベクトルを添えて）
+            if not self._block_sync:
+                self.deltaResized.emit(self, self.active_handle, delta_scene)
             
         else:
             super().mouseMoveEvent(event)

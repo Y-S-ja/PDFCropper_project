@@ -302,6 +302,7 @@ class PdfGraphicsView(QGraphicsView):
                 
                 # 同期信号の接続
                 self.new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
+                self.new_rect.deltaResized.connect(self._handle_item_delta_resized)
                 
                 # --- 番号表示 ---
                 index = len(self.rects) + 1
@@ -428,6 +429,7 @@ class PdfGraphicsView(QGraphicsView):
                 box.setData(self.RECT_NUM, res_id)
                 
                 box.geometryChanged.connect(self._handle_item_geometry_changed)
+                box.deltaResized.connect(self._handle_item_delta_resized)
 
                 self.scene.addItem(box)
                 self.rects.append(box)
@@ -468,15 +470,71 @@ class PdfGraphicsView(QGraphicsView):
         self.update_numbers()
 
     def _handle_item_geometry_changed(self, item):
-        """アイテムの座標やサイズが変わった時に呼ばれる"""
+        """アイテムの確定後（移動終了時など）の同期"""
         if not self.sync_size and not self.sync_symmetry:
             return
             
-        group_id = item.data(self.GROUP_ID)
-        if group_id is None:
+        # 変形中（リサイズ中）は deltaResized 側で処理するため、
+        # ここでの絶対座標同期（_sync_group）はスキップする。
+        # これにより、リサイズ中に枠全体が跳ねる問題を防止する。
+        if hasattr(item, 'active_handle') and item.active_handle is not None:
             return
-            
-        self._sync_group(item, group_id)
+
+        group_id = item.data(self.GROUP_ID)
+        if group_id is not None:
+            self._sync_group(item, group_id)
+
+    def _handle_item_delta_resized(self, item, handle_id, delta_scene):
+        """アイテムの変形中（ドラッグ中）のリアルタイム同期"""
+        if not self.sync_size and not self.sync_symmetry:
+            return
+        group_id = item.data(self.GROUP_ID)
+        if group_id is not None:
+            self._sync_group_delta(item, group_id, handle_id, delta_scene)
+
+    def _sync_group_delta(self, source_item, group_id, handle_id, delta_scene):
+        """移動ベクトル(delta)を用いてグループ内の他アイテムをリアルタイム同期させる"""
+        for rect in self.rects:
+            if rect == source_item: continue
+            if rect.data(self.GROUP_ID) == group_id:
+                rect._block_sync = True
+                
+                # 1. 対称性（位置）同期
+                if self.sync_symmetry:
+                    if not self.pdf_item: 
+                        rect._block_sync = False
+                        continue
+                    
+                    canvas_rect = self.pdf_item.pixmap().rect()
+                    cw, ch = canvas_rect.width(), canvas_rect.height()
+                    cx, cy = cw / 2, ch / 2
+                    
+                    s_center = source_item.mapToScene(source_item.rect().center())
+                    t_center = rect.mapToScene(rect.rect().center())
+                    
+                    target_handle = handle_id
+                    target_delta = QPointF(delta_scene)
+                    
+                    # X方向のミラー判定
+                    if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
+                        target_handle ^= 1 # handle_idの0bit目を反転 (Left <-> Right)
+                        target_delta.setX(-delta_scene.x())
+                        
+                    # Y方向のミラー判定
+                    if (s_center.y() < cy and t_center.y() > cy) or (s_center.y() > cy and t_center.y() < cy):
+                        target_handle ^= 2 # handle_idの1bit目を反転 (Top <-> Bottom)
+                        target_delta.setY(-delta_scene.y())
+                    
+                    # サイズ同期が無効な場合は、ベクトルを打ち消して移動だけに留める
+                    # (今回は apply_delta 内でサイズが変わるため、sync_size フラグを確認)
+                    if self.sync_size:
+                        rect.apply_delta(target_handle, target_delta)
+                
+                elif self.sync_size:
+                    # サイズのみ同期の場合（ミラーなし）
+                    rect.apply_delta(handle_id, delta_scene)
+
+                rect._block_sync = False
 
     def _sync_group(self, source_item, group_id):
         """同じグループの他のアイテムを同期させる"""
@@ -557,6 +615,7 @@ class PdfGraphicsView(QGraphicsView):
             
             # 同期信号の接続
             box.geometryChanged.connect(self._handle_item_geometry_changed)
+            box.deltaResized.connect(self._handle_item_delta_resized)
 
             self.scene.addItem(box)
             self.rects.append(box)
