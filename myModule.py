@@ -39,6 +39,7 @@ class myCropBox(QGraphicsObject):
         self.active_handle = None
         self._block_sync = False # 循環防止用
         self.allowed_rect = None # 移動・変形を制限する領域 (NoneならPDF全体)
+        self.last_mouse_scene_pos = QPointF()
         
         # --- ハンドル（小四角）を子アイテムとして作成 ---
         self.handle_items = {}
@@ -215,7 +216,7 @@ class myCropBox(QGraphicsObject):
         handle = self.get_handle_at(event.pos())
         if handle is not None:
             self.active_handle = handle
-            # self.is_resizing = True
+            self.last_mouse_scene_pos = self.mapToScene(event.pos())
             event.accept()
         else:
             # self.is_resizing = False
@@ -226,17 +227,20 @@ class myCropBox(QGraphicsObject):
         if self.active_handle is not None:
             self.prepareGeometryChange()
             rect = self.rect()
-            # pos = event.pos()
             
-            # マウス位置をシーン座標で取得し、PDF内に制限
+            # マウス位置をシーン座標で取得し、制限
             bg_rect = self.get_bg_rect()
-            scene_pos = self.mapToScene(event.pos())
+            current_scene_pos = self.mapToScene(event.pos())
             if bg_rect:
-                scene_pos.setX(max(bg_rect.left(), min(scene_pos.x(), bg_rect.right())))
-                scene_pos.setY(max(bg_rect.top(), min(scene_pos.y(), bg_rect.bottom())))
+                current_scene_pos.setX(max(bg_rect.left(), min(current_scene_pos.x(), bg_rect.right())))
+                current_scene_pos.setY(max(bg_rect.top(), min(current_scene_pos.y(), bg_rect.bottom())))
             
-            # ローカル座標に戻す
-            pos = self.mapFromScene(scene_pos)
+            # ベクトル（差分）を計算
+            delta_scene = current_scene_pos - self.last_mouse_scene_pos
+            self.last_mouse_scene_pos = current_scene_pos
+            
+            # ローカルの座標系での移動量に変換
+            pos = self.mapFromScene(current_scene_pos)
             
             # ビットフラグを使って頂点を更新 (1bit目が1ならRight, 2bit目が1ならBottom)
             # self.active_handleが01, 11なら条件式は01を返す
@@ -253,7 +257,7 @@ class myCropBox(QGraphicsObject):
             if rect.width() < 0:  self.active_handle ^= 1 # 左右反転、1ビット目を反転させる
             if rect.height() < 0: self.active_handle ^= 2 # 上下反転、2ビット目を反転させる
 
-            # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
+            # 常に「正のサイズ」としてセット
             self.setRect(rect.normalized())
             
             # 同期用の信号（現在のハンドル状態と移動ベクトルを添えて）
