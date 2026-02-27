@@ -140,6 +140,23 @@ class myCropBox(QGraphicsObject):
                     return item.boundingRect()
         return None
 
+    def normalize_geometry(self):
+        """見た目の位置・サイズを維持したまま、内部のズレ(rect.topLeft)を pos に吸収させる"""
+        rect = self.rect().normalized()
+        delta = rect.topLeft()
+        
+        if delta != QPointF(0, 0):
+            self._block_sync = True # 内部調整による再同期を防ぐ
+            self.setPos(self.pos() + delta)
+            # rect を (0,0) 起点の正のサイズに作り直す
+            norm_rect = QRectF(0, 0, rect.width(), rect.height())
+            self.setRect(norm_rect)
+            self._block_sync = False
+            # 最終的な正しい座標を通知
+            self.geometryChanged.emit(self)
+        else:
+            self.setRect(rect)
+
     def apply_delta(self, handle_id, delta_scene):
         """外部（同期など）から移動ベクトルを受け取って自身を変形させる"""
         self.prepareGeometryChange()
@@ -269,20 +286,9 @@ class myCropBox(QGraphicsObject):
 
     def mouseReleaseEvent(self, event):
         # 変形完了時に、矩形の左上のズレを pos に吸収させて (0,0) 起点に戻す
-        if self.active_handle is not None:
-            norm_rect = self.rect().normalized()
-            delta = norm_rect.topLeft()
-            
-            if delta != QPointF(0, 0):
-                # 位置と矩形を同時に更新するため、一時的に信号を止める
-                self._block_sync = True
-                self.setPos(self.pos() + delta)
-                self.setRect(QRectF(0, 0, norm_rect.width(), norm_rect.height()))
-                self._block_sync = False
-                # 最終的な状態を一括で通知
-                self.geometryChanged.emit(self)
-            else:
-                self.setRect(norm_rect)
+        was_resizing = self.active_handle is not None
+        if was_resizing:
+            self.normalize_geometry()
 
         self.active_handle = None
         super().mouseReleaseEvent(event)
