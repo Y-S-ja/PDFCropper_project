@@ -490,16 +490,12 @@ class PdfGraphicsView(QGraphicsView):
     def _handle_transformation_finished(self, item):
         """アイテムの変形（リサイズ）が完了した時のクリーンアップ"""
         group_id = item.data(self.GROUP_ID)
-        if group_id is None:
-            # 指定がなくても自分自身は一応 normalize する
-            item._block_sync = True
-            item.normalize_geometry()
-            item._block_sync = False
-            return
+        if group_id is None: return
             
-        # 自分を含め、グループ全員を normalize する
+        # 自分以外のグループ全員を normalize する
+        # (自分自身は mouseReleaseEvent 内ですでに normalize 済みのため)
         for rect in self.rects:
-            if rect.data(self.GROUP_ID) == group_id:
+            if rect != item and rect.data(self.GROUP_ID) == group_id:
                 rect._block_sync = True
                 rect.normalize_geometry()
                 rect._block_sync = False
