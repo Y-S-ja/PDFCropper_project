@@ -14,6 +14,7 @@ from PySide6 import QtGui
 class myCropBox(QGraphicsObject):
     geometryChanged = Signal(object) # 自身(item)を渡す
     deltaResized = Signal(object, int, QPointF) # item, handle_id, delta_scene
+    transformationFinished = Signal(object) # 変形(リサイズ)完了通知
     
     HANDLE_SIZE = 10.0  # ハンドルのサイズ
     # ハンドル定数をビットフラグに変更 (1枚目: 0=Left, 1=Right / 2枚目: 0=Top, 2=Bottom)
@@ -292,6 +293,10 @@ class myCropBox(QGraphicsObject):
 
         self.active_handle = None
         super().mouseReleaseEvent(event)
+        
+        # 変形が完全に終了したことを通知
+        if was_resizing:
+            self.transformationFinished.emit(self)
 
 class myBadge(QGraphicsRectItem):
     """切り抜き枠に付与する番号バッジクラス"""

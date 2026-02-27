@@ -303,6 +303,7 @@ class PdfGraphicsView(QGraphicsView):
                 # 同期信号の接続
                 self.new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
                 self.new_rect.deltaResized.connect(self._handle_item_delta_resized)
+                self.new_rect.transformationFinished.connect(self._handle_transformation_finished)
                 
                 # --- 番号表示 ---
                 index = len(self.rects) + 1
@@ -430,6 +431,7 @@ class PdfGraphicsView(QGraphicsView):
                 
                 box.geometryChanged.connect(self._handle_item_geometry_changed)
                 box.deltaResized.connect(self._handle_item_delta_resized)
+                box.transformationFinished.connect(self._handle_transformation_finished)
 
                 self.scene.addItem(box)
                 self.rects.append(box)
@@ -483,6 +485,23 @@ class PdfGraphicsView(QGraphicsView):
         group_id = item.data(self.GROUP_ID)
         if group_id is not None:
             self._sync_group(item, group_id)
+
+    def _handle_transformation_finished(self, item):
+        """アイテムの変形（リサイズ）が完了した時のクリーンアップ"""
+        group_id = item.data(self.GROUP_ID)
+        if group_id is None:
+            # 指定がなくても自分自身は一応 normalize する
+            item._block_sync = True
+            item.normalize_geometry()
+            item._block_sync = False
+            return
+            
+        # 自分を含め、グループ全員を normalize する
+        for rect in self.rects:
+            if rect.data(self.GROUP_ID) == group_id:
+                rect._block_sync = True
+                rect.normalize_geometry()
+                rect._block_sync = False
 
     def _handle_item_delta_resized(self, item, handle_id, delta_scene):
         """アイテムの変形中（ドラッグ中）のリアルタイム同期"""
@@ -616,6 +635,7 @@ class PdfGraphicsView(QGraphicsView):
             # 同期信号の接続
             box.geometryChanged.connect(self._handle_item_geometry_changed)
             box.deltaResized.connect(self._handle_item_delta_resized)
+            box.transformationFinished.connect(self._handle_transformation_finished)
 
             self.scene.addItem(box)
             self.rects.append(box)
