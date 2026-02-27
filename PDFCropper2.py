@@ -476,15 +476,16 @@ class PdfGraphicsView(QGraphicsView):
         if not self.sync_size and not self.sync_symmetry:
             return
             
-        # 変形中（リサイズ中）は deltaResized 側で処理するため、
-        # ここでの絶対座標同期（_sync_group）はスキップする。
-        # これにより、リサイズ中に枠全体が跳ねる問題を防止する。
+        group_id = item.data(self.GROUP_ID)
+        if group_id is None:
+            return
+
+        # 変形中（リサイズ中）は deltaResized 側で処理するためスキップ
         if hasattr(item, 'active_handle') and item.active_handle is not None:
             return
 
-        group_id = item.data(self.GROUP_ID)
-        if group_id is not None:
-            self._sync_group(item, group_id)
+        # 移動同期などを行う
+        self._sync_group(item, group_id)
 
     def _handle_transformation_finished(self, item):
         """アイテムの変形（リサイズ）が完了した時のクリーンアップ"""
