@@ -234,13 +234,16 @@ class myCropBox(QGraphicsObject):
         handle = self.get_handle_at(event.pos())
         if handle is not None:
             self.active_handle = handle
-            # 初回位置もしっかりクランプして保存する
-            bg_rect = self.get_bg_rect()
-            scene_pos = self.mapToScene(event.pos())
-            if bg_rect:
-                scene_pos.setX(max(bg_rect.left(), min(scene_pos.x(), bg_rect.right())))
-                scene_pos.setY(max(bg_rect.top(), min(scene_pos.y(), bg_rect.bottom())))
-            self.last_mouse_scene_pos = scene_pos
+            
+            # --- 重要：始点を「クリック位置」ではなく「現在の辺の位置」にする ---
+            # これにより、最初の mouseMoveEvent で発生する「吸着（スナップ）」も
+            # 正しいベクトルとして deltaResized に含まれるようになる。
+            rect = self.rect()
+            handle_pos = QPointF()
+            handle_pos.setX(rect.right() if handle & 1 else rect.left())
+            handle_pos.setY(rect.bottom() if handle & 2 else rect.top())
+            
+            self.last_mouse_scene_pos = self.mapToScene(handle_pos)
             event.accept()
         else:
             # self.is_resizing = False
