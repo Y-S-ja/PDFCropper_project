@@ -234,7 +234,13 @@ class myCropBox(QGraphicsObject):
         handle = self.get_handle_at(event.pos())
         if handle is not None:
             self.active_handle = handle
-            self.last_mouse_scene_pos = self.mapToScene(event.pos())
+            # 初回位置もしっかりクランプして保存する
+            bg_rect = self.get_bg_rect()
+            scene_pos = self.mapToScene(event.pos())
+            if bg_rect:
+                scene_pos.setX(max(bg_rect.left(), min(scene_pos.x(), bg_rect.right())))
+                scene_pos.setY(max(bg_rect.top(), min(scene_pos.y(), bg_rect.bottom())))
+            self.last_mouse_scene_pos = scene_pos
             event.accept()
         else:
             # self.is_resizing = False
