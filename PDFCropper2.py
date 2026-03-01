@@ -546,13 +546,10 @@ class PdfGraphicsView(QGraphicsView):
                             target_handle ^= 2
                             target_delta.setY(-delta_scene.y())
                     
-                    # サイズ同期が無効な場合は、ベクトルを打ち消して移動だけに留める
-                    # (今回は apply_delta 内でサイズが変わるため、sync_size フラグを確認)
                     if self.sync_size:
                         rect.apply_delta(target_handle, target_delta)
                 
                 elif self.sync_size:
-                    # サイズのみ同期の場合（ミラーなし）
                     rect.apply_delta(handle_id, delta_scene)
 
                 rect._block_sync = False
