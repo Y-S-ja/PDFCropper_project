@@ -358,6 +358,7 @@ class PdfGraphicsView(QGraphicsView):
             item.data(self.RECT_NUM), 
             QPointF(item.pos()), 
             QRectF(item.rect()), 
+            item.data(self.GROUP_ID), 
             item.data(self.QUADRANT_ID)
         ) for item in self.rects]
 
@@ -406,11 +407,12 @@ class PdfGraphicsView(QGraphicsView):
         # ハイブリッド更新：個数が同じなら座標・サイズの上書きと並び順の復元
         if len(state) == len(self.rects):
             new_rects_list = []
-            for res_id, pos, rect, quad_id in state:
+            for res_id, pos, rect, group_id, quad_id in state:
                 item = current_items.get(res_id)
                 if item:
                     item.setPos(pos)
                     item.setRect(rect)
+                    item.setData(self.GROUP_ID, group_id)
                     item.setData(self.QUADRANT_ID, quad_id)
                     new_rects_list.append(item)
             self.rects = new_rects_list
@@ -422,7 +424,7 @@ class PdfGraphicsView(QGraphicsView):
             self.rects.clear()
 
             # 2. 保存されていた状態からアイテムを再作成
-            for res_id, pos, rect, quad_id in state:
+            for res_id, pos, rect, group_id, quad_id in state:
                 box = myCropBox(rect)
                 box.setPos(pos)
                 
@@ -435,6 +437,7 @@ class PdfGraphicsView(QGraphicsView):
                 # タグと固有IDを復元
                 box.setData(self.TAG_NAME, "selection_rect")
                 box.setData(self.RECT_NUM, res_id)
+                box.setData(self.GROUP_ID, group_id)
                 box.setData(self.QUADRANT_ID, quad_id)
                 
                 box.geometryChanged.connect(self._handle_item_geometry_changed)
