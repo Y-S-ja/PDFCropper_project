@@ -4,13 +4,18 @@ import fitz
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QMessageBox, QGraphicsView, 
                              QGraphicsScene, QGraphicsRectItem, QHBoxLayout, QLabel,
-                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu)
-from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent
+                             QGraphicsSimpleTextItem, QGraphicsItem, QMenuBar, QMenu,
+                             QGraphicsObject, QGraphicsPixmapItem)
+from PySide6.QtCore import Qt, QRectF, QPointF, QVariantAnimation, QTimer, QEasingCurve, QEvent, Signal
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QPainterPath
 from PySide6 import QtGui
 
 # --- 1. スマートな枠（アイテム）クラス ---
-class myCropBox(QGraphicsRectItem):
+class myCropBox(QGraphicsObject):
+    geometryChanged = Signal(object) # 自身(item)を渡す
+    deltaResized = Signal(object, int, QPointF) # item, handle_id, delta_scene
+    transformationFinished = Signal(object) # 変形(リサイズ)完了通知
+    
     HANDLE_SIZE = 10.0  # ハンドルのサイズ
     # ハンドル定数をビットフラグに変更 (1枚目: 0=Left, 1=Right / 2枚目: 0=Top, 2=Bottom)
     HANDLE_TOP_LEFT = 0     # 00
@@ -19,19 +24,23 @@ class myCropBox(QGraphicsRectItem):
     HANDLE_BOTTOM_RIGHT = 3 # 11
 
     def __init__(self, rect):
-        super().__init__(rect)
-        self.setPen(QPen(QColor(0, 120, 215), 2, Qt.DashLine))
-        self.setBrush(QBrush(QColor(0, 120, 215, 20)))
+        super().__init__()
+        self._rect = rect
+        self.pen_style = QPen(QColor(0, 120, 215), 2, Qt.DashLine)
+        self.brush_style = QBrush(QColor(0, 120, 215, 20))
         
         # フラグ設定: 移動可能、選択可能、フォーカス可能にする
         self.setFlags(
-            QGraphicsRectItem.ItemIsMovable |
-            QGraphicsRectItem.ItemIsSelectable |
-            QGraphicsRectItem.ItemSendsGeometryChanges
+            QGraphicsItem.ItemIsMovable |
+            QGraphicsItem.ItemIsSelectable |
+            QGraphicsItem.ItemSendsGeometryChanges
         )
         # マウスの動きを監視する設定（カーソル変更のため）
         self.setAcceptHoverEvents(True)
         self.active_handle = None
+        self._block_sync = False # 循環防止用
+        self.allowed_rect = None # 移動・変形を制限する領域 (NoneならPDF全体)
+        self.last_mouse_scene_pos = QPointF()
         
         # --- ハンドル（小四角）を子アイテムとして作成 ---
         self.handle_items = {}
@@ -51,9 +60,13 @@ class myCropBox(QGraphicsRectItem):
         # 初期位置をハンドルに反映させるために明示的に呼び出す
         self.setRect(rect)
         
+    def rect(self):
+        return self._rect
+
     def setRect(self, rect):
         """矩形のサイズが変更されたらハンドルとバッジの位置も更新する"""
-        super().setRect(rect)
+        self._rect = QRectF(rect)
+        self.prepareGeometryChange()
         # 1. ハンドルの位置を更新
         if hasattr(self, 'handle_items'):
             self.handle_items[self.HANDLE_TOP_LEFT].setPos(rect.topLeft())
@@ -65,6 +78,14 @@ class myCropBox(QGraphicsRectItem):
         for child in self.childItems():
             if isinstance(child, myBadge):
                 child.setPos(rect.topLeft())
+        
+        if not self._block_sync:
+            self.geometryChanged.emit(self)
+
+    def pen(self): return self.pen_style
+    def setPen(self, pen): self.pen_style = pen; self.update()
+    def brush(self): return self.brush_style
+    def setBrush(self, brush): self.brush_style = brush; self.update()
 
     def get_current_scale(self):
         """現在のビューのズーム倍率を取得する"""
@@ -109,6 +130,52 @@ class myCropBox(QGraphicsRectItem):
                 path.addRect(h_rect)
         return path
 
+    def get_bg_rect(self):
+        """制限領域を取得する（個別設定があればそれを優先、なければPDF背景）"""
+        if self.allowed_rect is not None:
+            return self.allowed_rect
+            
+        if self.scene():
+            for item in self.scene().items():
+                if isinstance(item, QGraphicsPixmapItem):
+                    return item.boundingRect()
+        return None
+
+    def normalize_geometry(self):
+        """見た目の位置・サイズを維持したまま、内部のズレ(rect.topLeft)を pos に吸収させる"""
+        rect = self.rect().normalized()
+        delta = rect.topLeft()
+        
+        if delta != QPointF(0, 0):
+            self._block_sync = True # 内部調整による再同期を防ぐ
+            self.setPos(self.pos() + delta)
+            # rect を (0,0) 起点の正のサイズに作り直す
+            norm_rect = QRectF(0, 0, rect.width(), rect.height())
+            self.setRect(norm_rect)
+            self._block_sync = False
+        else:
+            self.setRect(rect)
+
+    def apply_delta(self, handle_id, delta_scene):
+        """外部（同期など）から移動ベクトルを受け取って自身を変形させる"""
+        self.prepareGeometryChange()
+        rect = self.rect()
+        
+        # シーン上の差分をローカルの差分に変換（スケーリングの影響を排除するため）
+        # ただし現在はスケーリングがない前提なので、delta_scene をそのまま使える
+        dx = delta_scene.x()
+        dy = delta_scene.y()
+        
+        if handle_id & 1: rect.setRight(rect.right() + dx)
+        else: rect.setLeft(rect.left() + dx)
+        
+        if handle_id & 2: rect.setBottom(rect.bottom() + dy)
+        else: rect.setTop(rect.top() + dy)
+        
+        # 反転判定は行わず、正規化だけしてセットする
+        # (同期中に handle_id が変わると収拾がつかなくなるため)
+        self.setRect(rect.normalized())
+
     def paint(self, painter, option, widget):
         # 標準の四角を描画
         painter.setPen(self.pen())
@@ -123,6 +190,21 @@ class myCropBox(QGraphicsRectItem):
             if hasattr(self, 'handle_items'):
                 for h_item in self.handle_items.values():
                     h_item.setVisible(is_sel)
+        
+        if change == QGraphicsItem.ItemPositionChange and self.scene():
+            # 1. 移動制限：PDFの範囲内に収める
+            new_pos = value # cropbox.pos()の移動先
+            bg_rect = self.get_bg_rect()
+            if bg_rect:
+                rect = self.rect()
+                x = max(bg_rect.left(), min(new_pos.x(), bg_rect.right() - rect.width()))
+                y = max(bg_rect.top(), min(new_pos.y(), bg_rect.bottom() - rect.height()))
+                return QPointF(x, y) # ここは補正値を返す必要があるため return して良い
+
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            # 2. 確定後の座標を同期させる
+            if not getattr(self, '_block_sync', False):
+                self.geometryChanged.emit(self)
         
         return super().itemChange(change, value)
 
@@ -150,7 +232,16 @@ class myCropBox(QGraphicsRectItem):
         handle = self.get_handle_at(event.pos())
         if handle is not None:
             self.active_handle = handle
-            # self.is_resizing = True
+            
+            # --- 重要：始点を「クリック位置」ではなく「現在の辺の位置」にする ---
+            # これにより、最初の mouseMoveEvent で発生する「吸着（スナップ）」も
+            # 正しいベクトルとして deltaResized に含まれるようになる。
+            rect = self.rect()
+            handle_pos = QPointF()
+            handle_pos.setX(rect.right() if handle & 1 else rect.left())
+            handle_pos.setY(rect.bottom() if handle & 2 else rect.top())
+            
+            self.last_mouse_scene_pos = self.mapToScene(handle_pos)
             event.accept()
         else:
             # self.is_resizing = False
@@ -161,7 +252,20 @@ class myCropBox(QGraphicsRectItem):
         if self.active_handle is not None:
             self.prepareGeometryChange()
             rect = self.rect()
-            pos = event.pos()
+            
+            # マウス位置をシーン座標で取得し、制限
+            bg_rect = self.get_bg_rect()
+            current_scene_pos = self.mapToScene(event.pos())
+            if bg_rect:
+                current_scene_pos.setX(max(bg_rect.left(), min(current_scene_pos.x(), bg_rect.right())))
+                current_scene_pos.setY(max(bg_rect.top(), min(current_scene_pos.y(), bg_rect.bottom())))
+            
+            # ベクトル（差分）を計算
+            delta_scene = current_scene_pos - self.last_mouse_scene_pos
+            self.last_mouse_scene_pos = current_scene_pos
+            
+            # ローカルの座標系での移動量に変換
+            pos = self.mapFromScene(current_scene_pos)
             
             # ビットフラグを使って頂点を更新 (1bit目が1ならRight, 2bit目が1ならBottom)
             # self.active_handleが01, 11なら条件式は01を返す
@@ -178,18 +282,28 @@ class myCropBox(QGraphicsRectItem):
             if rect.width() < 0:  self.active_handle ^= 1 # 左右反転、1ビット目を反転させる
             if rect.height() < 0: self.active_handle ^= 2 # 上下反転、2ビット目を反転させる
 
-            # 常に「正のサイズ」としてセット（これで描画が消えなくなる）
+            # 常に「正のサイズ」としてセット
             self.setRect(rect.normalized())
+            
+            # 同期用の信号（現在のハンドル状態と移動ベクトルを添えて）
+            if not self._block_sync:
+                self.deltaResized.emit(self, self.active_handle, delta_scene)
             
         else:
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        # self.is_resizing = False
-        # 最後に形を整える（幅や高さがマイナスの状態を直す）
-        if self.active_handle is not None:
-            self.setRect(self.rect().normalized())
+        # 変形完了時に、矩形の左上のズレを pos に吸収させて (0,0) 起点に戻す
+        was_resizing = self.active_handle is not None
+        if was_resizing:
+            self.normalize_geometry()
+
+        self.active_handle = None
         super().mouseReleaseEvent(event)
+        
+        # 変形が完全に終了したことを通知
+        if was_resizing:
+            self.transformationFinished.emit(self)
 
 class myBadge(QGraphicsRectItem):
     """切り抜き枠に付与する番号バッジクラス"""
