@@ -789,11 +789,11 @@ class MainWindow(QMainWindow):
         # テンプレート用ツールバー
         self.template_toolbar = self.addToolBar("テンプレート")
         
-        btn_2v = QPushButton("2分割(縦)")
+        btn_2v = QPushButton("2分割(左右)")
         btn_2v.clicked.connect(self._apply_template_2v)
         self.template_toolbar.addWidget(btn_2v)
         
-        btn_2h = QPushButton("2分割(横)")
+        btn_2h = QPushButton("2分割(上下)")
         btn_2h.clicked.connect(self._apply_template_2h)
         self.template_toolbar.addWidget(btn_2h)
         
