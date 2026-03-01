@@ -153,8 +153,6 @@ class myCropBox(QGraphicsObject):
             norm_rect = QRectF(0, 0, rect.width(), rect.height())
             self.setRect(norm_rect)
             self._block_sync = False
-            # 最終的な正しい座標を通知
-            self.geometryChanged.emit(self)
         else:
             self.setRect(rect)
 
