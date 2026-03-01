@@ -41,6 +41,8 @@ class PdfGraphicsView(QGraphicsView):
         self.start_pos = None
         self.TAG_NAME = Qt.UserRole
         self.RECT_NUM = Qt.UserRole + 1
+        self.GROUP_ID = Qt.UserRole + 2 # グループ同期用のID
+        self.QUADRANT_ID = Qt.UserRole + 3 # 上下左右の配置用定数
 
         self.pdf_path = None      # PDFファイルのパス
         self.pdf_doc = None       # PDFドキュメントオブジェクト
@@ -48,6 +50,9 @@ class PdfGraphicsView(QGraphicsView):
         self.undo_stack = [] # Undo履歴スタック
         self.redo_stack = [] # Redo履歴スタック
         self.pre_action_state = None # アクション開始前の状態保持用
+
+        self.sync_size = True     # サイズ同期フラグ
+        self.sync_symmetry = True # 対称性同期フラグ
 
         self.badge_size = 24
         self.margin = 100
@@ -291,10 +296,14 @@ class PdfGraphicsView(QGraphicsView):
                 self.new_rect.setPen(pen)
                 self.new_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
                 
-                # 識別タグを追加（削除時にこれを目印にする）
                 self.new_rect.setData(self.TAG_NAME, "selection_rect")
                 self.rect_count += 1
                 self.new_rect.setData(self.RECT_NUM, self.rect_count)
+                
+                # 同期信号の接続
+                self.new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
+                self.new_rect.deltaResized.connect(self._handle_item_delta_resized)
+                self.new_rect.transformationFinished.connect(self._handle_transformation_finished)
                 
                 # --- 番号表示 ---
                 index = len(self.rects) + 1
@@ -342,8 +351,14 @@ class PdfGraphicsView(QGraphicsView):
         self.selectionChanged.emit(target)
 
     def get_snapshot(self):
-        """座標、サイズ、および固有IDを含めたスナップショットを取る"""
-        return [(item.data(self.RECT_NUM), QPointF(item.pos()), QRectF(item.rect())) for item in self.rects]
+        """座標、サイズ、および固有ID、同期用IDを含めたスナップショットを取る"""
+        return [(
+            item.data(self.RECT_NUM), 
+            QPointF(item.pos()), 
+            QRectF(item.rect()), 
+            item.data(self.GROUP_ID), 
+            item.data(self.QUADRANT_ID)
+        ) for item in self.rects]
 
     def push_undo(self, state=None):
         """現在の状態または指定された状態をUndoスタックに保存する"""
@@ -390,11 +405,13 @@ class PdfGraphicsView(QGraphicsView):
         # ハイブリッド更新：個数が同じなら座標・サイズの上書きと並び順の復元
         if len(state) == len(self.rects):
             new_rects_list = []
-            for res_id, pos, rect in state:
+            for res_id, pos, rect, group_id, quad_id in state:
                 item = current_items.get(res_id)
                 if item:
                     item.setPos(pos)
                     item.setRect(rect)
+                    item.setData(self.GROUP_ID, group_id)
+                    item.setData(self.QUADRANT_ID, quad_id)
                     new_rects_list.append(item)
             self.rects = new_rects_list
         else:
@@ -405,7 +422,7 @@ class PdfGraphicsView(QGraphicsView):
             self.rects.clear()
 
             # 2. 保存されていた状態からアイテムを再作成
-            for res_id, pos, rect in state:
+            for res_id, pos, rect, group_id, quad_id in state:
                 box = myCropBox(rect)
                 box.setPos(pos)
                 
@@ -418,7 +435,13 @@ class PdfGraphicsView(QGraphicsView):
                 # タグと固有IDを復元
                 box.setData(self.TAG_NAME, "selection_rect")
                 box.setData(self.RECT_NUM, res_id)
+                box.setData(self.GROUP_ID, group_id)
+                box.setData(self.QUADRANT_ID, quad_id)
                 
+                box.geometryChanged.connect(self._handle_item_geometry_changed)
+                box.deltaResized.connect(self._handle_item_delta_resized)
+                box.transformationFinished.connect(self._handle_transformation_finished)
+
                 self.scene.addItem(box)
                 self.rects.append(box)
                 
@@ -456,6 +479,217 @@ class PdfGraphicsView(QGraphicsView):
         self.push_undo() # 並び替え前に状態を保存
         self.rects = new_order_objs
         self.update_numbers()
+
+    def _handle_item_geometry_changed(self, item):
+        """アイテムの確定後（移動終了時など）の同期"""
+        if not self.sync_size and not self.sync_symmetry:
+            return
+            
+        group_id = item.data(self.GROUP_ID)
+        if group_id is None:
+            return
+
+        # 変形中（リサイズ中）は deltaResized 側で処理するためスキップ
+        if hasattr(item, 'active_handle') and item.active_handle is not None:
+            return
+
+        # 移動同期などを行う
+        self._sync_group(item, group_id)
+
+    def _handle_transformation_finished(self, item):
+        """アイテムの変形（リサイズ）が完了した時のクリーンアップ"""
+        group_id = item.data(self.GROUP_ID)
+        if group_id is None: return
+            
+        # 自分以外のグループ全員を normalize する
+        # (自分自身は mouseReleaseEvent 内ですでに normalize 済みのため)
+        for rect in self.rects:
+            if rect != item and rect.data(self.GROUP_ID) == group_id:
+                rect._block_sync = True
+                rect.normalize_geometry()
+                rect._block_sync = False
+
+    def _handle_item_delta_resized(self, item, handle_id, delta_scene):
+        """アイテムの変形中（ドラッグ中）のリアルタイム同期"""
+        if not self.sync_size and not self.sync_symmetry:
+            return
+        group_id = item.data(self.GROUP_ID)
+        if group_id is not None:
+            self._sync_group_delta(item, group_id, handle_id, delta_scene)
+
+    def _sync_group_delta(self, source_item, group_id, handle_id, delta_scene):
+        """同じグループの他のアイテムを変形同期させる"""
+        s_quad = source_item.data(self.QUADRANT_ID)
+        for rect in self.rects:
+            if rect == source_item: continue
+            if rect.data(self.GROUP_ID) == group_id:
+                rect._block_sync = True
+                
+                # 1. 対称性（位置）同期
+                if self.sync_symmetry:
+                    if not self.pdf_item: 
+                        rect._block_sync = False
+                        continue
+                    
+                    t_quad = rect.data(self.QUADRANT_ID)
+                    target_handle = handle_id
+                    target_delta = QPointF(delta_scene)
+                    
+                    # Quadrant属性のビット差分でミラー判定 (0bit目が違う=横ミラー, 1bit目が違う=縦ミラー)
+                    if s_quad is not None and t_quad is not None:
+                        if (s_quad & 1) != (t_quad & 1): # 横ミラー
+                            target_handle ^= 1
+                            target_delta.setX(-delta_scene.x())
+                        if (s_quad & 2) != (t_quad & 2): # 縦ミラー
+                            target_handle ^= 2
+                            target_delta.setY(-delta_scene.y())
+                    
+                    if self.sync_size:
+                        rect.apply_delta(target_handle, target_delta)
+                
+                elif self.sync_size:
+                    rect.apply_delta(handle_id, delta_scene)
+
+                rect._block_sync = False
+
+    def _sync_group(self, source_item, group_id):
+        """同じグループの他のアイテムを同期させる（最終確定時の絶対座標同期）"""
+        s_quad = source_item.data(self.QUADRANT_ID)
+        s_rect = source_item.rect()
+        s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+        
+        for rect in self.rects:
+            if rect == source_item: continue
+            if rect.data(self.GROUP_ID) == group_id:
+                rect._block_sync = True
+                
+                # 1. サイズ同期
+                if self.sync_size:
+                    rect.setRect(s_rect)
+                
+                # 2. 対称性（位置）同期
+                if self.sync_symmetry:
+                    if not self.pdf_item: 
+                        rect._block_sync = False
+                        continue
+                    canvas_rect = self.pdf_item.pixmap().rect()
+                    cw, ch = canvas_rect.width(), canvas_rect.height()
+                    
+                    t_quad = rect.data(self.QUADRANT_ID)
+                    target_scene_tl = QPointF()
+                    
+                    if s_quad is not None and t_quad is not None:
+                        # X方向のミラー判定
+                        if (s_quad & 1) != (t_quad & 1): # 左右反対
+                            target_scene_tl.setX(cw - s_scene_rect.right())
+                        else: # 左右同じ
+                            target_scene_tl.setX(s_scene_rect.left())
+                            
+                        # Y方向のミラー判定
+                        if (s_quad & 2) != (t_quad & 2): # 上下反対
+                            target_scene_tl.setY(ch - s_scene_rect.bottom())
+                        else: # 上下同じ
+                            target_scene_tl.setY(s_scene_rect.top())
+                    else:
+                        # 属性がない場合のフォールバック（従来どおり）
+                        target_scene_tl = s_scene_rect.topLeft()
+                    
+                    # ターゲット枠への適用
+                    rect.setPos(target_scene_tl - rect.rect().topLeft())
+
+                rect._block_sync = False
+
+    def add_template_boxes(self, data_list):
+        """複数の矩形と制限領域をセットで追加する"""
+        if not data_list: return
+        self.push_undo()
+        
+        # グループIDを生成（現在の時刻などをベースにユニークな値にする）
+        import time
+        group_id = int(time.time() * 1000)
+        
+        for qrect, allowed_rect, quad_id in data_list:
+            pos = qrect.topLeft()
+            size_rect = QRectF(0, 0, qrect.width(), qrect.height())
+            
+            box = myCropBox(size_rect)
+            box.setPos(pos)
+            box.allowed_rect = allowed_rect # ここでエリア制限を設定
+            
+            # スタイル設定
+            pen = QPen(QColor(0, 120, 215), 3)
+            pen.setCosmetic(True)
+            box.setPen(pen)
+            box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+            
+            box.setData(self.TAG_NAME, "selection_rect")
+            self.rect_count += 1
+            box.setData(self.RECT_NUM, self.rect_count)
+            box.setData(self.GROUP_ID, group_id)
+            box.setData(self.QUADRANT_ID, quad_id)
+            
+            # 同期信号の接続
+            box.geometryChanged.connect(self._handle_item_geometry_changed)
+            box.deltaResized.connect(self._handle_item_delta_resized)
+            box.transformationFinished.connect(self._handle_transformation_finished)
+
+            self.scene.addItem(box)
+            self.rects.append(box)
+            
+            # バッジの追加
+            badge = myBadge(len(self.rects), self.badge_size, parent=box)
+            badge.setPos(size_rect.topLeft())
+            
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+        self._on_scene_selection_changed()
+
+    def add_template_2v(self):
+        """2分割（縦）テンプレート"""
+        if not self.pdf_item: return
+        
+        # ページの画像サイズを取得
+        canvas_rect = self.pdf_item.pixmap().rect()
+        w = canvas_rect.width()
+        h = canvas_rect.height()
+        
+        # (初期位置, 制限領域, quad_id)
+        # quad: 0=TL, 1=TR
+        data = [
+            (QRectF(0, 0, w/2, h), QRectF(0, 0, w/2, h), 0),
+            (QRectF(w/2, 0, w/2, h), QRectF(w/2, 0, w/2, h), 1)
+        ]
+        self.add_template_boxes(data)
+
+    def add_template_2h(self):
+        """2分割（横）テンプレート"""
+        if not self.pdf_item: return
+        canvas_rect = self.pdf_item.pixmap().rect()
+        w = canvas_rect.width()
+        h = canvas_rect.height()
+        
+        # quad: 0=TL, 2=BL
+        data = [
+            (QRectF(0, 0, w, h/2), QRectF(0, 0, w, h/2), 0),
+            (QRectF(0, h/2, w, h/2), QRectF(0, h/2, w, h/2), 2)
+        ]
+        self.add_template_boxes(data)
+
+    def add_template_4(self):
+        """4分割テンプレート"""
+        if not self.pdf_item: return
+        r = self.pdf_item.pixmap().rect()
+        w, h = r.width(), r.height()
+        cx, cy = w/2, h/2
+        
+        # quad: 0=TL, 1=TR, 2=BL, 3=BR
+        data = [
+            (QRectF(0, 0, cx, cy), QRectF(0, 0, cx, cy), 0),
+            (QRectF(cx, 0, cx, cy), QRectF(cx, 0, cx, cy), 1),
+            (QRectF(0, cy, cx, cy), QRectF(0, cy, cx, cy), 2),
+            (QRectF(cx, cy, cx, cy), QRectF(cx, cy, cx, cy), 3)
+        ]
+        self.add_template_boxes(data)
         
 
 
@@ -527,6 +761,8 @@ class MainWindow(QMainWindow):
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.prop_panel = PropertyPanel()
         self.prop_panel.orderChanged.connect(self._handle_reorder)
+        self.prop_panel.syncSizeChanged.connect(self._handle_sync_size_changed)
+        self.prop_panel.syncSymmetryChanged.connect(self._handle_sync_symmetry_changed)
         self.dock.setWidget(self.prop_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
 
@@ -548,6 +784,36 @@ class MainWindow(QMainWindow):
         # 最初のタブを追加
         self.add_new_tab()
 
+        # テンプレート用ツールバー
+        self.template_toolbar = self.addToolBar("テンプレート")
+        
+        btn_2v = QPushButton("2分割(左右)")
+        btn_2v.clicked.connect(self._apply_template_2v)
+        self.template_toolbar.addWidget(btn_2v)
+        
+        btn_2h = QPushButton("2分割(上下)")
+        btn_2h.clicked.connect(self._apply_template_2h)
+        self.template_toolbar.addWidget(btn_2h)
+        
+        btn_4 = QPushButton("4分割")
+        btn_4.clicked.connect(self._apply_template_4)
+        self.template_toolbar.addWidget(btn_4)
+
+    def _apply_template_2v(self):
+        view = self.current_view()
+        if view:
+            view.add_template_2v()
+
+    def _apply_template_2h(self):
+        view = self.current_view()
+        if view:
+            view.add_template_2h()
+
+    def _apply_template_4(self):
+        view = self.current_view()
+        if view:
+            view.add_template_4()
+
     def _on_tab_changed(self, index):
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
         self.update_window_title()
@@ -555,6 +821,7 @@ class MainWindow(QMainWindow):
         if view:
             # 初期状態を反映
             self.prop_panel.update_list(view.rects)
+            self.prop_panel.update_sync_settings(view.sync_size, view.sync_symmetry)
             self.preview_panel.update_previews(view)
             view._on_scene_selection_changed()
         else:
@@ -580,6 +847,16 @@ class MainWindow(QMainWindow):
         if view:
             view.reorder_rects(new_order)
             self.preview_panel.update_previews(view)
+
+    def _handle_sync_size_changed(self, enabled):
+        view = self.current_view()
+        if view:
+            view.sync_size = enabled
+
+    def _handle_sync_symmetry_changed(self, enabled):
+        view = self.current_view()
+        if view:
+            view.sync_symmetry = enabled
 
     def current_view(self):
         """現在のアクティブなタブにあるビューを返す"""

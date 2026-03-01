@@ -1,7 +1,7 @@
 import fitz
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QListWidget, QGroupBox, QFormLayout, 
-    QDoubleSpinBox, QListWidgetItem, QScrollArea, QFrame
+    QDoubleSpinBox, QListWidgetItem, QScrollArea, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
 from PySide6.QtGui import QImage, QPixmap
@@ -9,6 +9,8 @@ from PySide6.QtGui import QImage, QPixmap
 class PropertyPanel(QWidget):
     """QDockWidgetの中身として動作するプロパティ編集パネル"""
     orderChanged = Signal(list) # 並び順変更をメインウィンドウに知らせる用
+    syncSizeChanged = Signal(bool)     # サイズ同期のON/OFFを知らせる用
+    syncSymmetryChanged = Signal(bool) # 対称性同期のON/OFFを知らせる用
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,12 +49,26 @@ class PropertyPanel(QWidget):
         form.addRow("高さ:", self.spin_h)
 
         layout.addWidget(group)
+
+        # 3. グループ同期設定
+        sync_group = QGroupBox("テンプレート同期設定")
+        sync_layout = QVBoxLayout(sync_group)
+        self.check_sync_size = QCheckBox("サイズを共有")
+        self.check_sync_symmetry = QCheckBox("対称性を維持 (2-in-1等)")
+        
+        sync_layout.addWidget(self.check_sync_size)
+        sync_layout.addWidget(self.check_sync_symmetry)
+        layout.addWidget(sync_group)
+
         layout.addStretch()
 
         # イベント接続
         self.list_widget.currentItemChanged.connect(self._on_list_selection_changed)
         for spin in [self.spin_x, self.spin_y, self.spin_w, self.spin_h]:
             spin.valueChanged.connect(self.apply_changes)
+
+        self.check_sync_size.toggled.connect(self.syncSizeChanged.emit)
+        self.check_sync_symmetry.toggled.connect(self.syncSymmetryChanged.emit)
 
         self.setEnabled(False)
 
@@ -135,6 +151,13 @@ class PropertyPanel(QWidget):
                     list_item.setSelected(True)
                     self.list_widget.setCurrentItem(list_item)
                     break
+        self._updating = False
+
+    def update_sync_settings(self, sync_size, sync_symmetry):
+        """ビューから同期設定のフラグを受け取ってUIに反映する"""
+        self._updating = True
+        self.check_sync_size.setChecked(sync_size)
+        self.check_sync_symmetry.setChecked(sync_symmetry)
         self._updating = False
 
     def apply_changes(self):
