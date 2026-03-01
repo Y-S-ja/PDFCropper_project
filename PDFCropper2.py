@@ -42,6 +42,7 @@ class PdfGraphicsView(QGraphicsView):
         self.TAG_NAME = Qt.UserRole
         self.RECT_NUM = Qt.UserRole + 1
         self.GROUP_ID = Qt.UserRole + 2 # グループ同期用のID
+        self.QUADRANT_ID = Qt.UserRole + 3 # 上下左右の配置用定数
 
         self.pdf_path = None      # PDFファイルのパス
         self.pdf_doc = None       # PDFドキュメントオブジェクト
@@ -352,8 +353,13 @@ class PdfGraphicsView(QGraphicsView):
         self.selectionChanged.emit(target)
 
     def get_snapshot(self):
-        """座標、サイズ、および固有IDを含めたスナップショットを取る"""
-        return [(item.data(self.RECT_NUM), QPointF(item.pos()), QRectF(item.rect())) for item in self.rects]
+        """座標、サイズ、および固有ID、同期用IDを含めたスナップショットを取る"""
+        return [(
+            item.data(self.RECT_NUM), 
+            QPointF(item.pos()), 
+            QRectF(item.rect()), 
+            item.data(self.QUADRANT_ID)
+        ) for item in self.rects]
 
     def push_undo(self, state=None):
         """現在の状態または指定された状態をUndoスタックに保存する"""
@@ -400,11 +406,12 @@ class PdfGraphicsView(QGraphicsView):
         # ハイブリッド更新：個数が同じなら座標・サイズの上書きと並び順の復元
         if len(state) == len(self.rects):
             new_rects_list = []
-            for res_id, pos, rect in state:
+            for res_id, pos, rect, quad_id in state:
                 item = current_items.get(res_id)
                 if item:
                     item.setPos(pos)
                     item.setRect(rect)
+                    item.setData(self.QUADRANT_ID, quad_id)
                     new_rects_list.append(item)
             self.rects = new_rects_list
         else:
@@ -415,7 +422,7 @@ class PdfGraphicsView(QGraphicsView):
             self.rects.clear()
 
             # 2. 保存されていた状態からアイテムを再作成
-            for res_id, pos, rect in state:
+            for res_id, pos, rect, quad_id in state:
                 box = myCropBox(rect)
                 box.setPos(pos)
                 
@@ -428,6 +435,7 @@ class PdfGraphicsView(QGraphicsView):
                 # タグと固有IDを復元
                 box.setData(self.TAG_NAME, "selection_rect")
                 box.setData(self.RECT_NUM, res_id)
+                box.setData(self.QUADRANT_ID, quad_id)
                 
                 box.geometryChanged.connect(self._handle_item_geometry_changed)
                 box.deltaResized.connect(self._handle_item_delta_resized)
