@@ -509,7 +509,8 @@ class PdfGraphicsView(QGraphicsView):
             self._sync_group_delta(item, group_id, handle_id, delta_scene)
 
     def _sync_group_delta(self, source_item, group_id, handle_id, delta_scene):
-        """移動ベクトル(delta)を用いてグループ内の他アイテムをリアルタイム同期させる"""
+        """同じグループの他のアイテムを変形同期させる"""
+        s_quad = source_item.data(self.QUADRANT_ID)
         for rect in self.rects:
             if rect == source_item: continue
             if rect.data(self.GROUP_ID) == group_id:
@@ -521,25 +522,18 @@ class PdfGraphicsView(QGraphicsView):
                         rect._block_sync = False
                         continue
                     
-                    canvas_rect = self.pdf_item.pixmap().rect()
-                    cw, ch = canvas_rect.width(), canvas_rect.height()
-                    cx, cy = cw / 2, ch / 2
-                    
-                    s_center = source_item.mapToScene(source_item.rect().center())
-                    t_center = rect.mapToScene(rect.rect().center())
-                    
+                    t_quad = rect.data(self.QUADRANT_ID)
                     target_handle = handle_id
                     target_delta = QPointF(delta_scene)
                     
-                    # X方向のミラー判定
-                    if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
-                        target_handle ^= 1 # handle_idの0bit目を反転 (Left <-> Right)
-                        target_delta.setX(-delta_scene.x())
-                        
-                    # Y方向のミラー判定
-                    if (s_center.y() < cy and t_center.y() > cy) or (s_center.y() > cy and t_center.y() < cy):
-                        target_handle ^= 2 # handle_idの1bit目を反転 (Top <-> Bottom)
-                        target_delta.setY(-delta_scene.y())
+                    # Quadrant属性のビット差分でミラー判定 (0bit目が違う=横ミラー, 1bit目が違う=縦ミラー)
+                    if s_quad is not None and t_quad is not None:
+                        if (s_quad & 1) != (t_quad & 1): # 横ミラー
+                            target_handle ^= 1
+                            target_delta.setX(-delta_scene.x())
+                        if (s_quad & 2) != (t_quad & 2): # 縦ミラー
+                            target_handle ^= 2
+                            target_delta.setY(-delta_scene.y())
                     
                     # サイズ同期が無効な場合は、ベクトルを打ち消して移動だけに留める
                     # (今回は apply_delta 内でサイズが変わるため、sync_size フラグを確認)
@@ -553,8 +547,11 @@ class PdfGraphicsView(QGraphicsView):
                 rect._block_sync = False
 
     def _sync_group(self, source_item, group_id):
-        """同じグループの他のアイテムを同期させる"""
-        # source_item: 変形などの変更がなされたitem
+        """同じグループの他のアイテムを同期させる（最終確定時の絶対座標同期）"""
+        s_quad = source_item.data(self.QUADRANT_ID)
+        s_rect = source_item.rect()
+        s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+        
         for rect in self.rects:
             if rect == source_item: continue
             if rect.data(self.GROUP_ID) == group_id:
@@ -562,42 +559,37 @@ class PdfGraphicsView(QGraphicsView):
                 
                 # 1. サイズ同期
                 if self.sync_size:
-                    rect.setRect(source_item.rect())
+                    rect.setRect(s_rect)
                 
                 # 2. 対称性（位置）同期
                 if self.sync_symmetry:
-                    if not self.pdf_item: continue
+                    if not self.pdf_item: 
+                        rect._block_sync = False
+                        continue
                     canvas_rect = self.pdf_item.pixmap().rect()
-                    cw = canvas_rect.width()
-                    ch = canvas_rect.height()
-                    cx = cw / 2
-                    cy = ch / 2
+                    cw, ch = canvas_rect.width(), canvas_rect.height()
                     
-                    s_rect = source_item.rect()
-                    s_center = source_item.mapToScene(s_rect.center())
-                    
-                    t_rect = rect.rect()
-                    t_center = rect.mapToScene(t_rect.center())
-                    
-                    # ソースの見た目上の範囲をシーン座標で取得
-                    s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
-                    
+                    t_quad = rect.data(self.QUADRANT_ID)
                     target_scene_tl = QPointF()
                     
-                    # X方向の対称位置（相手が反対側にいる場合のみミラー）
-                    if (s_center.x() < cx and t_center.x() > cx) or (s_center.x() > cx and t_center.x() < cx):
-                        target_scene_tl.setX(cw - s_scene_rect.right())
+                    if s_quad is not None and t_quad is not None:
+                        # X方向のミラー判定
+                        if (s_quad & 1) != (t_quad & 1): # 左右反対
+                            target_scene_tl.setX(cw - s_scene_rect.right())
+                        else: # 左右同じ
+                            target_scene_tl.setX(s_scene_rect.left())
+                            
+                        # Y方向のミラー判定
+                        if (s_quad & 2) != (t_quad & 2): # 上下反対
+                            target_scene_tl.setY(ch - s_scene_rect.bottom())
+                        else: # 上下同じ
+                            target_scene_tl.setY(s_scene_rect.top())
                     else:
-                        target_scene_tl.setX(s_scene_rect.left())
-                        
-                    # Y方向の対称位置（相手が反対側にいる場合のみミラー）
-                    if (s_center.y() < cy and t_center.y() > cy) or (s_center.y() > cy and t_center.y() < cy):
-                        target_scene_tl.setY(ch - s_scene_rect.bottom())
-                    else:
-                        target_scene_tl.setY(s_scene_rect.top())
+                        # 属性がない場合のフォールバック（従来どおり）
+                        target_scene_tl = s_scene_rect.topLeft()
                     
-                    # ターゲット枠への適用（自身の内部オフセットを考慮）
-                    rect.setPos(target_scene_tl - t_rect.topLeft())
+                    # ターゲット枠への適用
+                    rect.setPos(target_scene_tl - rect.rect().topLeft())
 
                 rect._block_sync = False
 
