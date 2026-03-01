@@ -610,7 +610,7 @@ class PdfGraphicsView(QGraphicsView):
         import time
         group_id = int(time.time() * 1000)
         
-        for qrect, allowed_rect in data_list:
+        for qrect, allowed_rect, quad_id in data_list:
             pos = qrect.topLeft()
             size_rect = QRectF(0, 0, qrect.width(), qrect.height())
             
@@ -628,6 +628,7 @@ class PdfGraphicsView(QGraphicsView):
             self.rect_count += 1
             box.setData(self.RECT_NUM, self.rect_count)
             box.setData(self.GROUP_ID, group_id)
+            box.setData(self.QUADRANT_ID, quad_id)
             
             # 同期信号の接続
             box.geometryChanged.connect(self._handle_item_geometry_changed)
@@ -654,10 +655,11 @@ class PdfGraphicsView(QGraphicsView):
         w = canvas_rect.width()
         h = canvas_rect.height()
         
-        # (初期位置, 制限領域)
+        # (初期位置, 制限領域, quad_id)
+        # quad: 0=TL, 1=TR
         data = [
-            (QRectF(0, 0, w/2, h), QRectF(0, 0, w/2, h)),
-            (QRectF(w/2, 0, w/2, h), QRectF(w/2, 0, w/2, h))
+            (QRectF(0, 0, w/2, h), QRectF(0, 0, w/2, h), 0),
+            (QRectF(w/2, 0, w/2, h), QRectF(w/2, 0, w/2, h), 1)
         ]
         self.add_template_boxes(data)
 
@@ -668,9 +670,10 @@ class PdfGraphicsView(QGraphicsView):
         w = canvas_rect.width()
         h = canvas_rect.height()
         
+        # quad: 0=TL, 2=BL
         data = [
-            (QRectF(0, 0, w, h/2), QRectF(0, 0, w, h/2)),
-            (QRectF(0, h/2, w, h/2), QRectF(0, h/2, w, h/2))
+            (QRectF(0, 0, w, h/2), QRectF(0, 0, w, h/2), 0),
+            (QRectF(0, h/2, w, h/2), QRectF(0, h/2, w, h/2), 2)
         ]
         self.add_template_boxes(data)
 
@@ -681,11 +684,12 @@ class PdfGraphicsView(QGraphicsView):
         w, h = r.width(), r.height()
         cx, cy = w/2, h/2
         
+        # quad: 0=TL, 1=TR, 2=BL, 3=BR
         data = [
-            (QRectF(0, 0, cx, cy), QRectF(0, 0, cx, cy)),
-            (QRectF(cx, 0, cx, cy), QRectF(cx, 0, cx, cy)),
-            (QRectF(0, cy, cx, cy), QRectF(0, cy, cx, cy)),
-            (QRectF(cx, cy, cx, cy), QRectF(cx, cy, cx, cy))
+            (QRectF(0, 0, cx, cy), QRectF(0, 0, cx, cy), 0),
+            (QRectF(cx, 0, cx, cy), QRectF(cx, 0, cx, cy), 1),
+            (QRectF(0, cy, cx, cy), QRectF(0, cy, cx, cy), 2),
+            (QRectF(cx, cy, cx, cy), QRectF(cx, cy, cx, cy), 3)
         ]
         self.add_template_boxes(data)
         
