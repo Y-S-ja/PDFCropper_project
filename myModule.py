@@ -65,7 +65,7 @@ class myCropBox(QGraphicsObject):
 
     def setRect(self, rect):
         """矩形のサイズが変更されたらハンドルとバッジの位置も更新する"""
-        self._rect = rect
+        self._rect = QRectF(rect)
         self.prepareGeometryChange()
         # 1. ハンドルの位置を更新
         if hasattr(self, 'handle_items'):
