@@ -56,28 +56,37 @@ class PdfProcessor:
         src_doc.close()
 
     @staticmethod
-    def get_preview_images(pdf_path: str, crop_rects: list, scale_factor: float):
+    def generate_all_previews(pdf_path: str, crop_coords: list, scale_factor: float):
         """
-        クロップ枠ごとのプレビュー画像をリストで返す
-        crop_rects: [(l, t, r, b), (l, t, r, b), ...]  ← 純粋な座標のリスト
+        全ページをスキャンし、1ページ分の画像リストを順番に yield するジェネレータ。
+        crop_coords: [(l, t, r, b), ...] のリスト
         """
+        # ループの最初に1回だけPDFを開く
         doc = fitz.open(pdf_path)
-        previews = []
         
-        for page_index in range(len(doc)):
-            page = doc[page_index]
-            for i, rect in enumerate(crop_rects):
-                left, top, right, bottom = rect
-                fitz_rect = fitz.Rect(left * scale_factor, top * scale_factor, 
-                                    right * scale_factor, bottom * scale_factor)
+        try:
+            for page_index in range(len(doc)):
+                page = doc[page_index]
+                page_pixmaps = []
                 
-                if fitz_rect.is_empty: continue
+                for rect in crop_coords:
+                    l, t, r, b = rect
+                    # fitz用の矩形を作成
+                    fitz_rect = fitz.Rect(l * scale_factor, t * scale_factor, 
+                                         r * scale_factor, b * scale_factor)
+                    
+                    if fitz_rect.is_empty:
+                        page_pixmaps.append(None)
+                        continue
+                    
+                    # 画像生成 (Matrix(2, 2)は2倍鮮明にする設定)
+                    pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
+                    img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+                    page_pixmaps.append(QPixmap.fromImage(img))
                 
-                pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
-                img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+                # 1ページ分の画像リストが完成したら yield (ここで一時停止してUIへ渡す)
+                yield page_index, page_pixmaps
                 
-                # (ページ番号, 元のリスト内でのインデックス, 画像) を返す
-                previews.append((page_index, i, QPixmap.fromImage(img)))
-                
-        doc.close()
-        return previews
+        finally:
+            # 正常終了してもエラーが起きても、最後に1回だけ確実に閉じる
+            doc.close()
