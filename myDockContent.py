@@ -258,6 +258,7 @@ class PreviewPanel(QWidget):
 
                 # 1枚分の処理が終わるごとに表示させる。
                 # 全体の処理が終わるのを待たない。
+                # QThreadに変える
                 QCoreApplication.processEvents()
 
     def resizeEvent(self, event):
