@@ -361,7 +361,8 @@ class myCropBox(QGraphicsObject):
         """管理番号（枠 1, 枠 2...）を取得する"""
         return self.data(self.RECT_NUM) or 0
 
-    def set_index(self, num: int):
+    @index.setter
+    def index(self, num: int):
         """
         番号をセットし、紐付いているバッジ（番号ラベル）も自動更新する。
         """
