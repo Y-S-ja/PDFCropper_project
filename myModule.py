@@ -390,10 +390,20 @@ class myCropBox(QGraphicsObject):
         """同期グループIDを取得"""
         return self.data(self.GROUP_ID)
 
+    @group_id.setter
+    def group_id(self, value):
+        """同期グループIDをセット"""
+        self.setData(self.GROUP_ID, value)
+
     @property
     def quadrant_id(self):
         """配置場所（上下左右）のIDを取得"""
         return self.data(self.QUADRANT_ID)
+
+    @quadrant_id.setter
+    def quadrant_id(self, value):
+        """配置場所のIDをセット"""
+        self.setData(self.QUADRANT_ID, value)
 
     # --- 4. 便利な判定プロパティ ---
     @property
