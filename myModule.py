@@ -24,9 +24,13 @@ class CropBoxStyle:
     COLOR_BADGE = COLOR_MAIN  # バッジの色（基本色と同じ）
     COLOR_TEXT = QColor(255, 255, 255)  # テキストの色（白）
 
-    # --- 通常時のスタイル ---
+    # --- 作成中（ドラッグ中）のスタイル ---
     # 青色の破線
-    PEN_NORMAL = QPen(COLOR_MAIN, 2, Qt.DashLine)
+    PEN_CREATING = QPen(COLOR_MAIN, 2, Qt.DashLine)
+
+    # --- 通常時のスタイル ---
+    # 青色の実線
+    PEN_NORMAL = QPen(COLOR_MAIN, 2, Qt.SolidLine)
     # 透過度を低くした塗りつぶし (Alpha: 20/255)
     BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 20))
 
@@ -53,6 +57,7 @@ class CropBoxStyle:
         """
         cls.PEN_NORMAL.setCosmetic(True)
         cls.PEN_SELECTED.setCosmetic(True)
+        cls.PEN_CREATING.setCosmetic(True)
         cls.HANDLE_PEN.setCosmetic(True)
 
 
@@ -76,6 +81,7 @@ class myCropBox(QGraphicsObject):
     def __init__(self, rect):
         super().__init__()
         self._rect = rect
+        self._is_confirmed = True  # デフォルトは確定状態（テンプレートなどはこれ）
 
         # フラグ設定: 移動可能、選択可能、フォーカス可能にする
         self.setFlags(
@@ -114,6 +120,11 @@ class myCropBox(QGraphicsObject):
 
         # 初期位置をハンドルに反映させるために明示的に呼び出す
         self.setRect(rect)
+
+    def set_confirmed(self, confirmed):
+        """外部から確定状態を切り替えるメソッド"""
+        self._is_confirmed = confirmed
+        self.update()  # 再描画を促す
 
     def rect(self):
         return self._rect
@@ -248,15 +259,19 @@ class myCropBox(QGraphicsObject):
         """
         自分で自分の状態（選択中か）を判断して描画する
         """
-        # 1. 現在の状態（選択されているか）をチェック
-        if self.isSelected():
+        # 1. 作成中（ドラッグ中）なら最優先で破線
+        if not self._is_confirmed:
+            pen = CropBoxStyle.PEN_CREATING
+            brush = CropBoxStyle.BRUSH_NORMAL
+        # 2. 確定後の描き分け
+        elif self.isSelected():
             pen = CropBoxStyle.PEN_SELECTED
             brush = CropBoxStyle.BRUSH_SELECTED
         else:
             pen = CropBoxStyle.PEN_NORMAL
             brush = CropBoxStyle.BRUSH_NORMAL
 
-        # 2. 決定したスタイルで描画
+        # 2. スタイルをセットして描画
         painter.setPen(pen)
         painter.setBrush(brush)
 
