@@ -44,6 +44,7 @@ class CropBoxStyle:
     # --- バッジ（番号ラベル）の設定 ---
     BADGE_SIZE = 24
     BADGE_BRUSH = QBrush(COLOR_BADGE)
+    BADGE_TEXT_BRUSH = QBrush(COLOR_TEXT)
 
     @classmethod
     def apply_cosmetic(cls):
