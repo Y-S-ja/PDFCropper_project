@@ -127,10 +127,17 @@ class myCropBox(QGraphicsObject):
         # 初期位置をハンドルに反映させるために明示的に呼び出す
         self.setRect(rect)
 
-    def set_confirmed(self, confirmed):
-        """外部から確定状態を切り替えるメソッド"""
-        self._is_confirmed = confirmed
-        self.update()  # 再描画を促す
+    # --- 1. 確定状態のプロパティ化 ---
+    @property
+    def confirmed(self) -> bool:
+        """確定状態（新規作成中かどうか）を取得"""
+        return self._is_confirmed
+
+    @confirmed.setter
+    def confirmed(self, value: bool):
+        """確定状態をセットし、再描画を促す"""
+        self._is_confirmed = value
+        self.update()
 
     def rect(self):
         return self._rect
