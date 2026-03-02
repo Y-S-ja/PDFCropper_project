@@ -6,14 +6,13 @@ class PdfProcessor:
     """PDFの操作に関するすべてのロジックをカプセル化するクラス"""
 
     @staticmethod
-    def get_page_image(pdf_path: str, page_index: int = 0, scale: float = 3.0) -> tuple:
-        """指定したPDFページを高画質で画像化して返す"""
+    def get_page_image(pdf_path: str, page_index: int = 0, dpi: int = 216) -> tuple:
+        """指定したPDFページを高画質で画像化して返す (標準72dpiに対して216dpi = 3倍画質)"""
         with fitz.open(pdf_path) as doc:
             page = doc[page_index]
             
-            # 画像化
-            matrix = fitz.Matrix(scale, scale)
-            pix = page.get_pixmap(matrix=matrix)
+            # DPI指定で画像化
+            pix = page.get_pixmap(dpi=dpi)
             
             # PyMuPDFのデータからQPixmapを生成
             img_data = pix.tobytes("png")
@@ -52,10 +51,11 @@ class PdfProcessor:
                 new_doc.save(output_path)
 
     @staticmethod
-    def generate_all_previews(pdf_path: str, crop_coords: list, scale_factor: float):
+    def generate_all_previews(pdf_path: str, crop_coords: list, scale_factor: float, preview_dpi: int = 144):
         """
         全ページをスキャンし、1ページ分の画像リストを順番に yield するジェネレータ。
         crop_coords: [(l, t, r, b), ...] のリスト
+        preview_dpi: 144dpi (標準72dpiの2倍)
         """
         # ループの最初に1回だけPDFを開く
         with fitz.open(pdf_path) as doc:
@@ -73,8 +73,8 @@ class PdfProcessor:
                         page_pixmaps.append(None)
                         continue
                     
-                    # 画像生成 (Matrix(2, 2)は2倍鮮明にする設定)
-                    pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
+                    # 画像生成 (DPI指定)
+                    pix = page.get_pixmap(clip=fitz_rect, dpi=preview_dpi)
                     img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
                     page_pixmaps.append(QPixmap.fromImage(img))
                 
