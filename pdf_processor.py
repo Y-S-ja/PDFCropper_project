@@ -54,3 +54,30 @@ class PdfProcessor:
         new_doc.save(output_path)
         new_doc.close()
         src_doc.close()
+
+    @staticmethod
+    def get_preview_images(pdf_path: str, crop_rects: list, scale_factor: float):
+        """
+        クロップ枠ごとのプレビュー画像をリストで返す
+        crop_rects: [(l, t, r, b), (l, t, r, b), ...]  ← 純粋な座標のリスト
+        """
+        doc = fitz.open(pdf_path)
+        previews = []
+        
+        for page_index in range(len(doc)):
+            page = doc[page_index]
+            for i, rect in enumerate(crop_rects):
+                left, top, right, bottom = rect
+                fitz_rect = fitz.Rect(left * scale_factor, top * scale_factor, 
+                                    right * scale_factor, bottom * scale_factor)
+                
+                if fitz_rect.is_empty: continue
+                
+                pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
+                img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+                
+                # (ページ番号, 元のリスト内でのインデックス, 画像) を返す
+                previews.append((page_index, i, QPixmap.fromImage(img)))
+                
+        doc.close()
+        return previews
