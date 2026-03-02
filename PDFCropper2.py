@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPixmap, QImage, QPen, QColor, QBrush, QAction
 from myModule import *
 from myDockContent import *
+from pdf_processor import *
 
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
@@ -976,23 +977,20 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            f = view.scale_factor
-            src_doc = fitz.open(target_pdf)
-            new_doc = fitz.open()
+            # 1. UIの部品(myCropBox)から、純粋な座標データ(タプル)だけを抽出する
+            crop_coordinates =[]
+            for item in view.rects:
+                s_rect = item.mapToScene(item.rect()).boundingRect()
+                crop_coordinates.append((s_rect.left(), s_rect.top(), s_rect.right(), s_rect.bottom()))
+            
+            # 2. PDF処理の専門家にデータを丸投げする
+            PdfProcessor.crop_and_save(
+                input_path=target_pdf,
+                output_path=output_path,
+                crop_rects=crop_coordinates,
+                scale_factor=view.scale_factor
+            )
 
-            for page_index in range(len(src_doc)):
-                for item in view.rects:
-                    # ハンドルを含まない、純粋な枠の範囲(rect)をシーン座標に変換する
-                    s_rect = item.mapToScene(item.rect()).boundingRect()
-                    
-                    new_doc.insert_pdf(src_doc, from_page=page_index, to_page=page_index)
-                    # シーン座標をPDFのピクセル座標に変換
-                    pdf_rect = fitz.Rect(s_rect.left()*f, s_rect.top()*f, s_rect.right()*f, s_rect.bottom()*f)
-                    new_doc[-1].set_cropbox(pdf_rect)
-
-            new_doc.save(output_path)
-            new_doc.close()
-            src_doc.close()
             QMessageBox.information(self, "完了", "保存しました")
         except Exception as e:
             QMessageBox.critical(self, "エラー", str(e))
