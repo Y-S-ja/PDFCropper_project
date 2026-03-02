@@ -114,22 +114,16 @@ class PdfGraphicsView(QGraphicsView):
         self.scene.clear()
         self.rects = []
         self.rectsChanged.emit(self.rects)
-        
-        # PDF読み込み（高解像度で1回だけ作る）
-        if self.pdf_doc:
-            self.pdf_doc.close()
-        self.pdf_doc = fitz.open(file_path)
         self.pdf_path = file_path
-        page = self.pdf_doc[0]
-        pix = page.get_pixmap(matrix=fitz.Matrix(3, 3)) # 3倍高画質
-        img_data = pix.tobytes("png")
-        pixmap = QPixmap.fromImage(QImage.fromData(img_data))
+
+        # PDF読み込み（高解像度で1回だけ作る）
+        pixmap, original_width = PdfProcessor.get_page_image(file_path)
         
         # 3. シーンに画像を追加
         self.pdf_item = self.scene.addPixmap(pixmap)
         
         # PDF本来のサイズとの比率を計算（これが唯一の計算）
-        self.scale_factor = page.rect.width / pixmap.width()
+        self.scale_factor = original_width / pixmap.width()
 
         # 最初の表示を小さくする（0.4倍）
         self.resetTransform()
