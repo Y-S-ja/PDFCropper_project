@@ -340,6 +340,48 @@ class myCropBox(QGraphicsObject):
                 return handle_id
         return None
 
+    # --- 1. 座標計算の抽象化 ---
+    @property
+    def scene_rect(self) -> QRectF:
+        """
+        シーン座標系での正確な矩形（座標+サイズ）を返す。
+        PDFのクロップ処理やプレビュー生成で頻繁に使う計算を隠蔽します。
+        """
+        return self.mapToScene(self.rect()).boundingRect()
+
+    # --- 2. 管理番号(Index)の抽象化 ---
+    @property
+    def index(self) -> int:
+        """管理番号（枠 1, 枠 2...）を取得する"""
+        return self.data(Qt.UserRole + 1)  # RECT_NUM
+
+    def set_index(self, num: int):
+        """
+        番号をセットし、紐付いているバッジ（番号ラベル）も自動更新する。
+        """
+        self.setData(Qt.UserRole + 1, num)
+        # 子要素からバッジを探して更新するロジックをここに閉じ込める
+        for child in self.childItems():
+            if isinstance(child, myBadge):
+                child.set_number(num)
+
+    # --- 3. 同期用データの抽象化 ---
+    @property
+    def group_id(self):
+        """同期グループIDを取得"""
+        return self.data(Qt.UserRole + 2)  # GROUP_ID
+
+    @property
+    def quadrant_id(self):
+        """配置場所（上下左右）のIDを取得"""
+        return self.data(Qt.UserRole + 3)  # QUADRANT_ID
+
+    # --- 4. 便利な判定プロパティ ---
+    @property
+    def is_sync_enabled(self) -> bool:
+        """同期対象のアイテム（グループIDを持っているか）を判定"""
+        return self.group_id is not None
+
     def hoverMoveEvent(self, event):
         # 選択されていない時はハンドル判定を行わない（カーソルを変えない）
         if not self.isSelected():
