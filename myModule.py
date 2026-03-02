@@ -12,6 +12,53 @@ from PySide6.QtCore import Qt, QRectF, QPointF, QTimer, QEvent, Signal
 from PySide6.QtGui import QPen, QColor, QBrush, QPainterPath, QCursor
 
 
+class CropBoxStyle:
+    """
+    切り抜き枠（myCropBox）の見た目に関する設定を一括管理するクラス。
+    一箇所にまとめることで、将来的なデザイン変更を容易にします。
+    """
+
+    # --- 基本カラー定義 ---
+    COLOR_MAIN = QColor(0, 120, 215)  # 基本の青色
+    # COLOR_SELECTED = QColor(255, 165, 0)  # 選択時のオレンジ色
+    COLOR_BADGE = COLOR_MAIN  # バッジの色（基本色と同じ）
+    COLOR_TEXT = QColor(255, 255, 255)  # テキストの色（白）
+
+    # --- 通常時のスタイル ---
+    # 青色の破線
+    PEN_NORMAL = QPen(COLOR_MAIN, 2, Qt.DashLine)
+    # 透過度を低くした塗りつぶし (Alpha: 20/255)
+    BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 20))
+
+    # --- 選択時のスタイル ---
+    # 青色の実線（選択中であることを強調）
+    PEN_SELECTED = QPen(COLOR_MAIN, 2)
+    # 透過度を少し上げた青の塗りつぶし (Alpha: 20/255)
+    BRUSH_SELECTED = QBrush(QColor(0, 120, 215, 20))
+
+    # --- ハンドル（四隅の小四角）の設定 ---
+    HANDLE_SIZE = 10.0
+    HANDLE_PEN = QPen(COLOR_MAIN, 1)  # ハンドルの枠線
+    HANDLE_BRUSH = QBrush(Qt.white)  # ハンドルの中身は白
+
+    # --- バッジ（番号ラベル）の設定 ---
+    BADGE_SIZE = 24
+    BADGE_BRUSH = QBrush(COLOR_BADGE)
+
+    @classmethod
+    def apply_cosmetic(cls):
+        """
+        ズームしても線が太くならない設定（Cosmetic Pen）を一括適用する。
+        """
+        cls.PEN_NORMAL.setCosmetic(True)
+        cls.PEN_SELECTED.setCosmetic(True)
+        cls.HANDLE_PEN.setCosmetic(True)
+
+
+# 実行時に一度だけCosmetic設定を有効化
+CropBoxStyle.apply_cosmetic()
+
+
 # --- 1. スマートな枠（アイテム）クラス ---
 class myCropBox(QGraphicsObject):
     geometryChanged = Signal(object)  # 自身(item)を渡す
