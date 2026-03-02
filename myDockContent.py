@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer
 from PySide6.QtGui import QImage, QPixmap
+from pdf_processor import *
 
 class PropertyPanel(QWidget):
     """QDockWidgetの中身として動作するプロパティ編集パネル"""
@@ -202,44 +203,52 @@ class PreviewPanel(QWidget):
             item = self.container_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
         
-        if not view or not view.pdf_doc or not view.rects: return
+        if not view or not view.pdf_path or not view.rects: return
 
-        f = view.scale_factor
-        for page_index in range(len(view.pdf_doc)):
-            page = view.pdf_doc[page_index]
+        # 1. 座標だけのリストを作る
+        # 後で番号を参照するために元のオブジェクト(view.rects)の順番を保持しておく
+        crop_coordinates = []
+        for box in view.rects:
+            r = box.mapToScene(box.rect()).boundingRect()
+            crop_coordinates.append((r.left(), r.top(), r.right(), r.bottom()))
+
+        # 2. 専門家は座標だけを知っていれば良い
+        previews = PdfProcessor.get_preview_images(view.pdf_path, crop_coordinates, view.scale_factor)
+
+        current_page = -1
+        for page_index, index_in_list, pixmap in previews:
+            # ページヘッダーの描画
+            if page_index != current_page:
+                page_header = QLabel(f"--- ページ {page_index + 1} ---")
+                page_header.setStyleSheet("font-weight: bold; color: white; background-color: #666; padding: 4px; margin-top: 10px;")
+                page_header.setAlignment(Qt.AlignCenter)
+                self.container_layout.addWidget(page_header)
+                current_page = page_index
             
-            # ページ区切りのヘッダーを追加
-            page_header = QLabel(f"--- ページ {page_index + 1} ---")
-            page_header.setStyleSheet("font-weight: bold; color: white; background-color: #666; padding: 4px; margin-top: 10px;")
-            page_header.setAlignment(Qt.AlignCenter)
-            self.container_layout.addWidget(page_header)
+            # 3. リストの順番(index_in_list)から、実際の枠オブジェクトを取り出して番号を取得
+            original_box = view.rects[index_in_list]
+            actual_num = original_box.data(self.RECT_NUM) # ここで「枠 1」などの番号を特定
+            
+            # --- UI構築 (ラベルと画像) ---
+            item_widget = QWidget()
+            vbox = QVBoxLayout(item_widget)
+            vbox.setContentsMargins(5, 5, 5, 5)
+            
+            label_title = QLabel(f"枠 {actual_num}") # 正しい番号が表示される
+            label_title.setStyleSheet("font-weight: bold;")
+            vbox.addWidget(label_title)
+            
+            label_img = QLabel()
+            label_img.setPixmap(pixmap.scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
+            # リサイズ用にフルサイズを保持（任意）
+            label_img._full_pix = pixmap 
+            
+            vbox.addWidget(label_img)
 
-            for box in view.rects:
-                rect = box.mapToScene(box.rect()).boundingRect()
-                # 画面上の座標(ピクセル)をPDFの座標(ポイント)に変換
-                fitz_rect = fitz.Rect(rect.left()*f, rect.top()*f, rect.right()*f, rect.bottom()*f)
-                if fitz_rect.is_empty: continue
-                
-                pix = page.get_pixmap(clip=fitz_rect, matrix=fitz.Matrix(2, 2))
-                img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
-                
-                item_widget = QWidget()
-                item_vbox = QVBoxLayout(item_widget)
-                item_vbox.setContentsMargins(5, 5, 5, 5)
-                
-                label_title = QLabel(f"枠 {box.data(self.RECT_NUM)}")
-                label_title.setStyleSheet("font-weight: bold;")
-                item_vbox.addWidget(label_title)
-                
-                label_img = QLabel()
-                full_pix = QPixmap.fromImage(img)
-                label_img._full_pix = full_pix # 高解像度版をキャッシュしておく
-                label_img.setPixmap(full_pix.scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
-                item_vbox.addWidget(label_img)
-                
-                line = QFrame(); line.setFrameShape(QFrame.HLine); line.setFrameShadow(QFrame.Sunken)
-                item_vbox.addWidget(line)
-                self.container_layout.addWidget(item_widget)
+            line = QFrame(); line.setFrameShape(QFrame.HLine); line.setFrameShadow(QFrame.Sunken)
+            vbox.addWidget(line)
+
+            self.container_layout.addWidget(item_widget)
 
     def resizeEvent(self, event):
         """ドックの幅が変わった際、即座にタイマーを回して変更終了を待つ"""
