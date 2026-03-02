@@ -362,19 +362,24 @@ class myCropBox(QGraphicsObject):
         """
         return self.mapToScene(self.rect()).boundingRect()
 
-    # --- 2. 管理番号(Index)の抽象化 ---
+    # --- 2. 識別用ID（不変・一生変わらない） ---
     @property
-    def index(self) -> int:
-        """管理番号（枠 1, 枠 2...）を取得する"""
+    def rect_id(self) -> int:
+        """box自体の識別番号を取得"""
         return self.data(self.RECT_NUM) or 0
 
-    @index.setter
-    def index(self, num: int):
+    @rect_id.setter
+    def rect_id(self, value: int):
+        """識別番号をセット"""
+        self.setData(self.RECT_NUM, value)
+
+    # --- 2. 管理番号(バッジ)の表示更新窓口 ---
+    def update_display_number(self, num: int):
         """
-        番号をセットし、紐付いているバッジ（番号ラベル）も自動更新する。
+        表示上の番号のみを更新する。
+        子要素のバッジのラベルを書き換えるだけのメソッド。
+        （rect_id は書き換えない）
         """
-        self.setData(self.RECT_NUM, num)
-        # 子要素からバッジを探して更新するロジックをここに閉じ込める
         for child in self.childItems():
             if isinstance(child, myBadge):
                 child.set_number(num)

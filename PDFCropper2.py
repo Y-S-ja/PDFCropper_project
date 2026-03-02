@@ -251,7 +251,7 @@ class PdfGraphicsView(QGraphicsView):
 
             if target_cropbox:
                 print(
-                    f"Left-clicked: CropBox {target_cropbox.data(self.RECT_NUM)} (Resizing/Moving)"
+                    f"Left-clicked: CropBox (ID:{target_cropbox.rect_id}) (Resizing/Moving)"
                 )
                 self.new_rect = None
                 super().mousePressEvent(event)
@@ -304,7 +304,8 @@ class PdfGraphicsView(QGraphicsView):
             else:
                 self.new_rect.setData(self.TAG_NAME, "selection_rect")
                 self.rect_count += 1
-                self.new_rect.setData(self.RECT_NUM, self.rect_count)
+                self.new_rect.rect_id = self.rect_count
+                self.new_rect.update_display_number(len(self.rects) + 1)
 
                 # 同期信号の接続
                 self.new_rect.geometryChanged.connect(
@@ -347,10 +348,8 @@ class PdfGraphicsView(QGraphicsView):
         for i, item in enumerate(self.rects):
             # 重なり順を更新（後の番号ほど上に表示されるようにする）
             item.setZValue(i)
-            # 子要素から myBadge を探して更新
-            for child in item.childItems():
-                if isinstance(child, myBadge):
-                    child.set_number(i + 1)
+            # 見た目の番号（バッジ）のみを更新（IDは変えない）
+            item.update_display_number(i + 1)
 
     def _on_scene_selection_changed(self):
         """シーンの選択が変更されたら、選択中の myCropBox をシグナルで飛ばす"""
@@ -364,7 +363,7 @@ class PdfGraphicsView(QGraphicsView):
         """座標、サイズ、および固有ID、同期用IDを含めたスナップショットを取る"""
         return [
             (
-                item.data(self.RECT_NUM),
+                item.rect_id,
                 QPointF(item.pos()),
                 QRectF(item.rect()),
                 item.data(self.GROUP_ID),
@@ -412,8 +411,8 @@ class PdfGraphicsView(QGraphicsView):
 
     def _restore_state(self, state):
         """指定されたスナップショットから状態を復元する（共通処理）"""
-        # IDをキーにした現在のアイテムの辞書を作成
-        current_items = {item.data(self.RECT_NUM): item for item in self.rects}
+        # ID（rect_id）をキーにした現在のアイテムの辞書を作成
+        current_items = {item.rect_id: item for item in self.rects}
 
         # ハイブリッド更新：個数が同じなら座標・サイズの上書きと並び順の復元
         if len(state) == len(self.rects):
