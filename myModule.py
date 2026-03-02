@@ -32,13 +32,13 @@ class CropBoxStyle:
 
     # --- 選択時のスタイル ---
     # 青色の実線（選択中であることを強調）
-    PEN_SELECTED = QPen(COLOR_MAIN, 2)
+    PEN_SELECTED = QPen(COLOR_MAIN, 3)
     # 透過度を少し上げた青の塗りつぶし (Alpha: 20/255)
     BRUSH_SELECTED = QBrush(QColor(0, 120, 215, 20))
 
     # --- ハンドル（四隅の小四角）の設定 ---
     HANDLE_SIZE = 10.0
-    HANDLE_PEN = QPen(COLOR_MAIN, 1)  # ハンドルの枠線
+    HANDLE_PEN = QPen(COLOR_MAIN, 3)  # ハンドルの枠線
     HANDLE_BRUSH = QBrush(Qt.white)  # ハンドルの中身は白
 
     # --- バッジ（番号ラベル）の設定 ---
