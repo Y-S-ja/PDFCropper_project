@@ -1,22 +1,31 @@
-import fitz
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QListWidget, QGroupBox, QFormLayout, 
-    QDoubleSpinBox, QListWidgetItem, QScrollArea, QFrame, QCheckBox
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QListWidget,
+    QGroupBox,
+    QFormLayout,
+    QDoubleSpinBox,
+    QListWidgetItem,
+    QScrollArea,
+    QFrame,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
-from PySide6.QtGui import QImage, QPixmap
-from pdf_processor import *
+from pdf_processor import PdfProcessor
+
 
 class PropertyPanel(QWidget):
     """QDockWidgetの中身として動作するプロパティ編集パネル"""
-    orderChanged = Signal(list) # 並び順変更をメインウィンドウに知らせる用
-    syncSizeChanged = Signal(bool)     # サイズ同期のON/OFFを知らせる用
-    syncSymmetryChanged = Signal(bool) # 対称性同期のON/OFFを知らせる用
+
+    orderChanged = Signal(list)  # 並び順変更をメインウィンドウに知らせる用
+    syncSizeChanged = Signal(bool)  # サイズ同期のON/OFFを知らせる用
+    syncSymmetryChanged = Signal(bool)  # 対称性同期のON/OFFを知らせる用
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_item = None
-        self._updating = False # ループ防止
+        self._updating = False  # ループ防止
         self.init_ui()
         self.connnectedRect = Qt.UserRole
         self.RECT_NUM = Qt.UserRole + 1
@@ -28,11 +37,11 @@ class PropertyPanel(QWidget):
         self.list_label = QLabel("切り抜き枠一覧 (ドラッグで順序変更)")
         layout.addWidget(self.list_label)
         self.list_widget = QListWidget()
-        
+
         # ドラッグ＆ドロップによる並び替えを有効化
         self.list_widget.setDragDropMode(QListWidget.InternalMove)
         self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
-        
+
         layout.addWidget(self.list_widget)
 
         # 2. 座標設定グループ
@@ -56,7 +65,7 @@ class PropertyPanel(QWidget):
         sync_layout = QVBoxLayout(sync_group)
         self.check_sync_size = QCheckBox("サイズを共有")
         self.check_sync_symmetry = QCheckBox("対称性を維持 (2-in-1等)")
-        
+
         sync_layout.addWidget(self.check_sync_size)
         sync_layout.addWidget(self.check_sync_symmetry)
         layout.addWidget(sync_group)
@@ -79,15 +88,18 @@ class PropertyPanel(QWidget):
         spin.setDecimals(1)
         spin.setSingleStep(1.0)
         return spin
-        
+
     def update_list(self, rects):
         """ビュー内の枠リストを反映する"""
-        if self._updating: return
+        if self._updating:
+            return
         self._updating = True
         self.list_widget.clear()
         for i, rect in enumerate(rects):
             item = QListWidgetItem(f"枠 {rect.data(self.RECT_NUM)}")
-            item.setData(self.connnectedRect, rect) # アイテムに実際のオブジェクトを紐付ける
+            item.setData(
+                self.connnectedRect, rect
+            )  # アイテムに実際のオブジェクトを紐付ける
             self.list_widget.addItem(item)
         self._updating = False
         # 現在の選択状態も同期させる
@@ -95,25 +107,26 @@ class PropertyPanel(QWidget):
 
     def _on_rows_moved(self, parent, start, end, destination, row):
         """ドラッグで順番が入れ替わったら、新しいオブジェクトリストを通知する"""
-        if self._updating: return
-        
+        if self._updating:
+            return
+
         new_order = []
         for i in range(self.list_widget.count()):
             list_item = self.list_widget.item(i)
             new_order.append(list_item.data(self.connnectedRect))
-        
+
         self.orderChanged.emit(new_order)
 
     def _on_list_selection_changed(self, current, previous):
         """リストの選択が変更されたら、即座にパネルを更新し、シーン上のアイテムも選択する"""
         if self._updating or not current:
             return
-            
+
         target_rect = current.data(self.connnectedRect)
         if target_rect:
             # 1. シグナルを待たずに即座にプロパティ値を反映
             self.set_target(target_rect)
-            
+
             # 2. シーン側の選択も合わせる
             if target_rect.scene():
                 if not target_rect.isSelected():
@@ -124,8 +137,8 @@ class PropertyPanel(QWidget):
         """編集対象のアイテムをセットし、現在の値をスピンボックスに反映"""
         if self.current_item != item:
             self.current_item = item
-            self.sync_list_selection() 
-        
+            self.sync_list_selection()
+
         if not item:
             self.setEnabled(False)
             return
@@ -142,7 +155,8 @@ class PropertyPanel(QWidget):
 
     def sync_list_selection(self):
         """シーンの選択状態をリストのハイライトに同期させる"""
-        if self._updating: return
+        if self._updating:
+            return
         self._updating = True
         self.list_widget.clearSelection()
         if self.current_item:
@@ -165,22 +179,23 @@ class PropertyPanel(QWidget):
         """スピンボックスの値をアイテムに反映"""
         if not self.current_item or self._updating:
             return
-        
+
         # アイテムの座標系に合わせて更新
         new_pos = QPointF(self.spin_x.value(), self.spin_y.value())
         new_rect = QRectF(0, 0, self.spin_w.value(), self.spin_h.value())
-        
+
         self.current_item.setPos(new_pos)
         self.current_item.setRect(new_rect)
 
 
 class PreviewPanel(QWidget):
     """切り抜かれた状態の画像を一覧表示するパネル"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
         self.RECT_NUM = Qt.UserRole + 1
-        
+
         # リサイズイベントのデバウンス（遅延実行）用タイマー
         self.resize_timer = QTimer(self)
         self.resize_timer.setSingleShot(True)
@@ -201,9 +216,11 @@ class PreviewPanel(QWidget):
         """指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する"""
         while self.container_layout.count():
             item = self.container_layout.takeAt(0)
-            if item.widget(): item.widget().deleteLater()
-        
-        if not view or not view.pdf_path or not view.rects: return
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not view or not view.pdf_path or not view.rects:
+            return
 
         # 1. 座標だけのリストを作る
         # 後で番号を参照するために元のオブジェクト(view.rects)の順番を保持しておく
@@ -214,37 +231,42 @@ class PreviewPanel(QWidget):
 
         # 2. ジェネレータを開始
         generator = PdfProcessor.generate_all_previews(
-            view.pdf_path, 
-            crop_coordinates, 
-            view.scale_factor
+            view.pdf_path, crop_coordinates, view.scale_factor
         )
 
         # 4. 1ページ分ずつ画像を受け取って処理
         for page_idx, images in generator:
             # --- ページヘッダーの追加 ---
             header = QLabel(f"--- ページ {page_idx + 1} ---")
-            header.setStyleSheet("font-weight: bold; color: white; background-color: #666; padding: 4px;")
+            header.setStyleSheet(
+                "font-weight: bold; color: white; background-color: #666; padding: 4px;"
+            )
             header.setAlignment(Qt.AlignCenter)
             self.container_layout.addWidget(header)
 
             # --- 各枠のプレビューを追加 ---
             for i, pixmap in enumerate(images):
-                if pixmap is None: continue
-                
+                if pixmap is None:
+                    continue
+
                 # 順番 i を使って、元のビューから枠番号を取得
-                rect_num = view.rects[i].data(self.RECT_NUM) # RECT_NUM
+                rect_num = view.rects[i].data(self.RECT_NUM)  # RECT_NUM
 
                 # --- UI構築 (ラベルと画像) ---
                 item_widget = QWidget()
                 vbox = QVBoxLayout(item_widget)
                 vbox.setContentsMargins(5, 5, 5, 5)
-            
-                label_title = QLabel(f"枠 {rect_num}") # 正しい番号が表示される
+
+                label_title = QLabel(f"枠 {rect_num}")  # 正しい番号が表示される
                 label_title.setStyleSheet("font-weight: bold;")
                 vbox.addWidget(label_title)
-            
+
                 label_img = QLabel()
-                label_img.setPixmap(pixmap.scaledToWidth(max(50, self.width()-40), Qt.SmoothTransformation))
+                label_img.setPixmap(
+                    pixmap.scaledToWidth(
+                        max(50, self.width() - 40), Qt.SmoothTransformation
+                    )
+                )
                 # リサイズ用にフルサイズを保持（任意）
                 label_img._full_pix = pixmap
                 vbox.addWidget(label_img)
@@ -269,7 +291,7 @@ class PreviewPanel(QWidget):
     def _do_delayed_resize(self):
         """ドラッグが止まった後に一括で画像をリサイズする"""
         new_width = max(50, self.width() - 40)
-        
+
         for i in range(self.container_layout.count()):
             item = self.container_layout.itemAt(i)
             widget = item.widget()
@@ -277,5 +299,7 @@ class PreviewPanel(QWidget):
                 # 子要素の中から画像を保持しているラベルを探す
                 for label in widget.findChildren(QLabel):
                     if hasattr(label, "_full_pix"):
-                        scaled_pix = label._full_pix.scaledToWidth(new_width, Qt.SmoothTransformation)
+                        scaled_pix = label._full_pix.scaledToWidth(
+                            new_width, Qt.SmoothTransformation
+                        )
                         label.setPixmap(scaled_pix)
