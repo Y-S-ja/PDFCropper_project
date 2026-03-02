@@ -78,6 +78,12 @@ class myCropBox(QGraphicsObject):
     HANDLE_BOTTOM_LEFT = 2  # 10
     HANDLE_BOTTOM_RIGHT = 3  # 11
 
+    # ロール定数（PDFCropper2 側の定数と合わせる）
+    TAG_NAME = Qt.UserRole
+    RECT_NUM = Qt.UserRole + 1
+    GROUP_ID = Qt.UserRole + 2
+    QUADRANT_ID = Qt.UserRole + 3
+
     def __init__(self, rect):
         super().__init__()
         self._rect = rect
@@ -353,13 +359,13 @@ class myCropBox(QGraphicsObject):
     @property
     def index(self) -> int:
         """管理番号（枠 1, 枠 2...）を取得する"""
-        return self.data(Qt.UserRole + 1)  # RECT_NUM
+        return self.data(self.RECT_NUM) or 0
 
     def set_index(self, num: int):
         """
         番号をセットし、紐付いているバッジ（番号ラベル）も自動更新する。
         """
-        self.setData(Qt.UserRole + 1, num)
+        self.setData(self.RECT_NUM, num)
         # 子要素からバッジを探して更新するロジックをここに閉じ込める
         for child in self.childItems():
             if isinstance(child, myBadge):
@@ -369,12 +375,12 @@ class myCropBox(QGraphicsObject):
     @property
     def group_id(self):
         """同期グループIDを取得"""
-        return self.data(Qt.UserRole + 2)  # GROUP_ID
+        return self.data(self.GROUP_ID)
 
     @property
     def quadrant_id(self):
         """配置場所（上下左右）のIDを取得"""
-        return self.data(Qt.UserRole + 3)  # QUADRANT_ID
+        return self.data(self.QUADRANT_ID)
 
     # --- 4. 便利な判定プロパティ ---
     @property
