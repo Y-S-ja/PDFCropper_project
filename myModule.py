@@ -440,16 +440,20 @@ class myCropBox(QGraphicsObject):
 class myBadge(QGraphicsRectItem):
     """切り抜き枠に付与する番号バッジクラス"""
 
-    def __init__(self, index, size, parent=None):
+    def __init__(self, index, parent=None):
+        # スタイルクラスからサイズを取得
+        size = CropBoxStyle.BADGE_SIZE
         super().__init__(0, 0, size, size, parent=parent)
-        self.setBrush(QBrush(QColor(0, 120, 215)))
+        # スタイルクラスから色を取得
+        self.setBrush(CropBoxStyle.BADGE_BRUSH)
         self.setPen(Qt.NoPen)
         # ズームしても大きさが変わらないように設定
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
         self.setZValue(1)  # バッジは枠(Z=0)より上、ハンドル(Z=2)より下
 
         self.text_item = QGraphicsSimpleTextItem(str(index), parent=self)
-        self.text_item.setBrush(QBrush(Qt.white))
+        # スタイルクラスから色を取得
+        self.text_item.setBrush(CropBoxStyle.BADGE_TEXT_BRUSH)
         self.update_text_pos()
 
     def update_text_pos(self):
