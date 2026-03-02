@@ -301,12 +301,6 @@ class PdfGraphicsView(QGraphicsView):
             if rect.width() < 5 or rect.height() < 5:
                 self.scene.removeItem(self.new_rect)
             else:
-                # 確定したらリストに入れて、色は青に変える
-                pen = QPen(QColor(0, 120, 215), 3)
-                pen.setCosmetic(True)  # ズームしても太さが変わらない設定
-                self.new_rect.setPen(pen)
-                self.new_rect.setBrush(QBrush(QColor(0, 120, 215, 40)))
-
                 self.new_rect.setData(self.TAG_NAME, "selection_rect")
                 self.rect_count += 1
                 self.new_rect.setData(self.RECT_NUM, self.rect_count)
@@ -324,7 +318,7 @@ class PdfGraphicsView(QGraphicsView):
                 index = len(self.rects) + 1
 
                 # 親を new_rect にすることで、枠と一緒に移動・削除される
-                badge = myBadge(index, self.badge_size, parent=self.new_rect)
+                badge = myBadge(index, parent=self.new_rect)
                 badge.setPos(rect.topLeft())
 
                 self.rects.append(self.new_rect)
