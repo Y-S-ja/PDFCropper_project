@@ -65,7 +65,7 @@ class myCropBox(QGraphicsObject):
     deltaResized = Signal(object, int, QPointF)  # item, handle_id, delta_scene
     transformationFinished = Signal(object)  # 変形(リサイズ)完了通知
 
-    HANDLE_SIZE = 10.0  # ハンドルのサイズ
+    HANDLE_SIZE = CropBoxStyle.HANDLE_SIZE  # ハンドルのサイズ
     # ハンドル定数をビットフラグに変更 (1枚目: 0=Left, 1=Right / 2枚目: 0=Top, 2=Bottom)
     HANDLE_TOP_LEFT = 0  # 00
     HANDLE_TOP_RIGHT = 1  # 01
@@ -75,8 +75,6 @@ class myCropBox(QGraphicsObject):
     def __init__(self, rect):
         super().__init__()
         self._rect = rect
-        self.pen_style = QPen(QColor(0, 120, 215), 2, Qt.DashLine)
-        self.brush_style = QBrush(QColor(0, 120, 215, 20))
 
         # フラグ設定: 移動可能、選択可能、フォーカス可能にする
         self.setFlags(
@@ -106,10 +104,8 @@ class myCropBox(QGraphicsObject):
                 self.HANDLE_SIZE,
                 parent=self,
             )
-            h_item.setBrush(Qt.white)
-            pen = QPen(QColor(0, 120, 215), 3)
-            pen.setCosmetic(True)
-            h_item.setPen(pen)
+            h_item.setBrush(CropBoxStyle.HANDLE_BRUSH)
+            h_item.setPen(CropBoxStyle.HANDLE_PEN)
             h_item.setFlag(QGraphicsItem.ItemIgnoresTransformations)
             h_item.setZValue(2)  # ハンドルは最前面 (badgeより上)
             h_item.hide()
@@ -248,9 +244,22 @@ class myCropBox(QGraphicsObject):
         self.setRect(rect.normalized())
 
     def paint(self, painter, option, widget):
-        # 標準の四角を描画
-        painter.setPen(self.pen())
-        painter.setBrush(self.brush())
+        """
+        自分で自分の状態（選択中か）を判断して描画する
+        """
+        # 1. 現在の状態（選択されているか）をチェック
+        if self.isSelected():
+            pen = CropBoxStyle.PEN_SELECTED
+            brush = CropBoxStyle.BRUSH_SELECTED
+        else:
+            pen = CropBoxStyle.PEN_NORMAL
+            brush = CropBoxStyle.BRUSH_NORMAL
+
+        # 2. 決定したスタイルで描画
+        painter.setPen(pen)
+        painter.setBrush(brush)
+
+        # 3. 矩形を描画
         painter.drawRect(self.rect())
 
     def itemChange(self, change, value):
