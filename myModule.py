@@ -393,7 +393,7 @@ class myCropBox(QGraphicsObject):
         """
         for child in self.childItems():
             if isinstance(child, myBadge):
-                child.set_number(num)
+                child.number = num
 
     # --- 3. 同期用データの抽象化 ---
     @property
@@ -553,6 +553,7 @@ class myBadge(QGraphicsRectItem):
         # スタイルクラスから色を取得
         self.text_item.setBrush(CropBoxStyle.BADGE_TEXT_BRUSH)
         self.update_text_pos()
+        self._number = index
 
     @property
     def tag(self) -> str:
@@ -564,6 +565,17 @@ class myBadge(QGraphicsRectItem):
         """バッジの識別タグをセット"""
         self.setData(myCropBox.TAG_NAME, value)
 
+    @property
+    def number(self) -> int:
+        return self._number
+
+    @number.setter
+    def number(self, num: int):
+        """表示番号を更新し、位置を再調整する"""
+        self._number = num
+        self.text_item.setText(str(num))
+        self.update_text_pos()
+
     def update_text_pos(self):
         # バッジ内でのテキスト中央寄せ
         brect = self.text_item.boundingRect()
@@ -571,10 +583,6 @@ class myBadge(QGraphicsRectItem):
             (self.rect().width() - brect.width()) / 2,
             (self.rect().height() - brect.height()) / 2,
         )
-
-    def set_number(self, index):
-        self.text_item.setText(str(index))
-        self.update_text_pos()
 
 
 class myIntroductionText(QGraphicsSimpleTextItem):
