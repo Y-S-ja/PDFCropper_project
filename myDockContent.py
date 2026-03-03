@@ -27,8 +27,9 @@ class PropertyPanel(QWidget):
         self.current_item = None
         self._updating = False  # ループ防止
         self.init_ui()
-        self.connnectedRect = Qt.UserRole
-        self.RECT_NUM = Qt.UserRole + 1
+        self.connectedRectRole = (
+            Qt.UserRole + 10
+        )  # リストアイテム用の独自ロール (衝突回避)
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -98,7 +99,7 @@ class PropertyPanel(QWidget):
         for i, rect in enumerate(rects):
             item = QListWidgetItem(f"枠 {rect.data(self.RECT_NUM)}")
             item.setData(
-                self.connnectedRect, rect
+                self.connectedRectRole, rect
             )  # アイテムに実際のオブジェクトを紐付ける
             self.list_widget.addItem(item)
         self._updating = False
@@ -113,7 +114,7 @@ class PropertyPanel(QWidget):
         new_order = []
         for i in range(self.list_widget.count()):
             list_item = self.list_widget.item(i)
-            new_order.append(list_item.data(self.connnectedRect))
+            new_order.append(list_item.data(self.connectedRectRole))
 
         self.orderChanged.emit(new_order)
 
@@ -122,7 +123,7 @@ class PropertyPanel(QWidget):
         if self._updating or not current:
             return
 
-        target_rect = current.data(self.connnectedRect)
+        target_rect = current.data(self.connectedRectRole)
         if target_rect:
             # 1. シグナルを待たずに即座にプロパティ値を反映
             self.set_target(target_rect)
@@ -162,7 +163,7 @@ class PropertyPanel(QWidget):
         if self.current_item:
             for i in range(self.list_widget.count()):
                 list_item = self.list_widget.item(i)
-                if list_item.data(self.connnectedRect) == self.current_item:
+                if list_item.data(self.connectedRectRole) == self.current_item:
                     list_item.setSelected(True)
                     self.list_widget.setCurrentItem(list_item)
                     break
