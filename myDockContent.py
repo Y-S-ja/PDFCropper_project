@@ -97,7 +97,7 @@ class PropertyPanel(QWidget):
         self._updating = True
         self.list_widget.clear()
         for i, rect in enumerate(rects):
-            item = QListWidgetItem(f"枠 {rect.data(self.RECT_NUM)}")
+            item = QListWidgetItem(f"枠 {rect.rect_id}")
             item.setData(
                 self.connectedRectRole, rect
             )  # アイテムに実際のオブジェクトを紐付ける
@@ -195,7 +195,6 @@ class PreviewPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
-        self.RECT_NUM = Qt.UserRole + 1
 
         # リサイズイベントのデバウンス（遅延実行）用タイマー
         self.resize_timer = QTimer(self)
