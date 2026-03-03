@@ -250,7 +250,7 @@ class PreviewPanel(QWidget):
                     continue
 
                 # 順番 i を使って、元のビューから枠番号を取得
-                rect_num = view.rects[i].data(self.RECT_NUM)  # RECT_NUM
+                rect_num = view.rects[i].rect_id
 
                 # --- UI構築 (ラベルと画像) ---
                 item_widget = QWidget()

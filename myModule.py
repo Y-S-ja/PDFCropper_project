@@ -353,6 +353,17 @@ class myCropBox(QGraphicsObject):
                 return handle_id
         return None
 
+    # --- 0. アイテム識別タグのプロパティ化 ---
+    @property
+    def tag(self) -> str:
+        """アイテムの識別タグ（selection_rect等）を取得"""
+        return self.data(self.TAG_NAME)
+
+    @tag.setter
+    def tag(self, value: str):
+        """アイテムの識別タグをセット"""
+        self.setData(self.TAG_NAME, value)
+
     # --- 1. 座標計算の抽象化 ---
     @property
     def scene_rect(self) -> QRectF:
@@ -543,6 +554,16 @@ class myBadge(QGraphicsRectItem):
         self.text_item.setBrush(CropBoxStyle.BADGE_TEXT_BRUSH)
         self.update_text_pos()
 
+    @property
+    def tag(self) -> str:
+        """バッジの識別タグを取得"""
+        return self.data(myCropBox.TAG_NAME)
+
+    @tag.setter
+    def tag(self, value: str):
+        """バッジの識別タグをセット"""
+        self.setData(myCropBox.TAG_NAME, value)
+
     def update_text_pos(self):
         # バッジ内でのテキスト中央寄せ
         brect = self.text_item.boundingRect()
@@ -554,6 +575,25 @@ class myBadge(QGraphicsRectItem):
     def set_number(self, index):
         self.text_item.setText(str(index))
         self.update_text_pos()
+
+
+class myIntroductionText(QGraphicsSimpleTextItem):
+    """
+    起動時に表示される案内メッセージ用のテキストアイテム。
+    """
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+
+    @property
+    def tag(self) -> str:
+        """テキストの識別タグを取得"""
+        return self.data(myCropBox.TAG_NAME)
+
+    @tag.setter
+    def tag(self, value: str):
+        """テキストの識別タグをセット"""
+        self.setData(myCropBox.TAG_NAME, value)
 
 
 class HoverMenuBar(QMenuBar):
