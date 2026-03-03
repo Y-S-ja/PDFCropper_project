@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
 from pdf_processor import PdfProcessor
+from myModule import myCropBox
 
 
 class PropertyPanel(QWidget):
@@ -90,7 +91,7 @@ class PropertyPanel(QWidget):
         spin.setSingleStep(1.0)
         return spin
 
-    def update_list(self, rects):
+    def update_list(self, rects: list[myCropBox]):
         """ビュー内の枠リストを反映する"""
         if self._updating:
             return
@@ -134,7 +135,7 @@ class PropertyPanel(QWidget):
                     target_rect.scene().clearSelection()
                     target_rect.setSelected(True)
 
-    def set_target(self, item):
+    def set_target(self, item: myCropBox):
         """編集対象のアイテムをセットし、現在の値をスピンボックスに反映"""
         if self.current_item != item:
             self.current_item = item
