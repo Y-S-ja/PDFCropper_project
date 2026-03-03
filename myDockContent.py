@@ -226,7 +226,7 @@ class PreviewPanel(QWidget):
         # 後で番号を参照するために元のオブジェクト(view.rects)の順番を保持しておく
         crop_coordinates = []
         for box in view.rects:
-            r = box.mapToScene(box.rect()).boundingRect()
+            r = box.scene_rect
             crop_coordinates.append((r.left(), r.top(), r.right(), r.bottom()))
 
         # 2. ジェネレータを開始
