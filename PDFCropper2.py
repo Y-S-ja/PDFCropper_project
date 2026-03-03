@@ -13,10 +13,11 @@ from PySide6.QtWidgets import (
     QDockWidget,
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
-from PySide6.QtGui import QPen, QColor, QBrush
+from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack
 from myModule import myCropBox, myBadge, myIntroductionText
 from myDockContent import PreviewPanel, PropertyPanel
 from pdf_processor import PdfProcessor
+from commands import RectStateCommand
 
 
 class PdfGraphicsView(QGraphicsView):
@@ -51,8 +52,7 @@ class PdfGraphicsView(QGraphicsView):
         self.pdf_path = None  # PDFファイルのパス
         self.pdf_doc = None  # PDFドキュメントオブジェクト
         self.rect_count = 0
-        self.undo_stack = []  # Undo履歴スタック
-        self.redo_stack = []  # Redo履歴スタック
+        self.undo_stack = QUndoStack(self)
         self.pre_action_state = None  # アクション開始前の状態保持用
 
         self.sync_size = True  # サイズ同期フラグ
@@ -226,12 +226,13 @@ class PdfGraphicsView(QGraphicsView):
         # --- 右クリック：削除 ---
         if event.button() == Qt.RightButton:
             if target_cropbox and target_cropbox in self.rects:
-                self.push_undo()  # 削除前に現在の状態を保存
+                old_state = self.get_snapshot()
                 print("Right-clicked: CropBox (Deleting)")
                 self.rects.remove(target_cropbox)
                 self.scene.removeItem(target_cropbox)
                 self.update_numbers()
                 self.rectsChanged.emit(self.rects)
+                self.commit_snapshot(old_state, "枠の削除")
                 return
             elif is_intro_text:
                 print("Right-clicked: Intro Text (Ignoring)")
@@ -334,7 +335,8 @@ class PdfGraphicsView(QGraphicsView):
         if self.pre_action_state is not None:
             current_state = self.get_snapshot()
             if current_state != self.pre_action_state:
-                self.push_undo(self.pre_action_state)
+                # 操作終了後に push する
+                self.commit_snapshot(self.pre_action_state, "枠の作成")
                 # 操作が終了し、かつ変化があったのでパネル類を更新する
                 self._on_scene_selection_changed()
                 self.rectsChanged.emit(self.rects)
@@ -370,42 +372,27 @@ class PdfGraphicsView(QGraphicsView):
             for item in self.rects
         ]
 
-    def push_undo(self, state=None):
-        """現在の状態または指定された状態をUndoスタックに保存する"""
-        if state is None:
-            state = self.get_snapshot()
-
-        self.undo_stack.append(state)
-        # 新しい操作が行われたので、Redoスタックをクリアする
-        self.redo_stack.clear()
-
-        # 履歴上限
-        if len(self.undo_stack) > 50:
-            self.undo_stack.pop(0)
-
-    def undo(self):
-        """ひとつ前の状態に戻す（並び順も含む）"""
-        if not self.undo_stack:
+    def commit_snapshot(self, old_state, text="操作"):
+        """
+        現在の状態を新しいスナップショットとして確定し、スタックに積む
+        """
+        if old_state is None:
+            return
+        new_state = self.get_snapshot()
+        # 前後の状態に変化がなければ、履歴に積まない
+        if old_state == new_state:
             return
 
-        # 現在の状態をRedo用に保存
-        current_state = self.get_snapshot()
-        self.redo_stack.append(current_state)
+        command = RectStateCommand(self, old_state, new_state, text)
+        self.undo_stack.push(command)
 
-        state = self.undo_stack.pop()
-        self._restore_state(state)
+    def undo(self):
+        """ひとつ前の状態に戻す"""
+        self.undo_stack.undo()
 
     def redo(self):
         """戻した操作をやり直す"""
-        if not self.redo_stack:
-            return
-
-        # 現在の状態をUndo用に保存
-        current_state = self.get_snapshot()
-        self.undo_stack.append(current_state)
-
-        state = self.redo_stack.pop()
-        self._restore_state(state)
+        self.undo_stack.redo()
 
     def _restore_state(self, state):
         """指定されたスナップショットから状態を復元する（共通処理）"""
@@ -466,8 +453,7 @@ class PdfGraphicsView(QGraphicsView):
 
     def clear_selections(self):
         # クリア前に状態を保存
-        if self.rects:
-            self.push_undo()
+        old_state = self.get_snapshot()
 
         # シーン内の "selection_rect" タグが付いたアイテムだけを削除
         for item in list(self.scene.items()):
@@ -478,6 +464,7 @@ class PdfGraphicsView(QGraphicsView):
         self.rectsChanged.emit(self.rects)
         self.new_rect = None
         self.update_scene_limit()
+        self.commit_snapshot(old_state, "全削除")
         # プロパティパネル側でも再描画を促すために選択状態をリセット
         self._on_scene_selection_changed()
 
@@ -616,7 +603,7 @@ class PdfGraphicsView(QGraphicsView):
         """複数の矩形と制限領域をセットで追加する"""
         if not data_list:
             return
-        self.push_undo()
+        old_state = self.get_snapshot()
 
         # グループIDを生成（現在の時刻などをベースにユニークな値にする）
         import time
@@ -658,6 +645,7 @@ class PdfGraphicsView(QGraphicsView):
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
         self._on_scene_selection_changed()
+        self.commit_snapshot(old_state, "テンプレートの追加")
 
     def add_template_2v(self):
         """2分割（縦）テンプレート"""
