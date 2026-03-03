@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPen, QColor, QBrush
-from myModule import myCropBox, myBadge
+from myModule import myCropBox, myBadge, myIntroductionText
 from myDockContent import PreviewPanel, PropertyPanel
 from pdf_processor import PdfProcessor
 
@@ -47,10 +47,6 @@ class PdfGraphicsView(QGraphicsView):
         self.new_rect = None  # ドラッグ中の枠
         self.rects = []  # 確定した枠（QGraphicsRectItem）のリスト
         self.start_pos = None
-        self.TAG_NAME = Qt.UserRole
-        self.RECT_NUM = Qt.UserRole + 1
-        self.GROUP_ID = Qt.UserRole + 2  # グループ同期用のID
-        self.QUADRANT_ID = Qt.UserRole + 3  # 上下左右の配置用定数
 
         self.pdf_path = None  # PDFファイルのパス
         self.pdf_doc = None  # PDFドキュメントオブジェクト
@@ -76,7 +72,8 @@ class PdfGraphicsView(QGraphicsView):
 
     def detectItemByTag(self, tag):
         for item in self.scene.items():
-            if item.data(self.TAG_NAME) == tag:
+            # プロパティがあれば使い、なければ data() から取得する
+            if getattr(item, "tag", item.data(myCropBox.TAG_NAME)) == tag:
                 return item
         return None
 
@@ -109,15 +106,15 @@ class PdfGraphicsView(QGraphicsView):
     def show_intro_message(self):
         """起動時のメッセージを表示"""
         # self.scene.clear()
-        text = self.scene.addSimpleText(
-            "PDFファイルをここにドラッグ＆ドロップしてください"
-        )
+
+        text = myIntroductionText("PDFファイルをここにドラッグ＆ドロップしてください")
+        self.scene.addItem(text)
         text.setBrush(QBrush(QColor("gray")))
         font = text.font()
         font.setPointSize(18)
         text.setFont(font)
         # 案内テキストであることを識別するためのタグを付ける
-        text.setData(self.TAG_NAME, "intro_text")
+        text.tag = "intro_text"
         self.center_A_on_B(text, self.field_rect)
 
     def load_pdf_page(self, file_path):
@@ -221,7 +218,8 @@ class PdfGraphicsView(QGraphicsView):
             if isinstance(temp, myCropBox):
                 target_cropbox = temp
                 break
-            if temp.data(self.TAG_NAME) == "intro_text":
+            # プロパティがあれば使い、なければ data()
+            if getattr(temp, "tag", temp.data(myCropBox.TAG_NAME)) == "intro_text":
                 is_intro_text = True
                 break
             temp = temp.parentItem()
@@ -251,7 +249,7 @@ class PdfGraphicsView(QGraphicsView):
 
             if target_cropbox:
                 print(
-                    f"Left-clicked: CropBox {target_cropbox.data(self.RECT_NUM)} (Resizing/Moving)"
+                    f"Left-clicked: CropBox (ID:{target_cropbox.rect_id}) (Resizing/Moving)"
                 )
                 self.new_rect = None
                 super().mousePressEvent(event)
@@ -259,7 +257,7 @@ class PdfGraphicsView(QGraphicsView):
                 self.scene.clearSelection()
                 # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
                 self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
-                self.new_rect.set_confirmed(False)  # 作成中モード
+                self.new_rect.confirmed = False  # 作成中モード
                 self.new_rect.setPos(self.start_pos)
                 self.scene.addItem(self.new_rect)
                 if is_intro_text:
@@ -302,9 +300,11 @@ class PdfGraphicsView(QGraphicsView):
             if rect.width() < 5 or rect.height() < 5:
                 self.scene.removeItem(self.new_rect)
             else:
-                self.new_rect.setData(self.TAG_NAME, "selection_rect")
+                self.new_rect.confirmed = True  # 確定状態にする
+                self.new_rect.tag = "selection_rect"
                 self.rect_count += 1
-                self.new_rect.setData(self.RECT_NUM, self.rect_count)
+                self.new_rect.rect_id = self.rect_count
+                self.new_rect.update_display_number(len(self.rects) + 1)
 
                 # 同期信号の接続
                 self.new_rect.geometryChanged.connect(
@@ -347,10 +347,8 @@ class PdfGraphicsView(QGraphicsView):
         for i, item in enumerate(self.rects):
             # 重なり順を更新（後の番号ほど上に表示されるようにする）
             item.setZValue(i)
-            # 子要素から myBadge を探して更新
-            for child in item.childItems():
-                if isinstance(child, myBadge):
-                    child.set_number(i + 1)
+            # 見た目の番号（バッジ）のみを更新（IDは変えない）
+            item.update_display_number(i + 1)
 
     def _on_scene_selection_changed(self):
         """シーンの選択が変更されたら、選択中の myCropBox をシグナルで飛ばす"""
@@ -364,11 +362,11 @@ class PdfGraphicsView(QGraphicsView):
         """座標、サイズ、および固有ID、同期用IDを含めたスナップショットを取る"""
         return [
             (
-                item.data(self.RECT_NUM),
+                item.rect_id,
                 QPointF(item.pos()),
                 QRectF(item.rect()),
-                item.data(self.GROUP_ID),
-                item.data(self.QUADRANT_ID),
+                item.group_id,
+                item.quadrant_id,
             )
             for item in self.rects
         ]
@@ -412,8 +410,8 @@ class PdfGraphicsView(QGraphicsView):
 
     def _restore_state(self, state):
         """指定されたスナップショットから状態を復元する（共通処理）"""
-        # IDをキーにした現在のアイテムの辞書を作成
-        current_items = {item.data(self.RECT_NUM): item for item in self.rects}
+        # ID（rect_id）をキーにした現在のアイテムの辞書を作成
+        current_items = {item.rect_id: item for item in self.rects}
 
         # ハイブリッド更新：個数が同じなら座標・サイズの上書きと並び順の復元
         if len(state) == len(self.rects):
@@ -423,8 +421,8 @@ class PdfGraphicsView(QGraphicsView):
                 if item:
                     item.setPos(pos)
                     item.setRect(rect)
-                    item.setData(self.GROUP_ID, group_id)
-                    item.setData(self.QUADRANT_ID, quad_id)
+                    item.group_id = group_id
+                    item.quadrant_id = quad_id
                     new_rects_list.append(item)
             self.rects = new_rects_list
         else:
@@ -446,10 +444,10 @@ class PdfGraphicsView(QGraphicsView):
                 box.setBrush(QBrush(QColor(0, 120, 215, 40)))
 
                 # タグと固有IDを復元
-                box.setData(self.TAG_NAME, "selection_rect")
-                box.setData(self.RECT_NUM, res_id)
-                box.setData(self.GROUP_ID, group_id)
-                box.setData(self.QUADRANT_ID, quad_id)
+                box.tag = "selection_rect"
+                box.rect_id = res_id
+                box.group_id = group_id
+                box.quadrant_id = quad_id
 
                 box.geometryChanged.connect(self._handle_item_geometry_changed)
                 box.deltaResized.connect(self._handle_item_delta_resized)
@@ -474,7 +472,7 @@ class PdfGraphicsView(QGraphicsView):
 
         # シーン内の "selection_rect" タグが付いたアイテムだけを削除
         for item in list(self.scene.items()):
-            if item.data(self.TAG_NAME) == "selection_rect":
+            if getattr(item, "tag", item.data(myCropBox.TAG_NAME)) == "selection_rect":
                 self.scene.removeItem(item)
         # データリストもクリア
         self.rects = []
@@ -498,7 +496,7 @@ class PdfGraphicsView(QGraphicsView):
         if not self.sync_size and not self.sync_symmetry:
             return
 
-        group_id = item.data(self.GROUP_ID)
+        group_id = item.group_id
         if group_id is None:
             return
 
@@ -511,14 +509,14 @@ class PdfGraphicsView(QGraphicsView):
 
     def _handle_transformation_finished(self, item):
         """アイテムの変形（リサイズ）が完了した時のクリーンアップ"""
-        group_id = item.data(self.GROUP_ID)
+        group_id = item.group_id
         if group_id is None:
             return
 
         # 自分以外のグループ全員を normalize する
         # (自分自身は mouseReleaseEvent 内ですでに normalize 済みのため)
         for rect in self.rects:
-            if rect != item and rect.data(self.GROUP_ID) == group_id:
+            if rect != item and rect.group_id == group_id:
                 rect._block_sync = True
                 rect.normalize_geometry()
                 rect._block_sync = False
@@ -527,17 +525,17 @@ class PdfGraphicsView(QGraphicsView):
         """アイテムの変形中（ドラッグ中）のリアルタイム同期"""
         if not self.sync_size and not self.sync_symmetry:
             return
-        group_id = item.data(self.GROUP_ID)
+        group_id = item.group_id
         if group_id is not None:
             self._sync_group_delta(item, group_id, handle_id, delta_scene)
 
     def _sync_group_delta(self, source_item, group_id, handle_id, delta_scene):
         """同じグループの他のアイテムを変形同期させる"""
-        s_quad = source_item.data(self.QUADRANT_ID)
+        s_quad = source_item.quadrant_id
         for rect in self.rects:
             if rect == source_item:
                 continue
-            if rect.data(self.GROUP_ID) == group_id:
+            if rect.group_id == group_id:
                 rect._block_sync = True
 
                 # 1. 対称性（位置）同期
@@ -546,7 +544,7 @@ class PdfGraphicsView(QGraphicsView):
                         rect._block_sync = False
                         continue
 
-                    t_quad = rect.data(self.QUADRANT_ID)
+                    t_quad = rect.quadrant_id
                     target_handle = handle_id
                     target_delta = QPointF(delta_scene)
 
@@ -569,14 +567,14 @@ class PdfGraphicsView(QGraphicsView):
 
     def _sync_group(self, source_item, group_id):
         """同じグループの他のアイテムを同期させる（最終確定時の絶対座標同期）"""
-        s_quad = source_item.data(self.QUADRANT_ID)
+        s_quad = source_item.quadrant_id
         s_rect = source_item.rect()
-        s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+        s_scene_rect = source_item.scene_rect
 
         for rect in self.rects:
             if rect == source_item:
                 continue
-            if rect.data(self.GROUP_ID) == group_id:
+            if rect.group_id == group_id:
                 rect._block_sync = True
 
                 # 1. サイズ同期
@@ -591,7 +589,7 @@ class PdfGraphicsView(QGraphicsView):
                     canvas_rect = self.pdf_item.pixmap().rect()
                     cw, ch = canvas_rect.width(), canvas_rect.height()
 
-                    t_quad = rect.data(self.QUADRANT_ID)
+                    t_quad = rect.quadrant_id
                     target_scene_tl = QPointF()
 
                     if s_quad is not None and t_quad is not None:
@@ -640,11 +638,11 @@ class PdfGraphicsView(QGraphicsView):
             box.setPen(pen)
             box.setBrush(QBrush(QColor(0, 120, 215, 40)))
 
-            box.setData(self.TAG_NAME, "selection_rect")
+            box.tag = "selection_rect"
             self.rect_count += 1
-            box.setData(self.RECT_NUM, self.rect_count)
-            box.setData(self.GROUP_ID, group_id)
-            box.setData(self.QUADRANT_ID, quad_id)
+            box.rect_id = self.rect_count
+            box.group_id = group_id
+            box.quadrant_id = quad_id
 
             # 同期信号の接続
             box.geometryChanged.connect(self._handle_item_geometry_changed)

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
 from pdf_processor import PdfProcessor
+from myModule import myCropBox
 
 
 class PropertyPanel(QWidget):
@@ -27,8 +28,9 @@ class PropertyPanel(QWidget):
         self.current_item = None
         self._updating = False  # ループ防止
         self.init_ui()
-        self.connnectedRect = Qt.UserRole
-        self.RECT_NUM = Qt.UserRole + 1
+        self.connectedRectRole = (
+            Qt.UserRole + 10
+        )  # リストアイテム用の独自ロール (衝突回避)
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -89,16 +91,16 @@ class PropertyPanel(QWidget):
         spin.setSingleStep(1.0)
         return spin
 
-    def update_list(self, rects):
+    def update_list(self, rects: list[myCropBox]):
         """ビュー内の枠リストを反映する"""
         if self._updating:
             return
         self._updating = True
         self.list_widget.clear()
         for i, rect in enumerate(rects):
-            item = QListWidgetItem(f"枠 {rect.data(self.RECT_NUM)}")
+            item = QListWidgetItem(f"枠 {rect.rect_id}")
             item.setData(
-                self.connnectedRect, rect
+                self.connectedRectRole, rect
             )  # アイテムに実際のオブジェクトを紐付ける
             self.list_widget.addItem(item)
         self._updating = False
@@ -113,7 +115,7 @@ class PropertyPanel(QWidget):
         new_order = []
         for i in range(self.list_widget.count()):
             list_item = self.list_widget.item(i)
-            new_order.append(list_item.data(self.connnectedRect))
+            new_order.append(list_item.data(self.connectedRectRole))
 
         self.orderChanged.emit(new_order)
 
@@ -122,7 +124,7 @@ class PropertyPanel(QWidget):
         if self._updating or not current:
             return
 
-        target_rect = current.data(self.connnectedRect)
+        target_rect = current.data(self.connectedRectRole)
         if target_rect:
             # 1. シグナルを待たずに即座にプロパティ値を反映
             self.set_target(target_rect)
@@ -133,7 +135,7 @@ class PropertyPanel(QWidget):
                     target_rect.scene().clearSelection()
                     target_rect.setSelected(True)
 
-    def set_target(self, item):
+    def set_target(self, item: myCropBox):
         """編集対象のアイテムをセットし、現在の値をスピンボックスに反映"""
         if self.current_item != item:
             self.current_item = item
@@ -162,7 +164,7 @@ class PropertyPanel(QWidget):
         if self.current_item:
             for i in range(self.list_widget.count()):
                 list_item = self.list_widget.item(i)
-                if list_item.data(self.connnectedRect) == self.current_item:
+                if list_item.data(self.connectedRectRole) == self.current_item:
                     list_item.setSelected(True)
                     self.list_widget.setCurrentItem(list_item)
                     break
@@ -194,7 +196,6 @@ class PreviewPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
-        self.RECT_NUM = Qt.UserRole + 1
 
         # リサイズイベントのデバウンス（遅延実行）用タイマー
         self.resize_timer = QTimer(self)
@@ -213,7 +214,9 @@ class PreviewPanel(QWidget):
         layout.addWidget(self.scroll)
 
     def update_previews(self, view):
-        """指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する"""
+        """
+        指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する
+        """
         while self.container_layout.count():
             item = self.container_layout.takeAt(0)
             if item.widget():
@@ -226,7 +229,7 @@ class PreviewPanel(QWidget):
         # 後で番号を参照するために元のオブジェクト(view.rects)の順番を保持しておく
         crop_coordinates = []
         for box in view.rects:
-            r = box.mapToScene(box.rect()).boundingRect()
+            r = box.scene_rect
             crop_coordinates.append((r.left(), r.top(), r.right(), r.bottom()))
 
         # 2. ジェネレータを開始
@@ -250,7 +253,7 @@ class PreviewPanel(QWidget):
                     continue
 
                 # 順番 i を使って、元のビューから枠番号を取得
-                rect_num = view.rects[i].data(self.RECT_NUM)  # RECT_NUM
+                rect_num = view.rects[i].rect_id
 
                 # --- UI構築 (ラベルと画像) ---
                 item_widget = QWidget()

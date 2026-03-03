@@ -78,6 +78,12 @@ class myCropBox(QGraphicsObject):
     HANDLE_BOTTOM_LEFT = 2  # 10
     HANDLE_BOTTOM_RIGHT = 3  # 11
 
+    # ロール定数（PDFCropper2 側の定数と合わせる）
+    TAG_NAME = Qt.UserRole
+    RECT_NUM = Qt.UserRole + 1
+    GROUP_ID = Qt.UserRole + 2
+    QUADRANT_ID = Qt.UserRole + 3
+
     def __init__(self, rect):
         super().__init__()
         self._rect = rect
@@ -121,10 +127,17 @@ class myCropBox(QGraphicsObject):
         # 初期位置をハンドルに反映させるために明示的に呼び出す
         self.setRect(rect)
 
-    def set_confirmed(self, confirmed):
-        """外部から確定状態を切り替えるメソッド"""
-        self._is_confirmed = confirmed
-        self.update()  # 再描画を促す
+    # --- 1. 確定状態のプロパティ化 ---
+    @property
+    def confirmed(self) -> bool:
+        """確定状態（新規作成中かどうか）を取得"""
+        return self._is_confirmed
+
+    @confirmed.setter
+    def confirmed(self, value: bool):
+        """確定状態をセットし、再描画を促す"""
+        self._is_confirmed = value
+        self.update()
 
     def rect(self):
         return self._rect
@@ -340,6 +353,75 @@ class myCropBox(QGraphicsObject):
                 return handle_id
         return None
 
+    # --- 0. アイテム識別タグのプロパティ化 ---
+    @property
+    def tag(self) -> str:
+        """アイテムの識別タグ（selection_rect等）を取得"""
+        return self.data(self.TAG_NAME)
+
+    @tag.setter
+    def tag(self, value: str):
+        """アイテムの識別タグをセット"""
+        self.setData(self.TAG_NAME, value)
+
+    # --- 1. 座標計算の抽象化 ---
+    @property
+    def scene_rect(self) -> QRectF:
+        """
+        シーン座標系での正確な矩形（座標+サイズ）を返す。
+        PDFのクロップ処理やプレビュー生成で頻繁に使う計算を隠蔽します。
+        """
+        return self.mapToScene(self.rect()).boundingRect()
+
+    # --- 2. 識別用ID（不変・一生変わらない） ---
+    @property
+    def rect_id(self) -> int:
+        """box自体の識別番号を取得"""
+        return self.data(self.RECT_NUM) or 0
+
+    @rect_id.setter
+    def rect_id(self, value: int):
+        """識別番号をセット"""
+        self.setData(self.RECT_NUM, value)
+
+    # --- 2. 管理番号(バッジ)の表示更新窓口 ---
+    def update_display_number(self, num: int):
+        """
+        表示上の番号のみを更新する。
+        子要素のバッジのラベルを書き換えるだけのメソッド。
+        （rect_id は書き換えない）
+        """
+        for child in self.childItems():
+            if isinstance(child, myBadge):
+                child.number = num
+
+    # --- 3. 同期用データの抽象化 ---
+    @property
+    def group_id(self):
+        """同期グループIDを取得"""
+        return self.data(self.GROUP_ID)
+
+    @group_id.setter
+    def group_id(self, value):
+        """同期グループIDをセット"""
+        self.setData(self.GROUP_ID, value)
+
+    @property
+    def quadrant_id(self):
+        """配置場所（上下左右）のIDを取得"""
+        return self.data(self.QUADRANT_ID)
+
+    @quadrant_id.setter
+    def quadrant_id(self, value):
+        """配置場所のIDをセット"""
+        self.setData(self.QUADRANT_ID, value)
+
+    # --- 4. 便利な判定プロパティ ---
+    @property
+    def is_sync_enabled(self) -> bool:
+        """同期対象のアイテム（グループIDを持っているか）を判定"""
+        return self.group_id is not None
+
     def hoverMoveEvent(self, event):
         # 選択されていない時はハンドル判定を行わない（カーソルを変えない）
         if not self.isSelected():
@@ -454,7 +536,9 @@ class myCropBox(QGraphicsObject):
 
 
 class myBadge(QGraphicsRectItem):
-    """切り抜き枠に付与する番号バッジクラス"""
+    """
+    枠の左上に表示する番号バッジ。
+    """
 
     def __init__(self, index, parent=None):
         # スタイルクラスからサイズを取得
@@ -471,6 +555,28 @@ class myBadge(QGraphicsRectItem):
         # スタイルクラスから色を取得
         self.text_item.setBrush(CropBoxStyle.BADGE_TEXT_BRUSH)
         self.update_text_pos()
+        self._number = index
+
+    @property
+    def tag(self) -> str:
+        """バッジの識別タグを取得"""
+        return self.data(myCropBox.TAG_NAME)
+
+    @tag.setter
+    def tag(self, value: str):
+        """バッジの識別タグをセット"""
+        self.setData(myCropBox.TAG_NAME, value)
+
+    @property
+    def number(self) -> int:
+        return self._number
+
+    @number.setter
+    def number(self, num: int):
+        """表示番号を更新し、位置を再調整する"""
+        self._number = num
+        self.text_item.setText(str(num))
+        self.update_text_pos()
 
     def update_text_pos(self):
         # バッジ内でのテキスト中央寄せ
@@ -480,9 +586,24 @@ class myBadge(QGraphicsRectItem):
             (self.rect().height() - brect.height()) / 2,
         )
 
-    def set_number(self, index):
-        self.text_item.setText(str(index))
-        self.update_text_pos()
+
+class myIntroductionText(QGraphicsSimpleTextItem):
+    """
+    起動時に表示される案内メッセージ用のテキストアイテム。
+    """
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+
+    @property
+    def tag(self) -> str:
+        """テキストの識別タグを取得"""
+        return self.data(myCropBox.TAG_NAME)
+
+    @tag.setter
+    def tag(self, value: str):
+        """テキストの識別タグをセット"""
+        self.setData(myCropBox.TAG_NAME, value)
 
 
 class HoverMenuBar(QMenuBar):
