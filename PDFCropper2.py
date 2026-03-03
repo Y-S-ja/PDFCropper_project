@@ -58,7 +58,6 @@ class PdfGraphicsView(QGraphicsView):
         self.sync_size = True  # サイズ同期フラグ
         self.sync_symmetry = True  # 対称性同期フラグ
 
-        self.badge_size = 24
         self.margin = 100
         self.canvas_rect = QRectF(0, 0, 800, 600)
         self.scene.setSceneRect(self.canvas_rect)
@@ -457,7 +456,7 @@ class PdfGraphicsView(QGraphicsView):
                 self.rects.append(box)
 
                 # バッジ（番号）の追加
-                badge = myBadge(len(self.rects), self.badge_size, parent=box)
+                badge = myBadge(len(self.rects), parent=box)
                 badge.setPos(rect.topLeft())
 
         # 3. 各種表示の更新
@@ -653,7 +652,7 @@ class PdfGraphicsView(QGraphicsView):
             self.rects.append(box)
 
             # バッジの追加
-            badge = myBadge(len(self.rects), self.badge_size, parent=box)
+            badge = myBadge(len(self.rects), parent=box)
             badge.setPos(size_rect.topLeft())
 
         self.update_numbers()
