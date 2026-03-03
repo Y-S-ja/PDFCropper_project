@@ -569,7 +569,7 @@ class PdfGraphicsView(QGraphicsView):
         """同じグループの他のアイテムを同期させる（最終確定時の絶対座標同期）"""
         s_quad = source_item.quadrant_id
         s_rect = source_item.rect()
-        s_scene_rect = source_item.mapToScene(s_rect).boundingRect()
+        s_scene_rect = source_item.scene_rect
 
         for rect in self.rects:
             if rect == source_item:
