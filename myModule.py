@@ -536,7 +536,9 @@ class myCropBox(QGraphicsObject):
 
 
 class myBadge(QGraphicsRectItem):
-    """切り抜き枠に付与する番号バッジクラス"""
+    """
+    枠の左上に表示する番号バッジ。
+    """
 
     def __init__(self, index, parent=None):
         # スタイルクラスからサイズを取得

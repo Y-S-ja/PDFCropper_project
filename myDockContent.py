@@ -214,7 +214,9 @@ class PreviewPanel(QWidget):
         layout.addWidget(self.scroll)
 
     def update_previews(self, view):
-        """指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する"""
+        """
+        指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する
+        """
         while self.container_layout.count():
             item = self.container_layout.takeAt(0)
             if item.widget():
