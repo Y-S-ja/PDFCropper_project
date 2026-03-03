@@ -257,7 +257,7 @@ class PdfGraphicsView(QGraphicsView):
                 self.scene.clearSelection()
                 # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
                 self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
-                self.new_rect.set_confirmed(False)  # 作成中モード
+                self.new_rect.confirmed = False  # 作成中モード
                 self.new_rect.setPos(self.start_pos)
                 self.scene.addItem(self.new_rect)
                 if is_intro_text:
@@ -300,6 +300,7 @@ class PdfGraphicsView(QGraphicsView):
             if rect.width() < 5 or rect.height() < 5:
                 self.scene.removeItem(self.new_rect)
             else:
+                self.new_rect.confirmed = True  # 確定状態にする
                 self.new_rect.tag = "selection_rect"
                 self.rect_count += 1
                 self.new_rect.rect_id = self.rect_count
