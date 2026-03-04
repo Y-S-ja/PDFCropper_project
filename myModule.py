@@ -32,13 +32,13 @@ class CropBoxStyle:
     # 青色の実線
     PEN_NORMAL = QPen(COLOR_MAIN, 2, Qt.SolidLine)
     # 透過度を低くした塗りつぶし (Alpha: 15/255)
-    BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 15))
+    BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 30))
 
     # --- 選択時のスタイル ---
     # 青色の実線（選択中であることを強調）
     PEN_SELECTED = QPen(COLOR_MAIN, 3)
     # 透過度を少し上げた青の塗りつぶし (Alpha: 30/255)
-    BRUSH_SELECTED = QBrush(QColor(0, 120, 215, 30))
+    BRUSH_SELECTED = QBrush(QColor(0, 120, 215, 60))
 
     # --- ハンドル（四隅の小四角）の設定 ---
     HANDLE_SIZE = 10.0
