@@ -624,6 +624,8 @@ class PdfGraphicsView(QGraphicsView):
             badge = myBadge(len(self.rects), parent=box)
             badge.setPos(size_rect.topLeft())
 
+            created_boxes.append(box)
+
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
         self._on_scene_selection_changed()
