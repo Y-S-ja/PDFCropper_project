@@ -11,8 +11,10 @@ class AddCommand(QUndoCommand):
 
     def undo(self):
         for item in self.items:
+            # リストにあれば削除
             if item in self.view.rects:
                 self.view.rects.remove(item)
+            # シーンにあれば削除
             if item.scene():
                 self.view.scene.removeItem(item)
         self.view.update_numbers()
@@ -20,9 +22,12 @@ class AddCommand(QUndoCommand):
 
     def redo(self):
         for item in self.items:
+            # リストになければ追加
             if item not in self.view.rects:
                 self.view.rects.append(item)
-            self.view.scene.addItem(item)
+            # シーンになければ追加（ここでの重複チェックが重要）
+            if not item.scene():
+                self.view.scene.addItem(item)
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
 
@@ -39,7 +44,8 @@ class RemoveCommand(QUndoCommand):
         for item in self.items:
             if item not in self.view.rects:
                 self.view.rects.append(item)
-            self.view.scene.addItem(item)
+            if not item.scene():
+                self.view.scene.addItem(item)
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
 
