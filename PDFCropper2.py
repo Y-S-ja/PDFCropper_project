@@ -320,7 +320,9 @@ class PdfGraphicsView(QGraphicsView):
                 badge = myBadge(index, parent=self.new_rect)
                 badge.setPos(rect.topLeft())
 
-                # 全ての管理は AddCommand に任せる（push時に自動で redo -> append/addItem される）
+                # 一旦シーンから除外してから、AddCommand 経由で公式に追加する
+                # これにより、初期作成時とRedo時でロジックが完全に同一になる
+                self.scene.removeItem(self.new_rect)
                 self.undo_stack.push(AddCommand(self, self.new_rect, "枠の作成"))
 
                 # 新しく作った枠を選択状態にする
@@ -617,20 +619,15 @@ class PdfGraphicsView(QGraphicsView):
             box.deltaResized.connect(self._handle_item_delta_resized)
             box.transformationFinished.connect(self._handle_transformation_finished)
 
-            self.scene.addItem(box)
-            self.rects.append(box)
-
-            # バッジの追加
-            badge = myBadge(len(self.rects), parent=box)
+            # 暫定的な番号
+            temp_idx = len(self.rects) + len(created_boxes) + 1
+            badge = myBadge(temp_idx, parent=box)
             badge.setPos(size_rect.topLeft())
 
             created_boxes.append(box)
 
-        self.update_numbers()
-        self.rectsChanged.emit(self.rects)
-        self._on_scene_selection_changed()
-
-        # 追加コマンドをスタックに積んで一括管理
+        # 全ての管理は AddCommand に任せる。
+        # ここでは addItem や rects.append は一切行わない。
         self.undo_stack.push(AddCommand(self, created_boxes, "テンプレートの追加"))
 
     def add_template_2v(self):
