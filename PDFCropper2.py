@@ -332,7 +332,8 @@ class PdfGraphicsView(QGraphicsView):
             self.start_pos = None
             self.new_rect = None
 
-            # 移動・変形後の状態で差分をチェック
+        # 2. 移動・変形後の状態で差分をチェック (開始状態が保持されている場合のみ)
+        if self.pre_action_states is not None:
             new_states = self._get_rect_states_map()
             transforms = []
             for item, (old_p, old_r) in self.pre_action_states.items():
@@ -347,6 +348,7 @@ class PdfGraphicsView(QGraphicsView):
                 )
 
             self.pre_action_states = None
+
         self.update_scene_limit()
 
     def update_numbers(self):
