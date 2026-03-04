@@ -85,8 +85,9 @@ class TransformCommand(QUndoCommand):
     def undo(self):
         for item, old_p, old_r, _, _ in self._transforms:
             item._block_sync = True  # ループ防止
-            item.setPos(old_p)
+            # 先にサイズを戻すことで、後の setPos 時の移動制限計算を正しく行う
             item.setRect(old_r)
+            item.setPos(old_p)
             item._block_sync = False
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
@@ -96,8 +97,9 @@ class TransformCommand(QUndoCommand):
     def redo(self):
         for item, _, _, new_p, new_r in self._transforms:
             item._block_sync = True
-            item.setPos(new_p)
+            # 先にサイズを確定させることで、後の setPos 時の移動制限計算を正しく行う
             item.setRect(new_r)
+            item.setPos(new_p)
             item._block_sync = False
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
