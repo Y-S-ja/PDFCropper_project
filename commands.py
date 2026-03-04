@@ -89,11 +89,7 @@ class TransformCommand(QUndoCommand):
             item.setRect(old_r)
             item._block_sync = False
         self.view.update_numbers()
-        self.view.rectsChanged.emit(
-            self.view.view_rects()
-            if hasattr(self.view, "view_rects")
-            else self.view.rects
-        )
+        self.view.rectsChanged.emit(self.view.rects)
 
     def redo(self):
         for item, _, _, new_p, new_r in self._transforms:
@@ -102,11 +98,7 @@ class TransformCommand(QUndoCommand):
             item.setRect(new_r)
             item._block_sync = False
         self.view.update_numbers()
-        self.view.rectsChanged.emit(
-            self.view.view_rects()
-            if hasattr(self.view, "view_rects")
-            else self.view.rects
-        )
+        self.view.rectsChanged.emit(self.view.rects)
 
 
 class ReorderCommand(QUndoCommand):
