@@ -7,25 +7,29 @@ class AddCommand(QUndoCommand):
     def __init__(self, view, items, text="枠の追加"):
         super().__init__(text)
         self.view = view
+        # 挿入時の位置を保持 (単体追加を想定)
         self.items = items if isinstance(items, list) else [items]
+        self.indices = [
+            self.view.rects.index(item)
+            if item in self.view.rects
+            else len(self.view.rects)
+            for item in self.items
+        ]
 
     def undo(self):
         for item in self.items:
-            # リストにあれば削除
             if item in self.view.rects:
                 self.view.rects.remove(item)
-            # シーンにあれば削除
             if item.scene():
                 self.view.scene.removeItem(item)
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
 
     def redo(self):
-        for item in self.items:
-            # リストになければ追加
+        for item, idx in zip(self.items, self.indices):
             if item not in self.view.rects:
-                self.view.rects.append(item)
-            # シーンになければ追加（ここでの重複チェックが重要）
+                # 元の位置に挿入
+                self.view.rects.insert(idx, item)
             if not item.scene():
                 self.view.scene.addItem(item)
         self.view.update_numbers()
@@ -39,17 +43,26 @@ class RemoveCommand(QUndoCommand):
         super().__init__(text)
         self.view = view
         self.items = items if isinstance(items, list) else [items]
+        # 削除前のインデックスを記憶しておく
+        self.item_data = []  # list of (item, index)
+        for item in self.items:
+            if item in self.view.rects:
+                self.item_data.append((item, self.view.rects.index(item)))
+            else:
+                self.item_data.append((item, -1))
 
     def undo(self):
-        for item in self.items:
-            if item not in self.view.rects:
-                self.view.rects.append(item)
+        # 削除の逆なので、インデックスが小さい順に insert しないとズレる可能性がある
+        for item, idx in sorted(self.item_data, key=lambda x: x[1]):
+            if idx != -1 and item not in self.view.rects:
+                self.view.rects.insert(idx, item)
             if not item.scene():
                 self.view.scene.addItem(item)
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
 
     def redo(self):
+        # redo は削除を再度実行する
         for item in self.items:
             if item in self.view.rects:
                 self.view.rects.remove(item)
