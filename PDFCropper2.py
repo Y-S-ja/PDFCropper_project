@@ -17,7 +17,7 @@ from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack
 from myModule import myCropBox, myBadge, myIntroductionText
 from myDockContent import PreviewPanel, PropertyPanel
 from pdf_processor import PdfProcessor
-from commands import RectStateCommand
+from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
 
 
 class PdfGraphicsView(QGraphicsView):
@@ -205,6 +205,10 @@ class PdfGraphicsView(QGraphicsView):
         y = max(r.top(), min(pos.y(), r.bottom()))
         return QPointF(x, y)
 
+    def _get_rect_states_map(self):
+        """現在の全枠のインスタンスと（座標・サイズ）のペアを返す"""
+        return {item: (QPointF(item.pos()), QRectF(item.rect())) for item in self.rects}
+
     def mousePressEvent(self, event):
         item = self.itemAt(event.position().toPoint())
 
@@ -226,13 +230,8 @@ class PdfGraphicsView(QGraphicsView):
         # --- 右クリック：削除 ---
         if event.button() == Qt.RightButton:
             if target_cropbox and target_cropbox in self.rects:
-                old_state = self.get_snapshot()
                 print("Right-clicked: CropBox (Deleting)")
-                self.rects.remove(target_cropbox)
-                self.scene.removeItem(target_cropbox)
-                self.update_numbers()
-                self.rectsChanged.emit(self.rects)
-                self.commit_snapshot(old_state, "枠の削除")
+                self.undo_stack.push(RemoveCommand(self, target_cropbox))
                 return
             elif is_intro_text:
                 print("Right-clicked: Intro Text (Ignoring)")
@@ -242,8 +241,8 @@ class PdfGraphicsView(QGraphicsView):
 
         # --- 左クリック：操作 or 新規作成 ---
         elif event.button() == Qt.LeftButton:
-            # アクション開始前のスナップショットを撮っておく
-            self.pre_action_state = self.get_snapshot()
+            # アクション開始前のアイテムの状態を個別に保持
+            self.pre_action_states = self._get_rect_states_map()
 
             self.start_pos = self.mapToScene(event.position().toPoint())
 
@@ -304,7 +303,6 @@ class PdfGraphicsView(QGraphicsView):
                 self.new_rect.tag = "selection_rect"
                 self.rect_count += 1
                 self.new_rect.rect_id = self.rect_count
-                self.new_rect.update_display_number(len(self.rects) + 1)
 
                 # 同期信号の接続
                 self.new_rect.geometryChanged.connect(
@@ -315,32 +313,38 @@ class PdfGraphicsView(QGraphicsView):
                     self._handle_transformation_finished
                 )
 
-                # --- 番号表示 ---
+                # --- 番号表示 (バッジ) ---
+                # AddCommand -> update_numbers() 内で最終的に再調整されるため、
+                # ここでは暫定的な番号を渡す
                 index = len(self.rects) + 1
-
-                # 親を new_rect にすることで、枠と一緒に移動・削除される
                 badge = myBadge(index, parent=self.new_rect)
                 badge.setPos(rect.topLeft())
 
-                self.rects.append(self.new_rect)
-                self.rectsChanged.emit(self.rects)
-                # 新しく作った枠を選択状態にする（プロパティパネルに即反映される）
+                # 全ての管理は AddCommand に任せる（push時に自動で redo -> append/addItem される）
+                self.undo_stack.push(AddCommand(self, self.new_rect, "枠の作成"))
+
+                # 新しく作った枠を選択状態にする
                 self.scene.clearSelection()
                 self.new_rect.setSelected(True)
 
             self.start_pos = None
             self.new_rect = None
 
-        # もしアクション前後で状態が変わっていればUndoスタックに積む
-        if self.pre_action_state is not None:
-            current_state = self.get_snapshot()
-            if current_state != self.pre_action_state:
-                # 操作終了後に push する
-                self.commit_snapshot(self.pre_action_state, "枠の作成")
-                # 操作が終了し、かつ変化があったのでパネル類を更新する
-                self._on_scene_selection_changed()
-                self.rectsChanged.emit(self.rects)
-            self.pre_action_state = None
+            # 移動・変形後の状態で差分をチェック
+            new_states = self._get_rect_states_map()
+            transforms = []
+            for item, (old_p, old_r) in self.pre_action_states.items():
+                if item in new_states:
+                    new_p, new_r = new_states[item]
+                    if old_p != new_p or old_r != new_r:
+                        transforms.append((item, old_p, old_r, new_p, new_r))
+
+            if transforms:
+                self.undo_stack.push(
+                    TransformCommand(self, transforms, "枠の移動/変形")
+                )
+
+            self.pre_action_states = None
         self.update_scene_limit()
 
     def update_numbers(self):
@@ -371,20 +375,6 @@ class PdfGraphicsView(QGraphicsView):
             )
             for item in self.rects
         ]
-
-    def commit_snapshot(self, old_state, text="操作"):
-        """
-        現在の状態を新しいスナップショットとして確定し、スタックに積む
-        """
-        if old_state is None:
-            return
-        new_state = self.get_snapshot()
-        # 前後の状態に変化がなければ、履歴に積まない
-        if old_state == new_state:
-            return
-
-        command = RectStateCommand(self, old_state, new_state, text)
-        self.undo_stack.push(command)
 
     def undo(self):
         """ひとつ前の状態に戻す"""
@@ -449,23 +439,15 @@ class PdfGraphicsView(QGraphicsView):
         # 3. 各種表示の更新
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
-        self._on_scene_selection_changed()  # プロパティパネルの更新用
+        self._on_scene_selection_changed()
 
     def clear_selections(self):
-        # クリア前に状態を保存
-        old_state = self.get_snapshot()
+        # 削除コマンドを積む
+        if self.rects:
+            self.undo_stack.push(RemoveCommand(self, list(self.rects), "全削除"))
 
-        # シーン内の "selection_rect" タグが付いたアイテムだけを削除
-        for item in list(self.scene.items()):
-            if getattr(item, "tag", item.data(myCropBox.TAG_NAME)) == "selection_rect":
-                self.scene.removeItem(item)
-        # データリストもクリア
-        self.rects = []
-        self.rectsChanged.emit(self.rects)
         self.new_rect = None
         self.update_scene_limit()
-        self.commit_snapshot(old_state, "全削除")
-        # プロパティパネル側でも再描画を促すために選択状態をリセット
         self._on_scene_selection_changed()
 
     def reorder_rects(self, new_order_objs):
@@ -473,9 +455,8 @@ class PdfGraphicsView(QGraphicsView):
         if self.rects == new_order_objs:
             return
 
-        self.push_undo()  # 並び替え前に状態を保存
-        self.rects = new_order_objs
-        self.update_numbers()
+        # 差分コマンドを積む
+        self.undo_stack.push(ReorderCommand(self, self.rects, new_order_objs))
 
     def _handle_item_geometry_changed(self, item):
         """アイテムの確定後（移動終了時など）の同期"""
@@ -603,7 +584,8 @@ class PdfGraphicsView(QGraphicsView):
         """複数の矩形と制限領域をセットで追加する"""
         if not data_list:
             return
-        old_state = self.get_snapshot()
+
+        created_boxes = []
 
         # グループIDを生成（現在の時刻などをベースにユニークな値にする）
         import time
@@ -645,7 +627,9 @@ class PdfGraphicsView(QGraphicsView):
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
         self._on_scene_selection_changed()
-        self.commit_snapshot(old_state, "テンプレートの追加")
+
+        # 追加コマンドをスタックに積んで一括管理
+        self.undo_stack.push(AddCommand(self, created_boxes, "テンプレートの追加"))
 
     def add_template_2v(self):
         """2分割（縦）テンプレート"""
