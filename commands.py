@@ -90,6 +90,8 @@ class TransformCommand(QUndoCommand):
             item._block_sync = False
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
+        # プロパティパネルの表示を更新
+        self.view._on_scene_selection_changed()
 
     def redo(self):
         for item, _, _, new_p, new_r in self._transforms:
@@ -99,6 +101,8 @@ class TransformCommand(QUndoCommand):
             item._block_sync = False
         self.view.update_numbers()
         self.view.rectsChanged.emit(self.view.rects)
+        # プロパティパネルの表示を更新
+        self.view._on_scene_selection_changed()
 
 
 class ReorderCommand(QUndoCommand):
