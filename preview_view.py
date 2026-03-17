@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame
 from PySide6.QtCore import Qt, QEvent, QThread
 from PySide6.QtGui import QPixmap
+import fitz
 from worker import PreviewWorker
 
 
@@ -15,6 +16,7 @@ class PdfPreviewView(QWidget):
         # バックグラウンド処理用
         self.worker = None
         self.thread = None
+        self.page_slots = {}  # (page_idx, rect_idx) -> QLabel の辞書
 
         self.init_ui()
 
@@ -95,6 +97,7 @@ class PdfPreviewView(QWidget):
 
         # 既存の表示をクリア
         self.preview_items.clear()
+        self.page_slots.clear()
         while self.container_layout.count():
             item = self.container_layout.takeAt(0)
             if item.widget():
@@ -106,11 +109,49 @@ class PdfPreviewView(QWidget):
             self.container_layout.addWidget(msg, 0, Qt.AlignCenter)
             return
 
-        # 座標抽出
+        # 1. プレースホルダーを先に配置してレイアウトを確定させる
+        try:
+            with fitz.open(pdf_path) as doc:
+                page_count = len(doc)
+        except Exception:
+            return
+
         crop_coordinates = []
+        # 各枠の基準サイズを計算
+        box_sizes = []
         for box in rects:
             r = box.scene_rect
-            crop_coordinates.append((r.left(), r.top(), r.right(), r.bottom()))
+            coords = (r.left(), r.top(), r.right(), r.bottom())
+            crop_coordinates.append(coords)
+            
+            # 144dpi基準のサイズ
+            f_rect = fitz.Rect(
+                coords[0] * scale_factor, coords[1] * scale_factor,
+                coords[2] * scale_factor, coords[3] * scale_factor
+            )
+            box_sizes.append((f_rect.width * 2, f_rect.height * 2))
+
+        # 全ページ・全枠のスロットを作成
+        for page_idx in range(page_count):
+            for rect_idx, (base_w, base_h) in enumerate(box_sizes):
+                img_label = QLabel()
+                # プレースホルダーの初期サイズ (ズーム適用)
+                view_w = int(base_w * self.zoom_factor)
+                view_h = int(base_h * self.zoom_factor)
+                img_label.setFixedSize(view_w, view_h)
+                img_label.setFrameShape(QFrame.StyledPanel)
+                img_label.setAlignment(Qt.AlignCenter)
+                img_label.setText(f"Page {page_idx + 1}\nLoading...")
+                img_label.setStyleSheet(
+                    "border: 1px solid #ddd; background-color: #f9f9f9; color: #aaa;"
+                )
+
+                item_widget = QWidget()
+                item_layout = QVBoxLayout(item_widget)
+                item_layout.addWidget(img_label, 0, Qt.AlignCenter)
+                
+                self.container_layout.addWidget(item_widget)
+                self.page_slots[(page_idx, rect_idx)] = img_label
 
         # 別スレッドでの実行準備
         self.thread = QThread()
@@ -130,24 +171,23 @@ class PdfPreviewView(QWidget):
         self.thread.start()
 
     def _add_page_images(self, page_idx, images):
-        """Workerから送られてきた1ページ分の画像をUIに追加する"""
+        """Workerから送られてきた1ページ分の画像をUIに流し込む"""
         for i, q_img in enumerate(images):
             if q_img is None:
                 continue
 
-            # 画像表示ラベル
-            img_label = QLabel()
-            # Worker ですでにリサイズ済みなので Pixmap に変換するだけ
+            # すでに作成済みのスロットを取得
+            img_label = self.page_slots.get((page_idx, i))
+            if not img_label:
+                continue
+
+            # pixmapに変換して差し替え
             pixmap = QPixmap.fromImage(q_img)
             img_label.setPixmap(pixmap)
-            img_label.setFrameShape(QFrame.StyledPanel)
+            # サイズ固定を解除（元の縦横比に応じるため）またはそのまま
+            img_label.setFixedSize(pixmap.size())
+            img_label.setText("")  # テキストを消す
             img_label.setStyleSheet("border: 1px solid #ccc; background-color: white;")
 
-            # アイテム用コンテナ
-            item_widget = QWidget()
-            item_layout = QVBoxLayout(item_widget)
-            item_layout.addWidget(img_label, 0, Qt.AlignCenter)
-
-            self.container_layout.addWidget(item_widget)
-            # ズーム用に現在の pixmap を保持（再ズーム時はこれを使用）
+            # ズーム用に現在の pixmap を保持
             self.preview_items.append((img_label, pixmap))
