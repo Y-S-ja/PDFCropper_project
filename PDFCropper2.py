@@ -53,6 +53,7 @@ class PdfGraphicsView(QGraphicsView):
 
         self.pdf_path = None  # PDFファイルのパス
         self.pdf_doc = None  # PDFドキュメントオブジェクト
+        self.current_page_index = 0  # 現在表示中のページ番号
         self.rect_count = 0
         self.undo_stack = QUndoStack(self)
         self.pre_action_state = None  # アクション開始前の状態保持用

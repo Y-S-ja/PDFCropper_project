@@ -215,7 +215,7 @@ class PreviewPanel(QWidget):
 
     def update_previews(self, view):
         """
-        指定されたビューの枠に基づいてプレビュー画像を生成し、表示を更新する
+        指定されたビューの現在のページの枠に基づいてプレビュー画像を生成し、表示を更新する
         """
         while self.container_layout.count():
             item = self.container_layout.takeAt(0)
@@ -226,65 +226,48 @@ class PreviewPanel(QWidget):
             return
 
         # 1. 座標だけのリストを作る
-        # 後で番号を参照するために元のオブジェクト(view.rects)の順番を保持しておく
         crop_coordinates = []
         for box in view.rects:
             r = box.scene_rect
             crop_coordinates.append((r.left(), r.top(), r.right(), r.bottom()))
 
-        # 2. ジェネレータを開始
-        generator = PdfProcessor.generate_all_previews(
-            view.pdf_path, crop_coordinates, view.scale_factor
+        # 2. 現在のページの画像を取得
+        images = PdfProcessor.generate_page_preview(
+            view.pdf_path, view.current_page_index, crop_coordinates, view.scale_factor
         )
 
-        # 4. 1ページ分ずつ画像を受け取って処理
-        for page_idx, images in generator:
-            # --- ページヘッダーの追加 ---
-            header = QLabel(f"--- ページ {page_idx + 1} ---")
-            header.setStyleSheet(
-                "font-weight: bold; color: white; background-color: #666; padding: 4px;"
-            )
-            header.setAlignment(Qt.AlignCenter)
-            self.container_layout.addWidget(header)
+        # 3. 各枠のプレビューを追加
+        for i, pixmap in enumerate(images):
+            if pixmap is None:
+                continue
 
-            # --- 各枠のプレビューを追加 ---
-            for i, pixmap in enumerate(images):
-                if pixmap is None:
-                    continue
+            rect_num = view.rects[i].rect_id
 
-                # 順番 i を使って、元のビューから枠番号を取得
-                rect_num = view.rects[i].rect_id
+            # --- UI構築 (ラベルと画像) ---
+            item_widget = QWidget()
+            vbox = QVBoxLayout(item_widget)
+            vbox.setContentsMargins(5, 5, 5, 5)
 
-                # --- UI構築 (ラベルと画像) ---
-                item_widget = QWidget()
-                vbox = QVBoxLayout(item_widget)
-                vbox.setContentsMargins(5, 5, 5, 5)
+            label_title = QLabel(f"枠 {rect_num}")
+            label_title.setStyleSheet("font-weight: bold;")
+            vbox.addWidget(label_title)
 
-                label_title = QLabel(f"枠 {rect_num}")  # 正しい番号が表示される
-                label_title.setStyleSheet("font-weight: bold;")
-                vbox.addWidget(label_title)
-
-                label_img = QLabel()
-                label_img.setPixmap(
-                    pixmap.scaledToWidth(
-                        max(50, self.width() - 40), Qt.SmoothTransformation
-                    )
+            label_img = QLabel()
+            label_img.setPixmap(
+                pixmap.scaledToWidth(
+                    max(50, self.width() - 40), Qt.SmoothTransformation
                 )
-                # リサイズ用にフルサイズを保持（任意）
-                label_img._full_pix = pixmap
-                vbox.addWidget(label_img)
+            )
+            # リサイズ用にフルサイズを保持
+            label_img._full_pix = pixmap
+            vbox.addWidget(label_img)
 
-                line = QFrame()
-                line.setFrameShape(QFrame.HLine)
-                line.setFrameShadow(QFrame.Sunken)
-                vbox.addWidget(line)
+            self.container_layout.addWidget(item_widget)
 
-                self.container_layout.addWidget(item_widget)
-
-                # 1枚分の処理が終わるごとに表示させる。
-                # 全体の処理が終わるのを待たない。
-                # QThreadに変える
-                QCoreApplication.processEvents()
+            # 1枚分の処理が終わるごとに表示させる。
+            # 全体の処理が終わるのを待たない。
+            # QThreadに変える
+            QCoreApplication.processEvents()
 
     def resizeEvent(self, event):
         """ドックの幅が変わった際、即座にタイマーを回して変更終了を待つ"""

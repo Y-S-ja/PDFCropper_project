@@ -60,39 +60,55 @@ class PdfProcessor:
     ):
         """
         全ページをスキャンし、1ページ分の画像リストを順番に yield するジェネレータ。
-        crop_coords: [(left, top, right, bottom), ...] のリスト
-        preview_dpi: 144dpi (標準72dpiの2倍)
         """
-        # ループの最初に1回だけPDFを開く
         with fitz.open(pdf_path) as doc:
             for page_index in range(len(doc)):
-                page = doc[page_index]
-                page_pixmaps = []
+                yield page_index, PdfProcessor._get_previews_for_page(
+                    doc, page_index, crop_coords, scale_factor, preview_dpi
+                )
 
-                for rect in crop_coords:
-                    left, top, right, bottom = rect
-                    # fitz用の矩形を作成
-                    fitz_rect = fitz.Rect(
-                        left * scale_factor,
-                        top * scale_factor,
-                        right * scale_factor,
-                        bottom * scale_factor,
-                    )
+    @staticmethod
+    def generate_page_preview(
+        pdf_path: str,
+        page_index: int,
+        crop_coords: list,
+        scale_factor: float,
+        preview_dpi: int = 144,
+    ):
+        """特定のページのみのプレビュー画像リストを返す"""
+        with fitz.open(pdf_path) as doc:
+            return PdfProcessor._get_previews_for_page(
+                doc, page_index, crop_coords, scale_factor, preview_dpi
+            )
 
-                    if fitz_rect.is_empty:
-                        page_pixmaps.append(None)
-                        continue
+    @staticmethod
+    def _get_previews_for_page(
+        doc, page_index, crop_coords, scale_factor, preview_dpi
+    ):
+        """1ページ分のプレビュー画像を抽出する内部関数"""
+        page = doc[page_index]
+        page_pixmaps = []
 
-                    # 画像生成 (DPI指定)
-                    pix = page.get_pixmap(clip=fitz_rect, dpi=preview_dpi)
-                    img = QImage(
-                        pix.samples,
-                        pix.width,
-                        pix.height,
-                        pix.stride,
-                        QImage.Format_RGB888,
-                    )
-                    page_pixmaps.append(QPixmap.fromImage(img))
+        for rect in crop_coords:
+            left, top, right, bottom = rect
+            fitz_rect = fitz.Rect(
+                left * scale_factor,
+                top * scale_factor,
+                right * scale_factor,
+                bottom * scale_factor,
+            )
 
-                # 1ページ分の画像リストが完成したら yield (ここで一時停止してUIへ渡す)
-                yield page_index, page_pixmaps
+            if fitz_rect.is_empty:
+                page_pixmaps.append(None)
+                continue
+
+            pix = page.get_pixmap(clip=fitz_rect, dpi=preview_dpi)
+            img = QImage(
+                pix.samples,
+                pix.width,
+                pix.height,
+                pix.stride,
+                QImage.Format_RGB888,
+            )
+            page_pixmaps.append(QPixmap.fromImage(img))
+        return page_pixmaps
