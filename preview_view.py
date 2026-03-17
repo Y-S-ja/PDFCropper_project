@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame
-from PySide6.QtCore import Qt, QCoreApplication, QEvent
-from pdf_processor import PdfProcessor
+from PySide6.QtCore import Qt, QEvent, QThread
+from worker import PreviewWorker
 
 
 class PdfPreviewView(QWidget):
@@ -10,6 +10,11 @@ class PdfPreviewView(QWidget):
         super().__init__(parent)
         self.zoom_factor = 1.0
         self.preview_items = []  # (QLabel, QPixmap) のリスト
+
+        # バックグラウンド処理用
+        self.worker = None
+        self.thread = None
+
         self.init_ui()
 
     def init_ui(self):
@@ -70,10 +75,23 @@ class PdfPreviewView(QWidget):
             )
             label.setPixmap(scaled_pix)
 
+    def stop_rendering(self):
+        """生成処理を安全に停止する"""
+        if self.worker:
+            self.worker.cancel()
+        if self.thread and self.thread.isRunning():
+            self.thread.quit()
+            self.thread.wait()
+        self.worker = None
+        self.thread = None
+
     def update_previews(self, pdf_path, rects, scale_factor):
         """
-        指定されたPDFと枠データに基づいてプレビューを再構築する
+        指定されたPDFと枠データに基づいてプレビューの生成を開始する（非同期）
         """
+        # 前回の処理があれば停止
+        self.stop_rendering()
+
         # 既存の表示をクリア
         self.preview_items.clear()
         while self.container_layout.count():
@@ -93,37 +111,41 @@ class PdfPreviewView(QWidget):
             r = box.scene_rect
             crop_coordinates.append((r.left(), r.top(), r.right(), r.bottom()))
 
-        # ジェネレータを開始
-        generator = PdfProcessor.generate_all_previews(
-            pdf_path, crop_coordinates, scale_factor
-        )
+        # 別スレッドでの実行準備
+        self.thread = QThread()
+        self.worker = PreviewWorker(pdf_path, crop_coordinates, scale_factor)
+        self.worker.moveToThread(self.thread)
 
-        for page_idx, images in generator:
-            for i, pixmap in enumerate(images):
-                if pixmap is None:
-                    continue
+        # 信号の接続
+        self.thread.started.connect(self.worker.run)
+        self.worker.page_ready.connect(self._add_page_images)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
 
-                # 画像表示ラベル
-                img_label = QLabel()
-                # 初期表示も現在のズームを適用
-                scaled_size = pixmap.size() * self.zoom_factor
-                img_label.setPixmap(
-                    pixmap.scaled(
-                        scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                    )
-                )
-                img_label.setFrameShape(QFrame.StyledPanel)
-                img_label.setStyleSheet(
-                    "border: 1px solid #ccc; background-color: white;"
-                )
+        # 処理開始
+        self.thread.start()
 
-                # アイテム用コンテナ
-                item_widget = QWidget()
-                item_layout = QVBoxLayout(item_widget)
-                item_layout.addWidget(img_label, 0, Qt.AlignCenter)
+    def _add_page_images(self, page_idx, pixmaps):
+        """Workerから送られてきた1ページ分の画像をUIに追加する"""
+        for i, pixmap in enumerate(pixmaps):
+            if pixmap is None:
+                continue
 
-                self.container_layout.addWidget(item_widget)
-                self.preview_items.append((img_label, pixmap))
+            # 画像表示ラベル
+            img_label = QLabel()
+            # 現在のズームにあわせる
+            scaled_size = pixmap.size() * self.zoom_factor
+            img_label.setPixmap(
+                pixmap.scaled(scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            img_label.setFrameShape(QFrame.StyledPanel)
+            img_label.setStyleSheet("border: 1px solid #ccc; background-color: white;")
 
-                # 処理の合間にイベントループを回してフリーズを防ぐ
-                QCoreApplication.processEvents()
+            # アイテム用コンテナ
+            item_widget = QWidget()
+            item_layout = QVBoxLayout(item_widget)
+            item_layout.addWidget(img_label, 0, Qt.AlignCenter)
+
+            self.container_layout.addWidget(item_widget)
+            self.preview_items.append((img_label, pixmap))

@@ -713,12 +713,14 @@ class PdfTabContainer(QStackedWidget):
     def set_mode(self, preview_mode: bool):
         """表示モードを切り替える"""
         if preview_mode:
-            # プレビューに切り替える直前に内容を最新にする
+            # UIを即座に切り替えてから生成を開始
+            self.setCurrentWidget(self.preview)
             self.preview.update_previews(
                 self.editor.pdf_path, self.editor.rects, self.editor.scale_factor
             )
-            self.setCurrentWidget(self.preview)
         else:
+            # 編集に戻る際は生成を止める
+            self.preview.stop_rendering()
             self.setCurrentWidget(self.editor)
 
     def is_preview_mode(self):
