@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Qt
+from PySide6.QtCore import QObject, Signal, Qt, QThread
 from pdf_processor import PdfProcessor
 import fitz
 
@@ -59,6 +59,9 @@ class PreviewWorker(QObject):
 
                     # 加工済みの QImage リストを送信
                     self.page_ready.emit(page_idx, processed_images)
+
+                    # メインスレッドがイベント（スクロール等）を処理する隙間を作る
+                    QThread.msleep(10)
 
             self.finished.emit()
 
