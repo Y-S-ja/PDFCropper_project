@@ -12,10 +12,12 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QDockWidget,
     QStackedWidget,
+    QFrame,
+    QHBoxLayout,
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
-from myModule import myCropBox, myBadge, myIntroductionText
+from myModule import myCropBox, myBadge, myIntroductionText, CandidateBox
 from myDockContent import PreviewPanel, PropertyPanel
 from pdf_processor import PdfProcessor
 from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
@@ -72,6 +74,43 @@ class PdfGraphicsView(QGraphicsView):
 
         # 初期メッセージを表示
         self.show_intro_message()
+
+        # --- 候補選択モード関連 ---
+        self.is_candidate_mode = False
+        self.candidate_items = []
+
+        # 確定ボタンパネル（ビューの右下に浮かせる）
+        self.candidate_panel = QFrame(self)
+        self.candidate_panel.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 220);
+                border: 1px solid #ccc;
+                border-radius: 8px;
+            }
+            QPushButton {
+                padding: 5px 15px;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            #confirmBtn { background-color: #4CAF50; color: white; }
+            #confirmBtn:hover { background-color: #45a049; }
+            #cancelBtn { background-color: #f44336; color: white; }
+            #cancelBtn:hover { background-color: #da190b; }
+        """)
+        panel_layout = QHBoxLayout(self.candidate_panel)
+        
+        self.confirm_btn = QPushButton("✔ 選択した枠を確定", self.candidate_panel)
+        self.confirm_btn.setObjectName("confirmBtn")
+        self.confirm_btn.clicked.connect(self.confirm_candidates)
+        
+        self.cancel_btn = QPushButton("キャンセル", self.candidate_panel)
+        self.cancel_btn.setObjectName("cancelBtn")
+        self.cancel_btn.clicked.connect(self.cancel_candidates)
+        
+        panel_layout.addWidget(self.cancel_btn)
+        panel_layout.addWidget(self.confirm_btn)
+        
+        self.candidate_panel.hide()
 
     def detectItemByTag(self, tag):
         for item in self.scene.items():
@@ -254,11 +293,34 @@ class PdfGraphicsView(QGraphicsView):
         y = max(r.top(), min(pos.y(), r.bottom()))
         return QPointF(x, y)
 
+    def resizeEvent(self, event):
+        """ウィンドウサイズ変更時にボタン位置を調整"""
+        super().resizeEvent(event)
+        self.update_candidate_panel_pos()
+
+    def update_candidate_panel_pos(self):
+        """候補選択パネルを右下に配置"""
+        if self.candidate_panel.isVisible():
+            margin = 20
+            x = self.width() - self.candidate_panel.width() - margin
+            y = self.height() - self.candidate_panel.height() - margin
+            self.candidate_panel.move(x, y)
+
     def _get_rect_states_map(self):
         """現在の全枠のインスタンスと（座標・サイズ）のペアを返す"""
         return {item: (QPointF(item.pos()), QRectF(item.rect())) for item in self.rects}
 
     def mousePressEvent(self, event):
+        # 候補選択モード中は、候補アイテムのクリックイベントを優先
+        if self.is_candidate_mode:
+            item = self.itemAt(event.position().toPoint())
+            if isinstance(item, CandidateBox):
+                item.toggle()
+                return
+            # 背景クリックは無視（CandidateBoxが自身のイベントで処理する）
+            super().mousePressEvent(event)
+            return
+
         item = self.itemAt(event.position().toPoint())
 
         # --- 判定フェーズ：クリックされたものが何かを特定する ---
@@ -747,57 +809,86 @@ class PdfGraphicsView(QGraphicsView):
         self.add_template_boxes(data)
 
     def auto_detect_frames(self):
-        """現在のページから枠線を自動検知して追加する"""
+        """現在のページから枠線を自動検知して候補を表示する"""
         if not self.pdf_path:
             return
 
-        # 1. PdfProcessor を使ってベクターデータから矩形を取得 (PDFポイント単位)
+        # 前回の候補があればクリア
+        self.cancel_candidates()
+
+        # 1. 枠線の検知
         pdf_rects = PdfProcessor.detect_frames(self.pdf_path, self.current_page_index)
 
         if not pdf_rects:
-             # 通知などは MainWindow 側で行うのが理想的だが、一旦 print か
-            print("No frames detected in the vector data.")
+            QMessageBox.information(self, "情報", "このページにはベクター形式の枠線が見つかりませんでした。")
             return
 
-        new_boxes = []
+        # 2. 候補表示用アイテムを作成
+        self.is_candidate_mode = True
         for x0, y0, x1, y1 in pdf_rects:
-            # 2. PDFポイント座標 を シーン上のピクセル座標 に変換
-            # pts / scale_factor = px
             scene_left = x0 / self.scale_factor
             scene_top = y0 / self.scale_factor
             scene_w = (x1 - x0) / self.scale_factor
             scene_h = (y1 - y0) / self.scale_factor
 
-            # 3. myCropBox インスタンスを作成
-            size_rect = QRectF(0, 0, scene_w, scene_h)
-            box = myCropBox(size_rect)
-            box.setPos(scene_left, scene_top)
+            c_box = CandidateBox(QRectF(0, 0, scene_w, scene_h))
+            c_box.setPos(scene_left, scene_top)
+            self.scene.addItem(c_box)
+            self.candidate_items.append(c_box)
 
-            # スタイル設定（AddCommand 側でも設定されるが、一旦統一感のために）
-            pen = QPen(QColor(0, 120, 215), 3)
-            pen.setCosmetic(True)
-            box.setPen(pen)
-            box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+        # 3. ボタンパネルを表示
+        self.candidate_panel.show()
+        self.candidate_panel.adjustSize()
+        self.update_candidate_panel_pos()
+        self.setDragMode(QGraphicsView.NoDrag)
+        self.viewport().setCursor(Qt.ArrowCursor)
 
-            box.tag = "selection_rect"
-            self.rect_count += 1
-            box.rect_id = self.rect_count
+    def confirm_candidates(self):
+        """採用された候補を確定して cropbox に変換する"""
+        new_boxes = []
+        for c_box in self.candidate_items:
+            if c_box.is_active:
+                # 正規の myCropBox に変換
+                r = c_box.rect()
+                box = myCropBox(r)
+                box.setPos(c_box.pos())
+                
+                box.tag = "selection_rect"
+                self.rect_count += 1
+                box.rect_id = self.rect_count
 
-            # 信号の接続
-            box.geometryChanged.connect(self._handle_item_geometry_changed)
-            box.deltaResized.connect(self._handle_item_delta_resized)
-            box.transformationFinished.connect(self._handle_transformation_finished)
+                # 信号の接続
+                box.geometryChanged.connect(self._handle_item_geometry_changed)
+                box.deltaResized.connect(self._handle_item_delta_resized)
+                box.transformationFinished.connect(self._handle_transformation_finished)
 
-            # 番号バッジ
-            temp_idx = len(self.rects) + len(new_boxes) + 1
-            badge = myBadge(temp_idx, parent=box)
-            badge.setPos(size_rect.topLeft())
+                # 番号バッジ
+                idx = len(self.rects) + len(new_boxes) + 1
+                badge = myBadge(idx, parent=box)
+                badge.setPos(r.topLeft())
 
-            new_boxes.append(box)
+                new_boxes.append(box)
 
-        # 4. まとめて Undo 履歴に追加
+        # 履歴に追加
         if new_boxes:
             self.undo_stack.push(AddCommand(self, new_boxes, "枠線の自動認識"))
+
+        self.exit_candidate_mode()
+
+    def cancel_candidates(self):
+        """候補選択を中止して破棄する"""
+        self.exit_candidate_mode()
+
+    def exit_candidate_mode(self):
+        """候補選択モードを終了し、表示をクリアする"""
+        self.is_candidate_mode = False
+        for item in self.candidate_items:
+            self.scene.removeItem(item)
+        self.candidate_items.clear()
+        self.candidate_panel.hide()
+        
+        # カーソルを元に戻す
+        self.viewport().setCursor(Qt.CrossCursor)
 
 
 class PdfTabContainer(QStackedWidget):
