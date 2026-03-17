@@ -8,7 +8,7 @@ class PreviewWorker(QObject):
     バックグラウンドでPDFのプレビュー画像を生成するクラス
     """
 
-    page_ready = Signal(int, list)  # ページ番号, QImageのリスト
+    page_ready = Signal(list)  # [(page_idx, QImageのリスト), ...] のリスト
     finished = Signal()
     error = Signal(str)
 
@@ -29,6 +29,9 @@ class PreviewWorker(QObject):
         try:
             with fitz.open(self.pdf_path) as doc:
                 total_pages = len(doc)
+                batch = []
+                batch_size = 5
+
                 for page_idx in range(total_pages):
                     if self._is_cancelled:
                         break
@@ -50,18 +53,28 @@ class PreviewWorker(QObject):
                             continue
 
                         # ズーム倍率に合わせてリサイズ
-                        # QImage.scaled は CPU を使う重い処理なのでここでやるのが正解
                         target_size = img.size() * self.zoom_factor
                         scaled_img = img.scaled(
                             target_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
                         )
                         processed_images.append(scaled_img)
 
-                    # 加工済みの QImage リストを送信
-                    self.page_ready.emit(page_idx, processed_images)
+                    # バッチに追加
+                    batch.append((page_idx, processed_images))
 
-                    # メインスレッドがイベント（スクロール等）を処理する隙間を作る
-                    QThread.msleep(10)
+                    # 一定量たまったら送信
+                    if len(batch) >= batch_size:
+                        self.page_ready.emit(batch)
+                        batch = []
+                        # まとめて更新した後は少し長めに休む（UIに描画チャンスを確実に与える）
+                        QThread.msleep(30)
+                    else:
+                        # 毎回の微小スリープも継続
+                        QThread.msleep(5)
+
+                # 最後の未送信分があれば送信
+                if batch and not self._is_cancelled:
+                    self.page_ready.emit(batch)
 
             self.finished.emit()
 

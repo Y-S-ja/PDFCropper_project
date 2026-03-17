@@ -181,33 +181,36 @@ class PdfPreviewView(QGraphicsView):
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
-    def _add_page_images(self, page_idx, images):
-        """Workerから届いた画像をシーン上のプレースホルダーの位置に配置する"""
-        for i, q_img in enumerate(images):
-            if q_img is None:
-                continue
+    def _add_page_images(self, batch_data):
+        """Workerから届いたバッチ（複数ページ分）の画像をシーン上のプレースホルダーの位置に配置する"""
+        for page_idx, images in batch_data:
+            for i, q_img in enumerate(images):
+                if q_img is None:
+                    continue
 
-            # スロット情報を取得
-            if (page_idx, i) not in self.page_slots:
-                continue
+                # スロット情報を取得
+                if (page_idx, i) not in self.page_slots:
+                    continue
+                    
+                rect_item, text_item, y_pos, w, h = self.page_slots[(page_idx, i)]
 
-            rect_item, text_item, y_pos, w, h = self.page_slots[(page_idx, i)]
-
-            # 画像アイテムの作成
-            pixmap = QPixmap.fromImage(q_img)
-            pix_item = QGraphicsPixmapItem(pixmap)
-            pix_item.setPos(0, y_pos)
-            # ギザギザを防ぐ
-            pix_item.setTransformationMode(Qt.SmoothTransformation)
-
-            # 白い背景（枠線用）を後ろに引く
-            bg_rect = QGraphicsRectItem(0, y_pos, w, h)
-            bg_rect.setBrush(QBrush(Qt.white))
-            bg_rect.setPen(QPen(QColor("#cccccc"), 1))
-            self.scene.addItem(bg_rect)
-
-            self.scene.addItem(pix_item)
-
-            # プレースホルダーを隠す
-            rect_item.setVisible(False)
-            text_item.setVisible(False)
+                # 画像アイテムの作成
+                pixmap = QPixmap.fromImage(q_img)
+                pix_item = QGraphicsPixmapItem(pixmap)
+                pix_item.setPos(0, y_pos)
+                pix_item.setTransformationMode(Qt.SmoothTransformation)
+                
+                # 白い背景（枠線用）を後ろに引く
+                bg_rect = QGraphicsRectItem(0, y_pos, w, h)
+                bg_rect.setBrush(QBrush(Qt.white))
+                bg_rect.setPen(QPen(QColor("#cccccc"), 1))
+                self.scene.addItem(bg_rect)
+                
+                self.scene.addItem(pix_item)
+                
+                # プレースホルダーを隠す
+                rect_item.setVisible(False)
+                text_item.setVisible(False)
+                
+                # ズーム等での再利用（現在は transform ズームだが、互換性のために保持）
+                self.preview_items.append(pix_item)
