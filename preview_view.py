@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame
 from PySide6.QtCore import Qt, QEvent, QThread
+from PySide6.QtGui import QPixmap
 from worker import PreviewWorker
 
 
@@ -113,7 +114,9 @@ class PdfPreviewView(QWidget):
 
         # 別スレッドでの実行準備
         self.thread = QThread()
-        self.worker = PreviewWorker(pdf_path, crop_coordinates, scale_factor)
+        self.worker = PreviewWorker(
+            pdf_path, crop_coordinates, scale_factor, self.zoom_factor
+        )
         self.worker.moveToThread(self.thread)
 
         # 信号の接続
@@ -126,19 +129,17 @@ class PdfPreviewView(QWidget):
         # 処理開始
         self.thread.start()
 
-    def _add_page_images(self, page_idx, pixmaps):
+    def _add_page_images(self, page_idx, images):
         """Workerから送られてきた1ページ分の画像をUIに追加する"""
-        for i, pixmap in enumerate(pixmaps):
-            if pixmap is None:
+        for i, q_img in enumerate(images):
+            if q_img is None:
                 continue
 
             # 画像表示ラベル
             img_label = QLabel()
-            # 現在のズームにあわせる
-            scaled_size = pixmap.size() * self.zoom_factor
-            img_label.setPixmap(
-                pixmap.scaled(scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
+            # Worker ですでにリサイズ済みなので Pixmap に変換するだけ
+            pixmap = QPixmap.fromImage(q_img)
+            img_label.setPixmap(pixmap)
             img_label.setFrameShape(QFrame.StyledPanel)
             img_label.setStyleSheet("border: 1px solid #ccc; background-color: white;")
 
@@ -148,4 +149,5 @@ class PdfPreviewView(QWidget):
             item_layout.addWidget(img_label, 0, Qt.AlignCenter)
 
             self.container_layout.addWidget(item_widget)
+            # ズーム用に現在の pixmap を保持（再ズーム時はこれを使用）
             self.preview_items.append((img_label, pixmap))

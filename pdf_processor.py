@@ -87,7 +87,7 @@ class PdfProcessor:
     ):
         """1ページ分のプレビュー画像を抽出する内部関数"""
         page = doc[page_index]
-        page_pixmaps = []
+        page_images = []
 
         for rect in crop_coords:
             left, top, right, bottom = rect
@@ -99,7 +99,7 @@ class PdfProcessor:
             )
 
             if fitz_rect.is_empty:
-                page_pixmaps.append(None)
+                page_images.append(None)
                 continue
 
             pix = page.get_pixmap(clip=fitz_rect, dpi=preview_dpi)
@@ -109,6 +109,6 @@ class PdfProcessor:
                 pix.height,
                 pix.stride,
                 QImage.Format_RGB888,
-            )
-            page_pixmaps.append(QPixmap.fromImage(img))
-        return page_pixmaps
+            ).copy()  # データをコピーして安全性を持たせる
+            page_images.append(img)
+        return page_images

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
+from PySide6.QtGui import QPixmap
 from pdf_processor import PdfProcessor
 from myModule import myCropBox
 
@@ -237,8 +238,8 @@ class PreviewPanel(QWidget):
         )
 
         # 3. 各枠のプレビューを追加
-        for i, pixmap in enumerate(images):
-            if pixmap is None:
+        for i, q_img in enumerate(images):
+            if q_img is None:
                 continue
 
             rect_num = view.rects[i].rect_id
@@ -253,13 +254,14 @@ class PreviewPanel(QWidget):
             vbox.addWidget(label_title)
 
             label_img = QLabel()
-            label_img.setPixmap(
-                pixmap.scaledToWidth(
-                    max(50, self.width() - 40), Qt.SmoothTransformation
-                )
+            # QImage をリサイズしてから QPixmap に変換
+            scaled_q_img = q_img.scaledToWidth(
+                max(50, self.width() - 40), Qt.SmoothTransformation
             )
-            # リサイズ用にフルサイズを保持
-            label_img._full_pix = pixmap
+            label_img.setPixmap(QPixmap.fromImage(scaled_q_img))
+
+            # リサイズ用に元の QImage を保持
+            label_img._full_pix = q_img
             vbox.addWidget(label_img)
 
             self.container_layout.addWidget(item_widget)
@@ -285,7 +287,8 @@ class PreviewPanel(QWidget):
                 # 子要素の中から画像を保持しているラベルを探す
                 for label in widget.findChildren(QLabel):
                     if hasattr(label, "_full_pix"):
-                        scaled_pix = label._full_pix.scaledToWidth(
+                        # label._full_pix は QImage
+                        scaled_q_img = label._full_pix.scaledToWidth(
                             new_width, Qt.SmoothTransformation
                         )
-                        label.setPixmap(scaled_pix)
+                        label.setPixmap(QPixmap.fromImage(scaled_q_img))
