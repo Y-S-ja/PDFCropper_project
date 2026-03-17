@@ -32,13 +32,13 @@ class CropBoxStyle:
     # 青色の実線
     PEN_NORMAL = QPen(COLOR_MAIN, 2, Qt.SolidLine)
     # 透過度を低くした塗りつぶし (Alpha: 15/255)
-    BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 15))
+    BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 30))
 
     # --- 選択時のスタイル ---
     # 青色の実線（選択中であることを強調）
     PEN_SELECTED = QPen(COLOR_MAIN, 3)
     # 透過度を少し上げた青の塗りつぶし (Alpha: 30/255)
-    BRUSH_SELECTED = QBrush(QColor(0, 120, 215, 30))
+    BRUSH_SELECTED = QBrush(QColor(0, 120, 215, 60))
 
     # --- ハンドル（四隅の小四角）の設定 ---
     HANDLE_SIZE = 10.0
@@ -318,26 +318,7 @@ class myCropBox(QGraphicsObject):
                 y = max(
                     bg_rect.top(), min(new_pos.y(), bg_rect.bottom() - rect.height())
                 )
-                return QPointF(x, y)  # ここは補正値を返す必要があるため return して良い
-
-        if change == QGraphicsItem.ItemPositionHasChanged:
-            # 2. 確定後の座標を同期させる
-            if not getattr(self, "_block_sync", False):
-                self.geometryChanged.emit(self)
-
-        if change == QGraphicsItem.ItemPositionChange and self.scene():
-            # 1. 移動制限：PDFの範囲内に収める
-            new_pos = value  # cropbox.pos()の移動先
-            bg_rect = self.get_bg_rect()
-            if bg_rect:
-                rect = self.rect()
-                x = max(
-                    bg_rect.left(), min(new_pos.x(), bg_rect.right() - rect.width())
-                )
-                y = max(
-                    bg_rect.top(), min(new_pos.y(), bg_rect.bottom() - rect.height())
-                )
-                return QPointF(x, y)  # ここは補正値を返す必要があるため return して良い
+                return QPointF(x, y)
 
         if change == QGraphicsItem.ItemPositionHasChanged:
             # 2. 確定後の座標を同期させる
