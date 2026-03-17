@@ -594,32 +594,40 @@ class CandidateBox(QGraphicsRectItem):
 
     def __init__(self, rect, parent=None):
         super().__init__(rect, parent)
-        self.is_active = True  # 採用状態かどうか
+        self.is_active = False  # 初期状態は不採用
+        self.is_hovering = False
         self.setAcceptHoverEvents(True)
         self.setZValue(100)  # 通常の枠より上に表示
         self.update_style()
 
     def update_style(self):
+        # ホバー中は枠線を太くする
+        width = 4 if self.is_hovering else 2
+        
         if self.is_active:
             # 採用：明るい黄色
-            self.setPen(QPen(QColor("#FFD700"), 2, Qt.SolidLine))
+            color = QColor("#FFD700")
+            self.setPen(QPen(color, width, Qt.SolidLine))
             self.setBrush(QBrush(QColor(255, 215, 0, 80)))
         else:
             # 不採用：薄いグレー
-            self.setPen(QPen(QColor("#CCCCCC"), 1, Qt.DashLine))
+            color = QColor("#CCCCCC")
+            self.setPen(QPen(color, width, Qt.DashLine))
             self.setBrush(QBrush(QColor(200, 200, 200, 40)))
 
     def toggle(self):
         self.is_active = not self.is_active
         self.update_style()
 
-    def mousePressEvent(self, event):
-        # クリックされたら状態を反転
-        if event.button() == Qt.LeftButton:
-            self.toggle()
-            event.accept()
-        else:
-            super().mousePressEvent(event)
+    def hoverEnterEvent(self, event):
+        self.is_hovering = True
+        self.update_style()
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.is_hovering = False
+        self.update_style()
+        super().hoverLeaveEvent(event)
 
 
 class HoverMenuBar(QMenuBar):

@@ -112,6 +112,10 @@ class PdfGraphicsView(QGraphicsView):
         
         self.candidate_panel.hide()
 
+        # 連打（切り替え）用
+        self.last_click_pos = QPointF()
+        self.click_rotation_index = 0
+
     def detectItemByTag(self, tag):
         for item in self.scene.items():
             # プロパティがあれば使い、なければ data() から取得する
@@ -312,12 +316,26 @@ class PdfGraphicsView(QGraphicsView):
 
     def mousePressEvent(self, event):
         # 候補選択モード中は、候補アイテムのクリックイベントを優先
-        if self.is_candidate_mode:
-            item = self.itemAt(event.position().toPoint())
-            if isinstance(item, CandidateBox):
-                item.toggle()
+        if self.is_candidate_mode and event.button() == Qt.LeftButton:
+            click_pos = event.position().toPoint()
+            # クリックした位置にある全てのアイテムを取得（CandidateBoxのみ抽出）
+            items = self.items(click_pos)
+            candidates = [it for it in items if isinstance(it, CandidateBox)]
+            
+            if candidates:
+                # 前回のクリック位置と近ければ「連打」とみなして対象を切り替える
+                scene_pos = self.mapToScene(click_pos)
+                if (scene_pos - self.last_click_pos).manhattanLength() < 5:
+                    self.click_rotation_index = (self.click_rotation_index + 1) % len(candidates)
+                else:
+                    self.click_rotation_index = 0
+                
+                self.last_click_pos = scene_pos
+                
+                # ZValue順（面積小＝上）に並んでいるはずなので、インデックスに沿ってtoggle
+                candidates[self.click_rotation_index].toggle()
                 return
-            # 背景クリックは無視（CandidateBoxが自身のイベントで処理する）
+            
             super().mousePressEvent(event)
             return
 
@@ -823,20 +841,30 @@ class PdfGraphicsView(QGraphicsView):
             QMessageBox.information(self, "情報", "このページにはベクター形式の枠線が見つかりませんでした。")
             return
 
-        # 2. 候補表示用アイテムを作成
-        self.is_candidate_mode = True
+        # 2. 面積（シーン上のピクセル数）に基づいてソート
+        # 候補表示用データのリストを作成 [(area, x, y, w, h), ...]
+        rect_data = []
         for x0, y0, x1, y1 in pdf_rects:
-            scene_left = x0 / self.scale_factor
-            scene_top = y0 / self.scale_factor
-            scene_w = (x1 - x0) / self.scale_factor
-            scene_h = (y1 - y0) / self.scale_factor
+            w = (x1 - x0) / self.scale_factor
+            h = (y1 - y0) / self.scale_factor
+            rect_data.append((w * h, x0 / self.scale_factor, y0 / self.scale_factor, w, h))
+        
+        # 面積の降順（大きい順）にソート。後で ZValue を設定する際
+        # 大きいものほど ZValue を低く、小さいものほど ZValue を高くするため。
+        rect_data.sort(key=lambda x: x[0], reverse=True)
 
-            c_box = CandidateBox(QRectF(0, 0, scene_w, scene_h))
-            c_box.setPos(scene_left, scene_top)
+        # 3. 候補表示用アイテムを作成
+        self.is_candidate_mode = True
+        base_z = 100
+        for i, (area, x, y, w, h) in enumerate(rect_data):
+            c_box = CandidateBox(QRectF(0, 0, w, h))
+            c_box.setPos(x, y)
+            # zValue を少しずつ上げて、小さいもの（リストの後ろの方）が手間に来るようにする
+            c_box.setZValue(base_z + (i * 0.1))
             self.scene.addItem(c_box)
             self.candidate_items.append(c_box)
 
-        # 3. ボタンパネルを表示
+        # 4. ボタンパネルを表示
         self.candidate_panel.show()
         self.candidate_panel.adjustSize()
         self.update_candidate_panel_pos()
