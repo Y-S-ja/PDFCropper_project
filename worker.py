@@ -9,6 +9,7 @@ class PreviewWorker(QObject):
     """
 
     page_ready = Signal(list)  # [(page_idx, QImageのリスト), ...] のリスト
+    progress_updated = Signal(int, int)  # current, total
     finished = Signal()
     error = Signal(str)
 
@@ -61,6 +62,9 @@ class PreviewWorker(QObject):
 
                     # バッチに追加
                     batch.append((page_idx, processed_images))
+
+                    # 進捗を通知
+                    self.progress_updated.emit(page_idx + 1, total_pages)
 
                     # 一定量たまったら送信
                     if len(batch) >= batch_size:
