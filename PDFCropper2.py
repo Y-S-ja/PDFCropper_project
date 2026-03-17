@@ -11,13 +11,18 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem,
     QTabWidget,
     QDockWidget,
+    QStackedWidget,
+    QWidget,
+    QVBoxLayout,
+    QToolBar,
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
-from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack
+from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
 from myModule import myCropBox, myBadge, myIntroductionText
 from myDockContent import PreviewPanel, PropertyPanel
 from pdf_processor import PdfProcessor
 from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
+from preview_view import PdfPreviewView
 
 
 class PdfGraphicsView(QGraphicsView):
@@ -168,10 +173,6 @@ class PdfGraphicsView(QGraphicsView):
             if file_path.lower().endswith(".pdf"):
                 self.fileDropped.emit(file_path)
                 break
-
-    # def dragLeaveEvent(self, event):
-    #     # [追加] 出ていく時も親クラスに教えてあげる
-    #     super().dragLeaveEvent(event)
 
     def wheelEvent(self, event):
         if event.modifiers() == Qt.ControlModifier:
@@ -698,6 +699,34 @@ class PdfGraphicsView(QGraphicsView):
         self.add_template_boxes(data)
 
 
+class PdfTabContainer(QStackedWidget):
+    """
+    1つのタブ内で「編集画面」と「プレビュー画面」を管理するコンテナ。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.editor = PdfGraphicsView()
+        self.preview = PdfPreviewView()
+
+        self.addWidget(self.editor)
+        self.addWidget(self.preview)
+
+    def set_mode(self, preview_mode: bool):
+        """表示モードを切り替える"""
+        if preview_mode:
+            # プレビューに切り替える直前に内容を最新にする
+            self.preview.update_previews(
+                self.editor.pdf_path, self.editor.rects, self.editor.scale_factor
+            )
+            self.setCurrentWidget(self.preview)
+        else:
+            self.setCurrentWidget(self.editor)
+
+    def is_preview_mode(self):
+        return self.currentWidget() == self.preview
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -757,6 +786,22 @@ class MainWindow(QMainWindow):
                 self.current_view().clear_selections() if self.current_view() else None
             )
         )
+
+        # 表示モード切替ツールバー
+        self.mode_toolbar = self.addToolBar("表示モード")
+        self.mode_toolbar.setMovable(False)
+
+        self.action_editor = QAction("編集モード", self)
+        self.action_editor.setCheckable(True)
+        self.action_editor.setChecked(True)
+        self.action_editor.triggered.connect(lambda: self._handle_mode_change(False))
+
+        self.action_preview = QAction("プレビューモード", self)
+        self.action_preview.setCheckable(True)
+        self.action_preview.triggered.connect(lambda: self._handle_mode_change(True))
+
+        self.mode_toolbar.addAction(self.action_editor)
+        self.mode_toolbar.addAction(self.action_preview)
 
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
@@ -829,6 +874,15 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, index):
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
         self.update_window_title()
+        container = self.current_tab_container()
+        if not container:
+            return
+
+        # ツールバーのボタン状態をタブに合わせる
+        is_preview = container.is_preview_mode()
+        self.action_editor.setChecked(not is_preview)
+        self.action_preview.setChecked(is_preview)
+
         view = self.current_view()
         if view:
             # 初期状態を反映
@@ -840,6 +894,14 @@ class MainWindow(QMainWindow):
             self.prop_panel.set_target(None)
             self.prop_panel.update_list([])
             self.preview_panel.update_previews(None)
+
+    def _handle_mode_change(self, preview_mode):
+        """ツールバーでのモード切替を処理"""
+        container = self.current_tab_container()
+        if container:
+            container.set_mode(preview_mode)
+            self.action_editor.setChecked(not preview_mode)
+            self.action_preview.setChecked(preview_mode)
 
     def _handle_selection_changed(self, item):
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
@@ -870,9 +932,12 @@ class MainWindow(QMainWindow):
         if view:
             view.sync_symmetry = enabled
 
-    def current_view(self):
-        """現在のアクティブなタブにあるビューを返す"""
+    def current_tab_container(self):
         return self.tab_widget.currentWidget()
+
+    def current_view(self):
+        container = self.current_tab_container()
+        return container.editor if container else None
 
     def add_new_tab(self):
         """新しいタブを追加する。空いている最小の番号を割り振る"""
@@ -892,13 +957,14 @@ class MainWindow(QMainWindow):
         while new_num in used_numbers:
             new_num += 1
 
-        new_view = PdfGraphicsView()
+        new_container = PdfTabContainer()
+        new_view = new_container.editor
         new_view.fileDropped.connect(self.load_new_pdf)
         # 信号を一度だけ中継用メソッドに接続する（disconnect不要にするため）
         new_view.selectionChanged.connect(self._handle_selection_changed)
         new_view.rectsChanged.connect(self._handle_rects_changed)
 
-        index = self.tab_widget.addTab(new_view, f"無題 {new_num}")
+        index = self.tab_widget.addTab(new_container, f"無題 {new_num}")
         self.tab_widget.setCurrentIndex(index)
         self.update_window_title()
         return new_view
@@ -1015,7 +1081,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "エラー", str(e))
 
 
-app = QApplication(sys.argv)
-window = MainWindow()
-window.show()
-sys.exit(app.exec())
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
