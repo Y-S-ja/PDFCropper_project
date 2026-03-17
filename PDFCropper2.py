@@ -192,6 +192,55 @@ class PdfGraphicsView(QGraphicsView):
         else:
             super().wheelEvent(event)
 
+    def keyPressEvent(self, event):
+        """方向キーによる枠の微調整"""
+        # 選択中のアイテム（myCropBox型）を取得
+        selected_items = [
+            i for i in self.scene.selectedItems() if isinstance(i, myCropBox)
+        ]
+        if not selected_items:
+            super().keyPressEvent(event)
+            return
+
+        # 移動量の設定 (Shift併用で10px, 通常1px)
+        step = 10 if event.modifiers() & Qt.ShiftModifier else 1
+        dx, dy = 0, 0
+
+        if event.key() == Qt.Key_Left:
+            dx = -step
+        elif event.key() == Qt.Key_Right:
+            dx = step
+        elif event.key() == Qt.Key_Up:
+            dy = -step
+        elif event.key() == Qt.Key_Down:
+            dy = step
+        else:
+            super().keyPressEvent(event)
+            return
+
+        # --- 移動とUndo用の履歴記録 ---
+        # 1. 移動前の状態を記録
+        pre_states = self._get_rect_states_map()
+
+        # 2. 移動実行 (setPos により同期ロジックも自動で走る)
+        for item in selected_items:
+            item.setPos(item.pos() + QPointF(dx, dy))
+
+        # 3. 移動後の状態を確認
+        new_states = self._get_rect_states_map()
+        transforms = []
+        for item, (old_p, old_r) in pre_states.items():
+            if item in new_states:
+                new_p, new_r = new_states[item]
+                if old_p != new_p or old_r != new_r:
+                    transforms.append((item, old_p, old_r, new_p, new_r))
+
+        # 4. 差分があればコマンドを積む
+        if transforms:
+            self.undo_stack.push(TransformCommand(self, transforms, "キー操作による移動"))
+
+        event.accept()
+
     def get_pdf_rect(self):
         """PDF画像のシーン座標での矩形を返す"""
         if hasattr(self, "pdf_item") and self.pdf_item:
