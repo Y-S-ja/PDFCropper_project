@@ -55,19 +55,6 @@ class PdfProcessor:
                 new_doc.save(output_path)
 
     @staticmethod
-    def generate_all_previews(
-        pdf_path: str, crop_coords: list, scale_factor: float, preview_dpi: int = 144
-    ):
-        """
-        全ページをスキャンし、1ページ分の画像リストを順番に yield するジェネレータ。
-        """
-        with fitz.open(pdf_path) as doc:
-            for page_index in range(len(doc)):
-                yield page_index, PdfProcessor._get_previews_for_page(
-                    doc, page_index, crop_coords, scale_factor, preview_dpi
-                )
-
-    @staticmethod
     def generate_page_preview(
         pdf_path: str,
         page_index: int,
@@ -82,15 +69,16 @@ class PdfProcessor:
             )
 
     @staticmethod
-    def _get_previews_for_page(
-        doc, page_index, crop_coords, scale_factor, preview_dpi
-    ):
+    def _get_previews_for_page(doc, page_index, crop_coords, scale_factor, preview_dpi):
         """1ページ分のプレビュー画像を抽出する内部関数"""
         page = doc[page_index]
+        page_rect = page.rect
         page_images = []
 
         for rect in crop_coords:
             left, top, right, bottom = rect
+
+            # シーン座標をPDFのポイント座標に変換
             fitz_rect = fitz.Rect(
                 left * scale_factor,
                 top * scale_factor,
@@ -98,17 +86,24 @@ class PdfProcessor:
                 bottom * scale_factor,
             )
 
-            if fitz_rect.is_empty:
+            # ページ範囲内にクランプ（はみ出し防止）
+            fitz_rect.intersect(page_rect)
+
+            if fitz_rect.is_empty or fitz_rect.width < 1 or fitz_rect.height < 1:
                 page_images.append(None)
                 continue
 
-            pix = page.get_pixmap(clip=fitz_rect, dpi=preview_dpi)
-            img = QImage(
-                pix.samples,
-                pix.width,
-                pix.height,
-                pix.stride,
-                QImage.Format_RGB888,
-            ).copy()  # データをコピーして安全性を持たせる
-            page_images.append(img)
+            try:
+                pix = page.get_pixmap(clip=fitz_rect, dpi=preview_dpi)
+                img = QImage(
+                    pix.samples,
+                    pix.width,
+                    pix.height,
+                    pix.stride,
+                    QImage.Format_RGB888,
+                ).copy()
+                page_images.append(img)
+            except Exception:
+                page_images.append(None)
+
         return page_images

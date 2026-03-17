@@ -24,7 +24,6 @@ class PdfPreviewView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.zoom_factor = 1.0
-        self.preview_items = []
 
         # レイアウト
         self.main_layout = QVBoxLayout(self)
@@ -107,9 +106,17 @@ class PdfPreviewView(QWidget):
         """生成処理を安全に停止する"""
         if self.worker:
             self.worker.cancel()
-        if self.thread and self.thread.isRunning():
-            self.thread.quit()
-            self.thread.wait()
+
+        try:
+            # 処理が正常終了して C++ 側のスレッドオブジェクトが既に破棄されている場合、
+            # isRunning() の呼び出しで RuntimeError が発生するため保護する
+            if self.thread and self.thread.isRunning():
+                self.thread.quit()
+                self.thread.wait()
+        except RuntimeError as e:
+            print(f"Thread is already stopped: {e}")
+            pass
+
         self.worker = None
         self.thread = None
 
@@ -122,7 +129,6 @@ class PdfPreviewView(QWidget):
         # シーンをクリア
         self.scene.clear()
         self.page_slots.clear()
-        self.preview_items.clear()
 
         # ズームをリセット
         self.view.setTransform(QTransform())
@@ -181,10 +187,18 @@ class PdfPreviewView(QWidget):
                 text_item.setPos((w - text_w) / 2, current_y + (h - text_h) / 2)
                 self.scene.addItem(text_item)
 
-                self.page_slots[(page_idx, rect_idx)] = (rect_item, text_item, current_y, w, h)
+                self.page_slots[(page_idx, rect_idx)] = (
+                    rect_item,
+                    text_item,
+                    current_y,
+                    w,
+                    h,
+                )
                 current_y += h + spacing
 
-        self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-50, -50, 50, 50))
+        self.scene.setSceneRect(
+            self.scene.itemsBoundingRect().adjusted(-50, -50, 50, 50)
+        )
 
         # 別スレッドでの実行準備
         self.thread = QThread()
@@ -195,16 +209,19 @@ class PdfPreviewView(QWidget):
         self.worker.page_ready.connect(self._add_page_images)
         self.worker.progress_updated.connect(self._update_progress)
         self.worker.finished.connect(self._on_finished)
+        
+        # 終了処理の接続（スレッドを止めるだけにする）
         self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
+        
         self.thread.start()
 
     def _update_progress(self, current, total):
         """プログレスバーの更新"""
         self.progress_bar.setValue(current)
         percent = int((current / total) * 100)
-        self.progress_bar.setFormat(f"{current} / {total} ページを処理中... ({percent}%)")
+        self.progress_bar.setFormat(
+            f"{current} / {total} ページを処理中... ({percent}%)"
+        )
 
     def _on_finished(self):
         """処理完了時の処理"""
@@ -212,6 +229,9 @@ class PdfPreviewView(QWidget):
 
     def _add_page_images(self, batch_data):
         """Workerから届いたバッチ（複数ページ分）の画像をシーン上のプレースホルダーの位置に配置する"""
+        if not batch_data:
+            return
+            
         for page_idx, images in batch_data:
             for i, q_img in enumerate(images):
                 if q_img is None:
@@ -235,4 +255,3 @@ class PdfPreviewView(QWidget):
                 self.scene.addItem(pix_item)
                 rect_item.setVisible(False)
                 text_item.setVisible(False)
-                self.preview_items.append(pix_item)

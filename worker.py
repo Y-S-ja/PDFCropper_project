@@ -30,12 +30,15 @@ class PreviewWorker(QObject):
         try:
             with fitz.open(self.pdf_path) as doc:
                 total_pages = len(doc)
+                if total_pages == 0:
+                    return
+
                 batch = []
                 batch_size = 5
 
                 for page_idx in range(total_pages):
                     if self._is_cancelled:
-                        break
+                        return
 
                     # 1ページ分の抽出 (QImageのリストが返ってくる)
                     images = PdfProcessor._get_previews_for_page(
@@ -80,7 +83,7 @@ class PreviewWorker(QObject):
                 if batch and not self._is_cancelled:
                     self.page_ready.emit(batch)
 
-            self.finished.emit()
-
         except Exception as e:
             self.error.emit(str(e))
+        finally:
+            self.finished.emit()
