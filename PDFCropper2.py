@@ -50,6 +50,7 @@ class PdfGraphicsView(QGraphicsView):
         self.new_rect = None  # ドラッグ中の枠
         self.rects = []  # 確定した枠（QGraphicsRectItem）のリスト
         self.start_pos = None
+        self.scale_factor = 1.0
 
         self.pdf_path = None  # PDFファイルのパス
         self.pdf_doc = None  # PDFドキュメントオブジェクト
