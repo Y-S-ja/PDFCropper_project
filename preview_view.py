@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QFrame
-from PySide6.QtCore import Qt, QCoreApplication
+from PySide6.QtCore import Qt, QCoreApplication, QEvent
 from pdf_processor import PdfProcessor
 
 
@@ -29,6 +29,20 @@ class PdfPreviewView(QWidget):
 
         self.scroll.setWidget(self.container)
         layout.addWidget(self.scroll)
+
+        # スクロールを伴わないズームを実現するためにイベントフィルタを設置
+        self.scroll.viewport().installEventFilter(self)
+
+    def eventFilter(self, source, event):
+        """イベントを横取りして Ctrl+スクロール の際のスクロールを止める"""
+        if source == self.scroll.viewport() and event.type() == QEvent.Wheel:
+            if event.modifiers() == Qt.ControlModifier:
+                # 自前のホイールイベント（ズーム）を呼び出す
+                self.wheelEvent(event)
+                # Trueを返すと、そのイベントはここで消費され、
+                # スクロールエリア自体のスクロール処理は走らない
+                return True
+        return super().eventFilter(source, event)
 
     def wheelEvent(self, event):
         """Ctrl + スクロールでズーム"""
