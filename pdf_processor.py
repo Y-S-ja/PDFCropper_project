@@ -25,6 +25,55 @@ class PdfProcessor:
             return pixmap, original_width
 
     @staticmethod
+    def detect_frames(pdf_path: str, page_index: int = 0) -> list:
+        """
+        PDF内のベクターデータを解析して矩形枠を検知する (方針1)
+        """
+        detected_rects = []
+        try:
+            with fitz.open(pdf_path) as doc:
+                page = doc[page_index]
+                page_rect = page.rect
+                # ページ上の全ての描画オブジェクトを取得
+                drawings = page.get_drawings()
+
+                for d in drawings:
+                    r = d["rect"]
+
+                    # 1. フィルタリング：ページの端に近すぎる全体枠（外枠）は除外
+                    if (
+                        r.width > page_rect.width * 0.98
+                        and r.height > page_rect.height * 0.98
+                    ):
+                        continue
+
+                    # 2. フィルタリング：小さすぎるゴミ（10pt以下）は除外
+                    if r.width < 10 or r.height < 10:
+                        continue
+
+                    # 3. 重複排除：ほぼ同じ位置にある枠は1つにまとめる
+                    is_duplicate = False
+                    for existing in detected_rects:
+                        if (
+                            abs(existing.x0 - r.x0) < 2
+                            and abs(existing.y0 - r.y0) < 2
+                            and abs(existing.x1 - r.x1) < 2
+                            and abs(existing.y1 - r.y1) < 2
+                        ):
+                            is_duplicate = True
+                            break
+
+                    if not is_duplicate:
+                        detected_rects.append(r)
+
+            # (left, top, right, bottom) の形式で返す
+            return [(r.x0, r.y0, r.x1, r.y1) for r in detected_rects]
+
+        except Exception as e:
+            print(f"Error detecting frames: {e}")
+            return []
+
+    @staticmethod
     def crop_and_save(
         input_path: str, output_path: str, crop_rects: list, scale_factor: float
     ):

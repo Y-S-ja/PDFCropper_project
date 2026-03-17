@@ -746,6 +746,59 @@ class PdfGraphicsView(QGraphicsView):
         ]
         self.add_template_boxes(data)
 
+    def auto_detect_frames(self):
+        """現在のページから枠線を自動検知して追加する"""
+        if not self.pdf_path:
+            return
+
+        # 1. PdfProcessor を使ってベクターデータから矩形を取得 (PDFポイント単位)
+        pdf_rects = PdfProcessor.detect_frames(self.pdf_path, self.current_page_index)
+
+        if not pdf_rects:
+             # 通知などは MainWindow 側で行うのが理想的だが、一旦 print か
+            print("No frames detected in the vector data.")
+            return
+
+        new_boxes = []
+        for x0, y0, x1, y1 in pdf_rects:
+            # 2. PDFポイント座標 を シーン上のピクセル座標 に変換
+            # pts / scale_factor = px
+            scene_left = x0 / self.scale_factor
+            scene_top = y0 / self.scale_factor
+            scene_w = (x1 - x0) / self.scale_factor
+            scene_h = (y1 - y0) / self.scale_factor
+
+            # 3. myCropBox インスタンスを作成
+            size_rect = QRectF(0, 0, scene_w, scene_h)
+            box = myCropBox(size_rect)
+            box.setPos(scene_left, scene_top)
+
+            # スタイル設定（AddCommand 側でも設定されるが、一旦統一感のために）
+            pen = QPen(QColor(0, 120, 215), 3)
+            pen.setCosmetic(True)
+            box.setPen(pen)
+            box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+
+            box.tag = "selection_rect"
+            self.rect_count += 1
+            box.rect_id = self.rect_count
+
+            # 信号の接続
+            box.geometryChanged.connect(self._handle_item_geometry_changed)
+            box.deltaResized.connect(self._handle_item_delta_resized)
+            box.transformationFinished.connect(self._handle_transformation_finished)
+
+            # 番号バッジ
+            temp_idx = len(self.rects) + len(new_boxes) + 1
+            badge = myBadge(temp_idx, parent=box)
+            badge.setPos(size_rect.topLeft())
+
+            new_boxes.append(box)
+
+        # 4. まとめて Undo 履歴に追加
+        if new_boxes:
+            self.undo_stack.push(AddCommand(self, new_boxes, "枠線の自動認識"))
+
 
 class PdfTabContainer(QStackedWidget):
     """
@@ -906,6 +959,13 @@ class MainWindow(QMainWindow):
         btn_4.clicked.connect(self._apply_template_4)
         self.template_toolbar.addWidget(btn_4)
 
+        self.template_toolbar.addSeparator()
+
+        btn_auto = QPushButton("✨ 枠線を自動認識")
+        btn_auto.setStyleSheet("font-weight: bold; color: #005a9e;")
+        btn_auto.clicked.connect(self._handle_auto_detect)
+        self.template_toolbar.addWidget(btn_auto)
+
     def _apply_template_2v(self):
         view = self.current_view()
         if view:
@@ -920,6 +980,11 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if view:
             view.add_template_4()
+
+    def _handle_auto_detect(self):
+        view = self.current_view()
+        if view:
+            view.auto_detect_frames()
 
     def _on_tab_changed(self, index):
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
