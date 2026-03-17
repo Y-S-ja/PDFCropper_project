@@ -12,9 +12,6 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QDockWidget,
     QStackedWidget,
-    QWidget,
-    QVBoxLayout,
-    QToolBar,
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
