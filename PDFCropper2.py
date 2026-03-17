@@ -244,7 +244,8 @@ class PdfGraphicsView(QGraphicsView):
             # アクション開始前のアイテムの状態を個別に保持
             self.pre_action_states = self._get_rect_states_map()
 
-            self.start_pos = self.mapToScene(event.position().toPoint())
+            scene_pos = self.mapToScene(event.position().toPoint())
+            self.start_pos = scene_pos
 
             if target_cropbox:
                 print(
@@ -253,16 +254,30 @@ class PdfGraphicsView(QGraphicsView):
                 self.new_rect = None
                 super().mousePressEvent(event)
             else:
+                # --- 新規作成の開始判定 ---
+                pdf_rect = self.get_pdf_rect()
+                # 境界から30px以内なら「付近」とみなしてスナップさせる
+                snap_threshold = 30
+                active_area = pdf_rect.adjusted(
+                    -snap_threshold, -snap_threshold, snap_threshold, snap_threshold
+                )
+
+                if not active_area.contains(scene_pos):
+                    # 遠すぎるか、案内テキスト上の場合は無視
+                    print("Left-clicked: Far Background (Ignoring)")
+                    self.start_pos = None
+                    return
+
+                # 付近ならクランプ（吸着）して開始位置を確定
+                self.start_pos = self.clamp_pos(scene_pos)
+
                 self.scene.clearSelection()
                 # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
                 self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
                 self.new_rect.confirmed = False  # 作成中モード
                 self.new_rect.setPos(self.start_pos)
                 self.scene.addItem(self.new_rect)
-                if is_intro_text:
-                    print("Left-clicked: Intro Text (Ignoring)")
-                else:
-                    print("Left-clicked: Background (Creating new box)")
+                print("Left-clicked: Near Background (Snapping and creating new box)")
 
         else:
             super().mousePressEvent(event)
