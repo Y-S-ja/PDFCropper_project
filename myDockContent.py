@@ -292,3 +292,92 @@ class PreviewPanel(QWidget):
                             new_width, Qt.SmoothTransformation
                         )
                         label.setPixmap(QPixmap.fromImage(scaled_q_img))
+
+
+class AssetShelfWidget(QFrame):
+    """
+    素材棚のUIを司るウィジェット
+    """
+
+    assetSelected = Signal(str)  # ダブルクリックされた素材IDを通知
+
+    def __init__(self, asset_mgr: AssetManager):
+        super().__init__()
+        self.asset_mgr = asset_mgr
+        self.show_hidden = False  # 現在非表示リストを見ているか
+
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(5, 5, 5, 5)
+
+        # 上部：切り替えボタン
+        self.toggle_btn = QPushButton("👁 表示中の素材")
+        self.toggle_btn.setCheckable(True)
+        self.toggle_btn.clicked.connect(self.on_toggle_view)
+        self.layout.addWidget(self.toggle_btn)
+
+        # リスト
+        self.list_widget = QListWidget()
+        self.list_widget.setDragDropMode(QListWidget.InternalMove)
+        self.list_widget.model().rowsMoved.connect(self.on_rows_moved)
+        self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
+        self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.layout.addWidget(self.list_widget)
+
+        self.asset_mgr.assets_changed.connect(self.refresh_list)
+
+    def on_toggle_view(self):
+        self.show_hidden = self.toggle_btn.isChecked()
+        if self.show_hidden:
+            self.toggle_btn.setText("🚫 非表示アイテムを表示中")
+            self.toggle_btn.setStyleSheet("background-color: #ff5722; color: white;")
+        else:
+            self.toggle_btn.setText("👁 表示中の素材")
+            self.toggle_btn.setStyleSheet("")
+        self.refresh_list()
+
+    def refresh_list(self):
+        self.list_widget.clear()
+        for asset in self.asset_mgr.all_assets():
+            # 表示フィルタ（通常時は visible=True のみ、トグル時は visible=False のみ）
+            if asset.is_visible == (not self.show_hidden):
+                icon = "📄" if isinstance(asset, SourceAsset) else "✂️"
+                if isinstance(asset, JoinedAsset):
+                    icon = "🔗"
+
+                item = QListWidgetItem(f"{icon} {asset.name}")
+                item.setData(Qt.UserRole, asset.id)
+                self.list_widget.addItem(item)
+
+    def on_rows_moved(self, parent, start, end, destination, row):
+        # 内部的なドラッグ移動を AssetManager のデータ順序に反映
+        new_order = []
+        for i in range(self.list_widget.count()):
+            new_order.append(self.list_widget.item(i).data(Qt.UserRole))
+        self.asset_mgr._order_ids = new_order
+
+    def on_item_double_clicked(self, item):
+        self.assetSelected.emit(item.data(Qt.UserRole))
+
+    def show_context_menu(self, pos):
+        item = self.list_widget.itemAt(pos)
+        if not item:
+            return
+        asset_id = item.data(Qt.UserRole)
+
+        menu = QMenu()
+        if not self.show_hidden:
+            hide_act = menu.addAction("棚から隠す")
+            hide_act.triggered.connect(
+                lambda: self.asset_mgr.toggle_visibility(asset_id)
+            )
+        else:
+            show_act = menu.addAction("棚に戻す")
+            show_act.triggered.connect(
+                lambda: self.asset_mgr.toggle_visibility(asset_id)
+            )
+
+        remove_act = menu.addAction("完全に削除する")
+        remove_act.triggered.connect(lambda: self.asset_mgr.unregister_asset(asset_id))
+
+        menu.exec(self.list_widget.mapToGlobal(pos))
