@@ -14,6 +14,7 @@ class WorkspaceAsset:
         self.id = str(uuid.uuid4())
         self.name = name
         self.is_intermediate = False  # 加工品かどうかの識別
+        self.is_visible = True  # 棚に表示するかどうか
 
     def __repr__(self):
         return f"<{self.__class__.__name__} id={self.id[:6]} name={self.name}>"
@@ -90,6 +91,20 @@ class AssetManager(QObject):
     def all_assets(self) -> List[WorkspaceAsset]:
         """棚にある全アセットを表示順通りにリストで取得。"""
         return [self._assets_dict[aid] for aid in self._order_ids]
+
+    def move_asset(self, old_idx: int, new_idx: int):
+        """アセットの表示順序を入れ替える。"""
+        if 0 <= old_idx < len(self._order_ids) and 0 <= new_idx < len(self._order_ids):
+            asset_id = self._order_ids.pop(old_idx)
+            self._order_ids.insert(new_idx, asset_id)
+            self.assets_changed.emit()
+
+    def toggle_visibility(self, asset_id: str):
+        """アセットの表示/非表示を切り替える。"""
+        asset = self.get_asset(asset_id)
+        if asset:
+            asset.is_visible = not asset.is_visible
+            self.assets_changed.emit()
 
     def create_source(self, file_path: str):
         """外部ファイルから生の素材アセットを生成・登録する。"""
