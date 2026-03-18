@@ -601,18 +601,20 @@ class CandidateBox(QGraphicsRectItem):
         self.update_style()
 
     def update_style(self):
-        # ホバー中は枠線を太くする
+        # ホバー中は枠線を太く、色を変更
         width = 4 if self.is_hovering else 2
         
         if self.is_active:
-            # 採用：明るい黄色
-            color = QColor("#FFD700")
+            # 採用：明るい黄色 (ホバー時はオレンジ)
+            color = QColor("#FF8C00") if self.is_hovering else QColor("#FFD700")
             self.setPen(QPen(color, width, Qt.SolidLine))
             self.setBrush(QBrush(QColor(255, 215, 0, 80)))
         else:
-            # 不採用：薄いグレー
-            color = QColor("#CCCCCC")
-            self.setPen(QPen(color, width, Qt.DashLine))
+            # 不採用：薄いグレー (ホバー時は水色)
+            color = QColor("#00BFFF") if self.is_hovering else QColor("#CCCCCC")
+            # ホバー時は実線にして視認性を高める
+            style = Qt.SolidLine if self.is_hovering else Qt.DashLine
+            self.setPen(QPen(color, width, style))
             self.setBrush(QBrush(QColor(200, 200, 200, 40)))
 
     def toggle(self):
