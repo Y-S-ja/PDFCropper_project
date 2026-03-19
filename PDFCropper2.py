@@ -18,7 +18,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
 from myModule import myCropBox, myBadge, myIntroductionText, CandidateBox
-from myDockContent import PreviewPanel, PropertyPanel
+from workspace_models import (
+    AssetManager,
+    SourceAsset,
+    CroppedAsset,
+    JoinedAsset,
+    WorkspaceAsset,
+)
+from myDockContent import PreviewPanel, PropertyPanel, AssetShelfWidget
 from pdf_processor import PdfProcessor
 from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
 from preview_view import PdfPreviewView
@@ -410,6 +417,29 @@ class PdfGraphicsView(QGraphicsView):
                 print("Left-clicked: Near Background (Snapping and creating new box)")
         else:
             super().mousePressEvent(event)
+
+    def ask_discard_changes(self) -> bool:
+        """未保存の枠がある場合、破棄していいか確認する"""
+        if self.rects:
+            ret = QMessageBox.question(
+                self,
+                "確認",
+                "編集中の枠が破棄されますが、新しいファイルを開きますか？\n（保存されていない変更は失われます）",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            return ret == QMessageBox.Yes
+        return True
+
+    def set_asset(self, asset: WorkspaceAsset):
+        """アセットを読み込み、デスクを初期化する"""
+        if not asset or not isinstance(asset, SourceAsset):
+            # 現時点ではSourceのみ対応
+            print(f"Asset {asset} is not a SourceAsset")
+            return
+
+        self.pdf_path = asset.path
+        self.load_pdf_page(asset.path)
+        # TODO: asset に既に切り抜き指示があれば読み込む機能をフェーズ3で実装
 
     def mouseMoveEvent(self, event):
         if self.start_pos and self.new_rect:
@@ -957,8 +987,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PDFCropper2")
-        self.resize(1000, 800)
+        self.resize(1200, 850)
         self.setAcceptDrops(True)  # ドラッグ＆ドロップを許可
+
+        # 素材管理マネージャー
+        self.asset_mgr = AssetManager()
 
         # カスタムメニューバーを使用
         # self.setMenuBar(HoverMenuBar(self))
@@ -1035,6 +1068,16 @@ class MainWindow(QMainWindow):
         # タブ切り替え時にタイトルとプロパティの接続を更新
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self.tab_widget)
+
+        # 素材棚サイドバーを構築
+        self.shelf_dock = QDockWidget("素材棚", self)
+        self.shelf_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
+        self.shelf_widget = AssetShelfWidget(self.asset_mgr)
+        self.shelf_dock.setWidget(self.shelf_widget)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.shelf_dock)
+
+        # 棚のアイテムがダブルクリックされたときの処理
+        self.shelf_widget.assetSelected.connect(self.on_asset_from_shelf)
 
         # ドックウィジェット
         # ドックウィジェットのタブ位置を上部に設定
@@ -1232,10 +1275,32 @@ class MainWindow(QMainWindow):
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "PDFを開く", "", "PDF Files (*.pdf)"
+            self, "素材を追加", "", "PDF/Image Files (*.pdf *.png *.jpg *.jpeg *.bmp)"
         )
         if file_path:
-            self.load_new_pdf(file_path)
+            # マネージャーを通じて棚へ追加
+            self.asset_mgr.create_source(file_path)
+
+    def on_asset_from_shelf(self, asset_id: str):
+        asset = self.asset_mgr.get_asset(asset_id)
+        if not asset:
+            print(f"Asset {asset_id} not found")
+            return
+
+        # 切り抜きデスク（現在は一画面なのでgraphics_view）
+        view = self.current_view()
+        if not view:
+            print("No view found")
+            return
+
+        # 安全確認をしてからロード
+        if view.ask_discard_changes():
+            print(f"Loading asset {asset.path}")
+            view.set_asset(asset)
+            # 名前の同期
+            current_index = self.tab_widget.currentIndex()
+            self.tab_widget.setTabText(current_index, asset.name)
+            self.update_window_title()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
