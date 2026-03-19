@@ -10,11 +10,20 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QFrame,
     QCheckBox,
+    QPushButton,
+    QMenu,
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
 from PySide6.QtGui import QPixmap
 from pdf_processor import PdfProcessor
 from myModule import myCropBox
+from workspace_models import (
+    AssetManager,
+    SourceAsset,
+    CroppedAsset,
+    JoinedAsset,
+    WorkspaceAsset,
+)
 
 
 class PropertyPanel(QWidget):
