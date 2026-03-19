@@ -287,7 +287,9 @@ class PdfGraphicsView(QGraphicsView):
 
         # 4. 差分があればコマンドを積む
         if transforms:
-            self.undo_stack.push(TransformCommand(self, transforms, "キー操作による移動"))
+            self.undo_stack.push(
+                TransformCommand(self, transforms, "キー操作による移動")
+            )
 
         event.accept()
 
@@ -333,7 +335,9 @@ class PdfGraphicsView(QGraphicsView):
                 # 前回のクリック位置と近ければ「連打」とみなして対象を切り替える
                 scene_pos = self.mapToScene(click_pos)
                 if (scene_pos - self.last_click_pos).manhattanLength() < 5:
-                    self.click_rotation_index = (self.click_rotation_index + 1) % len(candidates)
+                    self.click_rotation_index = (self.click_rotation_index + 1) % len(
+                        candidates
+                    )
                 else:
                     self.click_rotation_index = 0
 
