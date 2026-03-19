@@ -59,7 +59,7 @@ class PdfGraphicsView(QGraphicsView):
         self.current_page_index = 0  # 現在表示中のページ番号
         self.rect_count = 0
         self.undo_stack = QUndoStack(self)
-        self.pre_action_state = None  # アクション開始前の状態保持用
+        self.pre_action_states = None  # アクション開始前の状態保持用
 
         self.sync_size = True  # サイズ同期フラグ
         self.sync_symmetry = True  # 対称性同期フラグ
@@ -98,18 +98,18 @@ class PdfGraphicsView(QGraphicsView):
             #cancelBtn:hover { background-color: #da190b; }
         """)
         panel_layout = QHBoxLayout(self.candidate_panel)
-        
+
         self.confirm_btn = QPushButton("✔ 選択した枠を確定", self.candidate_panel)
         self.confirm_btn.setObjectName("confirmBtn")
         self.confirm_btn.clicked.connect(self.confirm_candidates)
-        
+
         self.cancel_btn = QPushButton("キャンセル", self.candidate_panel)
         self.cancel_btn.setObjectName("cancelBtn")
         self.cancel_btn.clicked.connect(self.cancel_candidates)
-        
+
         panel_layout.addWidget(self.cancel_btn)
         panel_layout.addWidget(self.confirm_btn)
-        
+
         self.candidate_panel.hide()
 
         # 連打（切り替え）用
@@ -321,7 +321,7 @@ class PdfGraphicsView(QGraphicsView):
             # クリックした位置にある全てのアイテムを取得（CandidateBoxのみ抽出）
             items = self.items(click_pos)
             candidates = [it for it in items if isinstance(it, CandidateBox)]
-            
+
             if candidates:
                 # 前回のクリック位置と近ければ「連打」とみなして対象を切り替える
                 scene_pos = self.mapToScene(click_pos)
@@ -329,13 +329,13 @@ class PdfGraphicsView(QGraphicsView):
                     self.click_rotation_index = (self.click_rotation_index + 1) % len(candidates)
                 else:
                     self.click_rotation_index = 0
-                
+
                 self.last_click_pos = scene_pos
-                
+
                 # ZValue順（面積小＝上）に並んでいるはずなので、インデックスに沿ってtoggle
                 candidates[self.click_rotation_index].toggle()
                 return
-            
+
             super().mousePressEvent(event)
             return
 
@@ -367,9 +367,10 @@ class PdfGraphicsView(QGraphicsView):
             else:
                 print(f"Right-clicked: Background (item={item})")
             super().mousePressEvent(event)
+            return
 
         # --- 左クリック：操作 or 新規作成 ---
-        elif event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton:
             # アクション開始前のアイテムの状態を個別に保持
             self.pre_action_states = self._get_rect_states_map()
 
@@ -392,7 +393,7 @@ class PdfGraphicsView(QGraphicsView):
                 )
 
                 if not active_area.contains(scene_pos):
-                    # 遠すぎるか、案内テキスト上の場合は無視
+                    # 遠すぎる場合は無視
                     print("Left-clicked: Far Background (Ignoring)")
                     self.start_pos = None
                     return
@@ -407,7 +408,6 @@ class PdfGraphicsView(QGraphicsView):
                 self.new_rect.setPos(self.start_pos)
                 self.scene.addItem(self.new_rect)
                 print("Left-clicked: Near Background (Snapping and creating new box)")
-
         else:
             super().mousePressEvent(event)
 
@@ -838,7 +838,9 @@ class PdfGraphicsView(QGraphicsView):
         pdf_rects = PdfProcessor.detect_frames(self.pdf_path, self.current_page_index)
 
         if not pdf_rects:
-            QMessageBox.information(self, "情報", "このページにはベクター形式の枠線が見つかりませんでした。")
+            QMessageBox.information(
+                self, "情報", "このページにはベクター形式の枠線が見つかりませんでした。"
+            )
             return
 
         # 2. 面積（シーン上のピクセル数）に基づいてソート
@@ -847,8 +849,10 @@ class PdfGraphicsView(QGraphicsView):
         for x0, y0, x1, y1 in pdf_rects:
             w = (x1 - x0) / self.scale_factor
             h = (y1 - y0) / self.scale_factor
-            rect_data.append((w * h, x0 / self.scale_factor, y0 / self.scale_factor, w, h))
-        
+            rect_data.append(
+                (w * h, x0 / self.scale_factor, y0 / self.scale_factor, w, h)
+            )
+
         # 面積の降順（大きい順）にソート。後で ZValue を設定する際
         # 大きいものほど ZValue を低く、小さいものほど ZValue を高くするため。
         rect_data.sort(key=lambda x: x[0], reverse=True)
@@ -880,7 +884,7 @@ class PdfGraphicsView(QGraphicsView):
                 r = c_box.rect()
                 box = myCropBox(r)
                 box.setPos(c_box.pos())
-                
+
                 box.tag = "selection_rect"
                 self.rect_count += 1
                 box.rect_id = self.rect_count
@@ -914,7 +918,7 @@ class PdfGraphicsView(QGraphicsView):
             self.scene.removeItem(item)
         self.candidate_items.clear()
         self.candidate_panel.hide()
-        
+
         # カーソルを元に戻す
         self.viewport().setCursor(Qt.CrossCursor)
 
