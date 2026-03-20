@@ -175,17 +175,44 @@ class PdfGraphicsView(QGraphicsView):
             print(f"❌ ファイルが見つかりません: {file_path}")
             return
 
-        # 前の画像や枠をクリア
-        self.scene.clear()
+        # 1. 完全に新しいシーンを作成（古いシーンのキャッシュをリセットするため）
+        new_scene = QGraphicsScene(self)
+        new_scene.setBackgroundBrush(QBrush(QColor("lightgray")))
+        # シグナルを再接続
+        new_scene.selectionChanged.connect(self._on_scene_selection_changed)
+
+        # 2. ビューから古いシーンを切り離し、新しいシーンをセット
+        old_scene = self.scene
+        self.setScene(new_scene)
+        self.scene = new_scene
+
+        # 3. 古いシーンを安全に破棄
+        if old_scene:
+            old_scene.deleteLater()
+
+        # 4. インフラ（キャンバス枠など）を再構築
+        self.canvas_rect = QRectF(0, 0, 800, 600)
+        self.scene.setSceneRect(self.canvas_rect)
+        self.field_rect = QGraphicsRectItem(self.canvas_rect)
+        self.scene.addItem(self.field_rect)
+
+        # 5. 変数をリセット
         self.rects = []
         self.rectsChanged.emit(self.rects)
         self.pdf_path = file_path
+        self.undo_stack.clear()
+        self.pre_action_states = None
 
-        # PDF読み込み（高解像度で1回だけ作る）
-        pixmap, original_width = PdfProcessor.get_page_image(file_path)
-
-        # 3. シーンに画像を追加
-        self.pdf_item = self.scene.addPixmap(pixmap)
+        # 6. PDF読み込み
+        try:
+            pixmap, original_width = PdfProcessor.get_page_image(file_path)
+            print(f"pdf_image created: {pixmap}")
+            # シーンに画像を追加
+            self.pdf_item = self.scene.addPixmap(pixmap)
+            print("pdf_item added to new scene")
+        except Exception as e:
+            print(f"❌ PDFの読み込みに失敗しました: {e}")
+            return
 
         # PDF本来のサイズとの比率を計算（これが唯一の計算）
         self.scale_factor = original_width / pixmap.width()
