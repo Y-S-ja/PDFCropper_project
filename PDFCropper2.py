@@ -31,6 +31,29 @@ from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
 from preview_view import PdfPreviewView
 
 
+class InteractionMode:
+    """マウス操作モードの基底クラス"""
+
+    def __init__(self, view):
+        self.view = view
+
+    def mousePress(self, event):
+        # 動作確認用のデバッグ出力
+        print(f"DEBUG: InteractionMode.mousePress (Mode: {self.__class__.__name__})")
+        return False  # Falseを返すと既存のロジックを継続
+
+    def mouseMove(self, event): return False
+    def mouseRelease(self, event): return False
+    def keyPress(self, event): return False
+    def on_enter(self): pass
+    def on_exit(self): pass
+
+
+class DefaultMode(InteractionMode):
+    """移行用のデフォルトモード"""
+    pass
+
+
 class ProjectState:
     """プロジェクト（ファイル）ごとの編集状態を保持するコンテナ"""
 
@@ -95,6 +118,7 @@ class PdfGraphicsView(QGraphicsView):
         self.setAcceptDrops(True)
         self.scene = None
         self.state = None
+        self._current_mode = DefaultMode(self)  # 初期モード
         self._setup_new_scene()
 
         # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
@@ -153,6 +177,14 @@ class PdfGraphicsView(QGraphicsView):
         # 連打（切り替え）用
         self.last_click_pos = QPointF()
         self.click_rotation_index = 0
+
+    def set_interaction_mode(self, mode_class):
+        """操作モードを切り替える"""
+        if self._current_mode:
+            self._current_mode.on_exit()
+        self._current_mode = mode_class(self)
+        self._current_mode.on_enter()
+        print(f"MODE CHANGED: {self._current_mode.__class__.__name__}")
 
     def _reset_project_state(self):
         """プロジェクト固有の変数を機械的に一括初期化する"""
@@ -390,6 +422,10 @@ class PdfGraphicsView(QGraphicsView):
         return {item: (QPointF(item.pos()), QRectF(item.rect())) for item in self.rects}
 
     def mousePressEvent(self, event):
+        # ステップ1: 新しいモードへの委譲を試みる
+        if self._current_mode.mousePress(event):
+            return
+
         # 候補選択モード中は、候補アイテムのクリックイベントを優先
         if self.is_candidate_mode and event.button() == Qt.LeftButton:
             click_pos = event.position().toPoint()
