@@ -38,12 +38,9 @@ class PdfGraphicsView(QGraphicsView):
 
     def __init__(self):
         super().__init__()
-        self.setAcceptDrops(True)  # ドロップを受け入れるように変更
-        # 1. シーン（キャンバス）を作成
-        self.setBackgroundBrush(QBrush(QColor("lightgray")))
-        self.scene = QGraphicsScene(self)
-        self.setScene(self.scene)
-        self.scene.selectionChanged.connect(self._on_scene_selection_changed)
+        self.setAcceptDrops(True)
+        self.scene = None
+        self._setup_new_scene()
 
         # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
@@ -70,14 +67,6 @@ class PdfGraphicsView(QGraphicsView):
 
         self.sync_size = True  # サイズ同期フラグ
         self.sync_symmetry = True  # 対称性同期フラグ
-
-        self.margin = 100
-        self.canvas_rect = QRectF(0, 0, 800, 600)
-        self.scene.setSceneRect(self.canvas_rect)
-
-        self.field_rect = QGraphicsRectItem(QRectF(0, 0, 800, 600))
-        self.field_rect.setPos(0, 0)
-        self.scene.addItem(self.field_rect)
 
         # 初期メッセージを表示
         self.show_intro_message()
@@ -122,6 +111,29 @@ class PdfGraphicsView(QGraphicsView):
         # 連打（切り替え）用
         self.last_click_pos = QPointF()
         self.click_rotation_index = 0
+
+    def _setup_new_scene(self):
+        """新しいシーンを作成し、インフラを再構築して古いシーンを破棄する"""
+        new_scene = QGraphicsScene(self)
+        new_scene.setBackgroundBrush(QBrush(QColor("lightgray")))
+        new_scene.selectionChanged.connect(self._on_scene_selection_changed)
+
+        # 基礎設定
+        self.margin = 100
+        self.canvas_rect = QRectF(0, 0, 800, 600)
+        new_scene.setSceneRect(self.canvas_rect)
+
+        # キャンバス枠の設置
+        self.field_rect = QGraphicsRectItem(self.canvas_rect)
+        new_scene.addItem(self.field_rect)
+
+        # シーンの差し替え
+        old_scene = getattr(self, "scene", None)
+        self.setScene(new_scene)
+        self.scene = new_scene
+
+        if old_scene:
+            old_scene.deleteLater()
 
     def detectItemByTag(self, tag):
         for item in self.scene.items():
@@ -175,26 +187,8 @@ class PdfGraphicsView(QGraphicsView):
             print(f"❌ ファイルが見つかりません: {file_path}")
             return
 
-        # 1. 完全に新しいシーンを作成（古いシーンのキャッシュをリセットするため）
-        new_scene = QGraphicsScene(self)
-        new_scene.setBackgroundBrush(QBrush(QColor("lightgray")))
-        # シグナルを再接続
-        new_scene.selectionChanged.connect(self._on_scene_selection_changed)
-
-        # 2. ビューから古いシーンを切り離し、新しいシーンをセット
-        old_scene = self.scene
-        self.setScene(new_scene)
-        self.scene = new_scene
-
-        # 3. 古いシーンを安全に破棄
-        if old_scene:
-            old_scene.deleteLater()
-
-        # 4. インフラ（キャンバス枠など）を再構築
-        self.canvas_rect = QRectF(0, 0, 800, 600)
-        self.scene.setSceneRect(self.canvas_rect)
-        self.field_rect = QGraphicsRectItem(self.canvas_rect)
-        self.scene.addItem(self.field_rect)
+        # 1. 共通処理でシーンを刷新
+        self._setup_new_scene()
 
         # 5. 変数をリセット
         self.rects = []
