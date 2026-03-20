@@ -31,15 +31,70 @@ from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
 from preview_view import PdfPreviewView
 
 
+class ProjectState:
+    """プロジェクト（ファイル）ごとの編集状態を保持するコンテナ"""
+
+    def __init__(self, view):
+        self.pdf_item = None
+        self.new_rect = None
+        self.rects = []
+        self.start_pos = None
+        self.scale_factor = 1.0
+        self.pdf_path = None
+        self.current_page_index = 0
+        self.rect_count = 0
+        self.undo_stack = QUndoStack(view)
+        self.pre_action_states = None
+
+
 class PdfGraphicsView(QGraphicsView):
     fileDropped = Signal(str)
     selectionChanged = Signal(object)  # 選択されたアイテム(myCropBox)を通知用
     rectsChanged = Signal(list)  # 枠のリストが変更されたことを通知用
 
+    # プロジェクト固有の変数をプロパティ経由で state へ中継
+    rects = property(
+        lambda self: self.state.rects, lambda self, v: setattr(self.state, "rects", v)
+    )
+    undo_stack = property(lambda self: self.state.undo_stack)
+    pdf_path = property(
+        lambda self: self.state.pdf_path,
+        lambda self, v: setattr(self.state, "pdf_path", v),
+    )
+    scale_factor = property(
+        lambda self: self.state.scale_factor,
+        lambda self, v: setattr(self.state, "scale_factor", v),
+    )
+    rect_count = property(
+        lambda self: self.state.rect_count,
+        lambda self, v: setattr(self.state, "rect_count", v),
+    )
+    pre_action_states = property(
+        lambda self: self.state.pre_action_states,
+        lambda self, v: setattr(self.state, "pre_action_states", v),
+    )
+    pdf_item = property(
+        lambda self: self.state.pdf_item,
+        lambda self, v: setattr(self.state, "pdf_item", v),
+    )
+    new_rect = property(
+        lambda self: self.state.new_rect,
+        lambda self, v: setattr(self.state, "new_rect", v),
+    )
+    start_pos = property(
+        lambda self: self.state.start_pos,
+        lambda self, v: setattr(self.state, "start_pos", v),
+    )
+    current_page_index = property(
+        lambda self: self.state.current_page_index,
+        lambda self, v: setattr(self.state, "current_page_index", v),
+    )
+
     def __init__(self):
         super().__init__()
         self.setAcceptDrops(True)
         self.scene = None
+        self.state = None
         self._setup_new_scene()
 
         # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
@@ -51,19 +106,6 @@ class PdfGraphicsView(QGraphicsView):
         self.setDragMode(QGraphicsView.NoDrag)
         # ビューポートのカーソルを十字（範囲選択っぽく）または標準に設定
         self.viewport().setCursor(Qt.CrossCursor)
-
-        self.pdf_item = None  # PDF画像
-        self.new_rect = None  # ドラッグ中の枠
-        self.rects = []  # 確定した枠（QGraphicsRectItem）のリスト
-        self.start_pos = None
-        self.scale_factor = 1.0
-
-        self.pdf_path = None  # PDFファイルのパス
-        self.pdf_doc = None  # PDFドキュメントオブジェクト
-        self.current_page_index = 0  # 現在表示中のページ番号
-        self.rect_count = 0
-        self.undo_stack = QUndoStack(self)
-        self.pre_action_states = None  # アクション開始前の状態保持用
 
         self.sync_size = True  # サイズ同期フラグ
         self.sync_symmetry = True  # 対称性同期フラグ
@@ -112,8 +154,15 @@ class PdfGraphicsView(QGraphicsView):
         self.last_click_pos = QPointF()
         self.click_rotation_index = 0
 
+    def _reset_project_state(self):
+        """プロジェクト固有の変数を機械的に一括初期化する"""
+        if self.state:
+            self.state.undo_stack.deleteLater()  # 旧スタックの明示的破棄
+        self.state = ProjectState(self)
+
     def _setup_new_scene(self):
         """新しいシーンを作成し、インフラを再構築して古いシーンを破棄する"""
+        self._reset_project_state()
         new_scene = QGraphicsScene(self)
         new_scene.setBackgroundBrush(QBrush(QColor("lightgray")))
         new_scene.selectionChanged.connect(self._on_scene_selection_changed)
@@ -187,15 +236,11 @@ class PdfGraphicsView(QGraphicsView):
             print(f"❌ ファイルが見つかりません: {file_path}")
             return
 
-        # 1. 共通処理でシーンを刷新
+        # 1. 共通処理でシーンとステートを刷新
         self._setup_new_scene()
 
-        # 5. 変数をリセット
-        self.rects = []
         self.rectsChanged.emit(self.rects)
         self.pdf_path = file_path
-        self.undo_stack.clear()
-        self.pre_action_states = None
 
         # 6. PDF読み込み
         try:
