@@ -477,6 +477,54 @@ class PdfGraphicsView(QGraphicsView):
             if item.scene():
                 self._scene.removeItem(item)
 
+    # --- コマンド実行用の低レベルAPI (Raw Operations) ---
+    # これらは UndoStack 経由で呼び出されることを想定しており、
+    # 実行時に新たな Undo コマンドを生成しない。
+
+    def _raw_add_item(self, item, index: int):
+        """アイテムをリストとシーンの指定位置に追加する"""
+        if item not in self.rects:
+            if index >= len(self.rects):
+                self.rects.append(item)
+            else:
+                self.rects.insert(index, item)
+        
+        if not item.scene():
+            self._scene.addItem(item)
+            
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+
+    def _raw_remove_item(self, item):
+        """アイテムをリストとシーンから除外する"""
+        if item in self.rects:
+            self.rects.remove(item)
+        
+        if item.scene():
+            self._scene.removeItem(item)
+            
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+
+    def _raw_apply_transforms(self, transforms):
+        """複数のアイテムの変形を一括適用する"""
+        # transforms: list of (item, _, _, new_pos, new_rect) or (item, old_pos, old_rect, _, _)
+        for item, p, r in transforms:
+            item._block_sync = True
+            item.setRect(r)
+            item.setPos(p)
+            item._block_sync = False
+            
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+        self._on_scene_selection_changed()
+
+    def _raw_reorder_rects(self, new_list):
+        """リストの順序を書き換える"""
+        self.rects = list(new_list)
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+
     def set_interaction_mode(self, mode_class, *args, **kwargs):
         """操作モードを切り替える"""
         if self._current_mode:
