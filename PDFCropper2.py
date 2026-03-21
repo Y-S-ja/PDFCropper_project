@@ -156,17 +156,43 @@ class CropMode(InteractionMode):
     def mouseRelease(self, event):
         if self.view.start_pos and self.view.new_rect:
             # 描画終了
-            final_rect = self.view.new_rect.rect()
-            if final_rect.width() < 5 or final_rect.height() < 5:
+            rect = self.view.new_rect.rect()
+
+            # 【重要】小さすぎる枠（クリックミス等）は無視して削除する
+            if rect.width() < 5 or rect.height() < 5:
                 self.view.scene.removeItem(self.view.new_rect)
             else:
-                self.view.new_rect.confirmed = True
+                self.view.new_rect.confirmed = True  # 確定状態にする
                 self.view.new_rect.tag = "selection_rect"
                 self.view.rect_count += 1
                 self.view.new_rect.rect_id = self.view.rect_count
-                self.view.undo_stack.push(AddCommand(self.view, self.view.new_rect))
-            self.view.new_rect = None
+
+                # 同期信号の接続
+                self.view.new_rect.geometryChanged.connect(
+                    self.view._handle_item_geometry_changed
+                )
+                self.view.new_rect.deltaResized.connect(self.view._handle_item_delta_resized)
+                self.view.new_rect.transformationFinished.connect(
+                    self.view._handle_transformation_finished
+                )
+
+                # --- 番号表示 (バッジ) ---
+                # AddCommand -> update_numbers() 内で最終的に再調整されるため、暫定的な番号を渡す
+                index = len(self.view.rects) + 1
+                badge = myBadge(index, parent=self.view.new_rect)
+                badge.setPos(rect.topLeft())
+
+                # 一旦シーンから除外してから、AddCommand 経由で公式に追加する
+                # これにより、初期作成時とRedo時でロジックが完全に同一になる
+                self.view.scene.removeItem(self.view.new_rect)
+                self.view.undo_stack.push(AddCommand(self.view, self.view.new_rect, "枠の作成"))
+
+                # 新しく作った枠を選択状態にする
+                self.view.scene.clearSelection()
+                self.view.new_rect.setSelected(True)
+
             self.view.start_pos = None
+            self.view.new_rect = None
             return True
 
         # 移動・変形の確定
@@ -566,59 +592,11 @@ class PdfGraphicsView(QGraphicsView):
             super().wheelEvent(event)
 
     def keyPressEvent(self, event):
-        # ステップ2: モードへの委譲
+        # モードへの委譲
         if self._current_mode.keyPress(event):
             return
 
-        """方向キーによる枠の微調整"""
-        # 選択中のアイテム（myCropBox型）を取得
-        selected_items = [
-            i for i in self.scene.selectedItems() if isinstance(i, myCropBox)
-        ]
-        if not selected_items:
-            super().keyPressEvent(event)
-            return
-
-        # 移動量の設定 (Shift併用で10px, 通常1px)
-        step = 10 if event.modifiers() & Qt.ShiftModifier else 1
-        dx, dy = 0, 0
-
-        if event.key() == Qt.Key_Left:
-            dx = -step
-        elif event.key() == Qt.Key_Right:
-            dx = step
-        elif event.key() == Qt.Key_Up:
-            dy = -step
-        elif event.key() == Qt.Key_Down:
-            dy = step
-        else:
-            super().keyPressEvent(event)
-            return
-
-        # --- 移動とUndo用の履歴記録 ---
-        # 1. 移動前の状態を記録
-        pre_states = self._get_rect_states_map()
-
-        # 2. 移動実行 (setPos により同期ロジックも自動で走る)
-        for item in selected_items:
-            item.setPos(item.pos() + QPointF(dx, dy))
-
-        # 3. 移動後の状態を確認
-        new_states = self._get_rect_states_map()
-        transforms = []
-        for item, (old_p, old_r) in pre_states.items():
-            if item in new_states:
-                new_p, new_r = new_states[item]
-                if old_p != new_p or old_r != new_r:
-                    transforms.append((item, old_p, old_r, new_p, new_r))
-
-        # 4. 差分があればコマンドを積む
-        if transforms:
-            self.undo_stack.push(
-                TransformCommand(self, transforms, "キー操作による移動")
-            )
-
-        event.accept()
+        super().keyPressEvent(event)
 
     def get_pdf_rect(self):
         """PDF画像のシーン座標での矩形を返す"""
@@ -651,107 +629,15 @@ class PdfGraphicsView(QGraphicsView):
         return {item: (QPointF(item.pos()), QRectF(item.rect())) for item in self.rects}
 
     def mousePressEvent(self, event):
-        # ステップ1: 新しいモードへの委譲を試みる
+        # モードへの委譲
         if self._current_mode.mousePress(event):
             return
 
-        # 候補選択モード中は、候補アイテムのクリックイベントを優先
-        if self.is_candidate_mode and event.button() == Qt.LeftButton:
-            click_pos = event.position().toPoint()
-            # クリックした位置にある全てのアイテムを取得（CandidateBoxのみ抽出）
-            items = self.items(click_pos)
-            candidates = [it for it in items if isinstance(it, CandidateBox)]
+        super().mousePressEvent(event)
 
-            if candidates:
-                # 前回のクリック位置と近ければ「連打」とみなして対象を切り替える
-                scene_pos = self.mapToScene(click_pos)
-                if (scene_pos - self.last_click_pos).manhattanLength() < 5:
-                    self.click_rotation_index = (self.click_rotation_index + 1) % len(
-                        candidates
-                    )
-                else:
-                    self.click_rotation_index = 0
-
-                self.last_click_pos = scene_pos
-
-                # ZValue順（面積小＝上）に並んでいるはずなので、インデックスに沿ってtoggle
-                candidates[self.click_rotation_index].toggle()
-                return
-
-            super().mousePressEvent(event)
-            return
-
-        item = self.itemAt(event.position().toPoint())
-
-        # --- 判定フェーズ：クリックされたものが何かを特定する ---
-        target_cropbox = None
-        is_intro_text = False
-
-        temp = item
-        while temp:
-            if isinstance(temp, myCropBox):
-                target_cropbox = temp
-                break
-            # プロパティがあれば使い、なければ data()
-            if getattr(temp, "tag", temp.data(myCropBox.TAG_NAME)) == "intro_text":
-                is_intro_text = True
-                break
-            temp = temp.parentItem()
-
-        # --- 右クリック：削除 ---
-        if event.button() == Qt.RightButton:
-            if target_cropbox and target_cropbox in self.rects:
-                print("Right-clicked: CropBox (Deleting)")
-                self.undo_stack.push(RemoveCommand(self, target_cropbox))
-                return
-            elif is_intro_text:
-                print("Right-clicked: Intro Text (Ignoring)")
-            else:
-                print(f"Right-clicked: Background (item={item})")
-            super().mousePressEvent(event)
-            return
-
-        # --- 左クリック：操作 or 新規作成 ---
-        if event.button() == Qt.LeftButton:
-            # アクション開始前のアイテムの状態を個別に保持
-            self.pre_action_states = self._get_rect_states_map()
-
-            scene_pos = self.mapToScene(event.position().toPoint())
-            self.start_pos = scene_pos
-
-            if target_cropbox:
-                print(
-                    f"Left-clicked: CropBox (ID:{target_cropbox.rect_id}) (Resizing/Moving)"
-                )
-                self.new_rect = None
-                super().mousePressEvent(event)
-            else:
-                # --- 新規作成の開始判定 ---
-                pdf_rect = self.get_pdf_rect()
-                # 境界から30px以内なら「付近」とみなしてスナップさせる
-                snap_threshold = 30
-                active_area = pdf_rect.adjusted(
-                    -snap_threshold, -snap_threshold, snap_threshold, snap_threshold
-                )
-
-                if not active_area.contains(scene_pos):
-                    # 遠すぎる場合は無視
-                    print("Left-clicked: Far Background (Ignoring)")
-                    self.start_pos = None
-                    return
-
-                # 付近ならクランプ（吸着）して開始位置を確定
-                self.start_pos = self.clamp_pos(scene_pos)
-
-                self.scene.clearSelection()
-                # 新規作成：pos を開始位置にし、rect は (0,0) で初期化
-                self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
-                self.new_rect.confirmed = False  # 作成中モード
-                self.new_rect.setPos(self.start_pos)
-                self.scene.addItem(self.new_rect)
-                print("Left-clicked: Near Background (Snapping and creating new box)")
-        else:
-            super().mousePressEvent(event)
+    def mousePressEvent_LegacyCleanup(self):
+        # このチャンクで古い不要な判定フェーズ～新規作成ロジックを削除
+        pass
 
     def ask_discard_changes(self) -> bool:
         """未保存の枠がある場合、破棄していいか確認する"""
@@ -777,77 +663,19 @@ class PdfGraphicsView(QGraphicsView):
         # TODO: asset に既に切り抜き指示があれば読み込む機能をフェーズ3で実装
 
     def mouseMoveEvent(self, event):
+        # モードへの委譲
         if self._current_mode.mouseMove(event):
             return
 
-        if self.start_pos and self.new_rect:
-            # 新規枠作成
-            # 現在のマウス位置（シーン座標）をPDF内に制限
-            current_pos = self.clamp_pos(self.mapToScene(event.position().toPoint()))
-
-            # 開始点からの差分でローカルの rect を計算
-            diff = current_pos - self.start_pos
-
-            # もしマイナス方向にドラッグしたら、posの方を調整する（常に左上が基点になるように）
-            actual_top_left = QPointF(
-                min(self.start_pos.x(), current_pos.x()),
-                min(self.start_pos.y(), current_pos.y()),
-            )
-            self.new_rect.setPos(actual_top_left)
-            self.new_rect.setRect(QRectF(0, 0, abs(diff.x()), abs(diff.y())))
-        else:
-            # 移動と変形
-            super().mouseMoveEvent(event)
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        # 先にアイテム側の処理（正規化など）を終わらせる
+        # モードへの委譲
         if self._current_mode.mouseRelease(event):
             return
 
         super().mouseReleaseEvent(event)
-
-        if self.start_pos and self.new_rect:
-            # 新規枠作成
-            rect = self.new_rect.rect()
-
-            # 【重要】小さすぎる枠（クリックミス等）は無視して削除する
-            if rect.width() < 5 or rect.height() < 5:
-                self.scene.removeItem(self.new_rect)
-            else:
-                self.new_rect.confirmed = True  # 確定状態にする
-                self.new_rect.tag = "selection_rect"
-                self.rect_count += 1
-                self.new_rect.rect_id = self.rect_count
-
-                # 同期信号の接続
-                self.new_rect.geometryChanged.connect(
-                    self._handle_item_geometry_changed
-                )
-                self.new_rect.deltaResized.connect(self._handle_item_delta_resized)
-                self.new_rect.transformationFinished.connect(
-                    self._handle_transformation_finished
-                )
-
-                # --- 番号表示 (バッジ) ---
-                # AddCommand -> update_numbers() 内で最終的に再調整されるため、
-                # ここでは暫定的な番号を渡す
-                index = len(self.rects) + 1
-                badge = myBadge(index, parent=self.new_rect)
-                badge.setPos(rect.topLeft())
-
-                # 一旦シーンから除外してから、AddCommand 経由で公式に追加する
-                # これにより、初期作成時とRedo時でロジックが完全に同一になる
-                self.scene.removeItem(self.new_rect)
-                self.undo_stack.push(AddCommand(self, self.new_rect, "枠の作成"))
-
-                # 新しく作った枠を選択状態にする
-                self.scene.clearSelection()
-                self.new_rect.setSelected(True)
-
-            self.start_pos = None
-            self.new_rect = None
-
-        # 2. 移動・変形後の状態で差分をチェック (開始状態が保持されている場合のみ)
+        self.update_scene_limit()
         if self.pre_action_states is not None:
             new_states = self._get_rect_states_map()
             transforms = []
