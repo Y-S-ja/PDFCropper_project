@@ -377,6 +377,63 @@ class PdfGraphicsView(QGraphicsView):
         lambda self, v: setattr(self.state, "current_page_index", v),
     )
 
+    def __init__(self):
+        super().__init__()
+        self.setAcceptDrops(True)
+        self.scene = None
+        self.state = None
+        self._current_mode = CropMode(self)  # 初期モードをNormalに変更
+        self._setup_new_scene()
+
+        # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        # キャンバスが画面より小さい時に中央に寄せる設定
+        self.setAlignment(Qt.AlignCenter)
+
+        # ドラッグでスクロールできるようにする設定をオフ（最初は普通のカーソルにする）
+        self.setDragMode(QGraphicsView.NoDrag)
+        # ビューポートのカーソルを十字（範囲選択っぽく）または標準に設定
+        self.viewport().setCursor(Qt.CrossCursor)
+
+        self.sync_size = True  # サイズ同期フラグ
+        self.sync_symmetry = True  # 対称性同期フラグ
+
+        # 初期メッセージを表示
+        self.show_intro_message()
+
+        # 確定ボタンパネル（ビューの右下に浮かせる）
+        self.candidate_panel = QFrame(self)
+        self.candidate_panel.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 220);
+                border: 1px solid #ccc;
+                border-radius: 8px;
+            }
+            QPushButton {
+                padding: 5px 15px;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            #confirmBtn { background-color: #4CAF50; color: white; }
+            #confirmBtn:hover { background-color: #45a049; }
+            #cancelBtn { background-color: #f44336; color: white; }
+            #cancelBtn:hover { background-color: #da190b; }
+        """)
+        panel_layout = QHBoxLayout(self.candidate_panel)
+
+        self.confirm_btn = QPushButton("✔ 選択した枠を確定", self.candidate_panel)
+        self.confirm_btn.setObjectName("confirmBtn")
+        self.confirm_btn.clicked.connect(self.confirm_candidates)
+
+        self.cancel_btn = QPushButton("キャンセル", self.candidate_panel)
+        self.cancel_btn.setObjectName("cancelBtn")
+        self.cancel_btn.clicked.connect(self.cancel_candidates)
+
+        panel_layout.addWidget(self.cancel_btn)
+        panel_layout.addWidget(self.confirm_btn)
+
+        self.candidate_panel.hide()
+
     def hit_test(self, pos: QPoint) -> HitTestResult:
         """指定された座標にあるアイテムの種類を判定する"""
         item = self.itemAt(pos)
@@ -485,62 +542,6 @@ class PdfGraphicsView(QGraphicsView):
         self.new_rect = None
         return True
 
-    def __init__(self):
-        super().__init__()
-        self.setAcceptDrops(True)
-        self.scene = None
-        self.state = None
-        self._current_mode = CropMode(self)  # 初期モードをNormalに変更
-        self._setup_new_scene()
-
-        # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        # キャンバスが画面より小さい時に中央に寄せる設定
-        self.setAlignment(Qt.AlignCenter)
-
-        # ドラッグでスクロールできるようにする設定をオフ（最初は普通のカーソルにする）
-        self.setDragMode(QGraphicsView.NoDrag)
-        # ビューポートのカーソルを十字（範囲選択っぽく）または標準に設定
-        self.viewport().setCursor(Qt.CrossCursor)
-
-        self.sync_size = True  # サイズ同期フラグ
-        self.sync_symmetry = True  # 対称性同期フラグ
-
-        # 初期メッセージを表示
-        self.show_intro_message()
-
-        # 確定ボタンパネル（ビューの右下に浮かせる）
-        self.candidate_panel = QFrame(self)
-        self.candidate_panel.setStyleSheet("""
-            QFrame {
-                background-color: rgba(255, 255, 255, 220);
-                border: 1px solid #ccc;
-                border-radius: 8px;
-            }
-            QPushButton {
-                padding: 5px 15px;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            #confirmBtn { background-color: #4CAF50; color: white; }
-            #confirmBtn:hover { background-color: #45a049; }
-            #cancelBtn { background-color: #f44336; color: white; }
-            #cancelBtn:hover { background-color: #da190b; }
-        """)
-        panel_layout = QHBoxLayout(self.candidate_panel)
-
-        self.confirm_btn = QPushButton("✔ 選択した枠を確定", self.candidate_panel)
-        self.confirm_btn.setObjectName("confirmBtn")
-        self.confirm_btn.clicked.connect(self.confirm_candidates)
-
-        self.cancel_btn = QPushButton("キャンセル", self.candidate_panel)
-        self.cancel_btn.setObjectName("cancelBtn")
-        self.cancel_btn.clicked.connect(self.cancel_candidates)
-
-        panel_layout.addWidget(self.cancel_btn)
-        panel_layout.addWidget(self.confirm_btn)
-
-        self.candidate_panel.hide()
 
     def set_interaction_mode(self, mode_class, *args, **kwargs):
         """操作モードを切り替える"""
