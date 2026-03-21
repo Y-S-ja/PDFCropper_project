@@ -76,14 +76,6 @@ class AssetManager(QObject):
             self._order_ids.append(asset.id)
             self.assets_changed.emit()
 
-    def unregister_asset(self, asset_id: str):
-        """アセットを棚から削除する。"""
-        if asset_id in self._assets_dict:
-            del self._assets_dict[asset_id]
-            if asset_id in self._order_ids:
-                self._order_ids.remove(asset_id)
-            self.assets_changed.emit()
-
     def get_asset(self, asset_id: str) -> Optional[WorkspaceAsset]:
         """IDからアセットを取得する。"""
         return self._assets_dict.get(asset_id)

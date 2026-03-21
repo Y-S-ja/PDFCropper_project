@@ -386,7 +386,4 @@ class AssetShelfWidget(QFrame):
                 lambda: self.asset_mgr.toggle_visibility(asset_id)
             )
 
-        remove_act = menu.addAction("完全に削除する")
-        remove_act.triggered.connect(lambda: self.asset_mgr.unregister_asset(asset_id))
-
         menu.exec(self.list_widget.mapToGlobal(pos))
