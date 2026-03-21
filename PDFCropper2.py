@@ -415,6 +415,76 @@ class PdfGraphicsView(QGraphicsView):
         )
         return active_area.contains(scene_pos)
 
+    def begin_box_drawing(self, pos: QPoint):
+        """新規枠の描画を開始する"""
+        scene_pos = self.mapToScene(pos)
+        self.start_pos = self.clamp_pos(scene_pos)
+
+        self.scene.clearSelection()
+        # 新規作成
+        self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
+        self.new_rect.confirmed = False
+        self.new_rect.setPos(self.start_pos)
+        self.scene.addItem(self.new_rect)
+        print(f"Drawing action started at {self.start_pos}")
+
+    def update_box_drawing(self, pos: QPoint):
+        """マウス位置に合わせて作成中の枠を更新する"""
+        if not self.start_pos or not self.new_rect:
+            return
+
+        current_pos = self.clamp_pos(self.mapToScene(pos))
+        diff = current_pos - self.start_pos
+        actual_top_left = QPointF(
+            min(self.start_pos.x(), current_pos.x()),
+            min(self.start_pos.y(), current_pos.y()),
+        )
+        self.new_rect.setPos(actual_top_left)
+        self.new_rect.setRect(QRectF(0, 0, abs(diff.x()), abs(diff.y())))
+
+    def finish_box_drawing(self):
+        """描画を確定し、正規のアイテムとして登録する"""
+        if not self.start_pos or not self.new_rect:
+            return True
+
+        rect = self.new_rect.rect()
+
+        # 【重要】小さすぎる枠（クリックミス等）は無視して削除する
+        if rect.width() < 5 or rect.height() < 5:
+            self.scene.removeItem(self.new_rect)
+            print("Drawing canceled: rectangle too small.")
+        else:
+            self.new_rect.confirmed = True  # 確定状態にする
+            self.new_rect.tag = "selection_rect"
+            self.rect_count += 1
+            self.new_rect.rect_id = self.rect_count
+
+            # 同期信号の接続
+            self.new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
+            self.new_rect.deltaResized.connect(self._handle_item_delta_resized)
+            self.new_rect.transformationFinished.connect(
+                self._handle_transformation_finished
+            )
+
+            # --- 番号表示 (バッジ) ---
+            # AddCommand -> update_numbers() 内で最終的に再調整されるため、暫定的な番号を渡す
+            index = len(self.rects) + 1
+            badge = myBadge(index, parent=self.new_rect)
+            badge.setPos(rect.topLeft())
+
+            # 一旦シーンから除外してから、AddCommand 経由で公式に追加する
+            self.scene.removeItem(self.new_rect)
+            self.undo_stack.push(AddCommand(self, self.new_rect, "枠の作成"))
+
+            # 新しく作った枠を選択状態にする
+            self.scene.clearSelection()
+            self.new_rect.setSelected(True)
+            print(f"Drawing finished: Rect ID {self.rect_count} created.")
+
+        self.start_pos = None
+        self.new_rect = None
+        return True
+
     def __init__(self):
         super().__init__()
         self.setAcceptDrops(True)
