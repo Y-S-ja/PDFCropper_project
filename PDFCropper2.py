@@ -137,9 +137,7 @@ class CropMode(InteractionMode):
 
     def keyPress(self, event):
         """方向キーによる枠の微調整ロジックを移動"""
-        selected_items = [
-            i for i in self.view.scene.selectedItems() if isinstance(i, myCropBox)
-        ]
+        selected_items = self.view.selected_cropboxes()
         if not selected_items:
             return False
 
@@ -212,16 +210,16 @@ class ProjectState:
     """プロジェクト（ファイル）ごとの編集状態を保持するコンテナ"""
 
     def __init__(self, view):
-        self.pdf_item = None
-        self.new_rect = None
-        self.rects = []
-        self.start_pos = None
-        self.scale_factor = 1.0
-        self.pdf_path = None
-        self.current_page_index = 0
-        self.rect_count = 0
-        self.undo_stack = QUndoStack(view)
-        self.pre_action_states = None
+        self._pdf_item = None
+        self._new_rect = None
+        self._rects = []
+        self._start_pos = None
+        self._scale_factor = 1.0
+        self._pdf_path = None
+        self._current_page_index = 0
+        self._rect_count = 0
+        self._undo_stack = QUndoStack(view)
+        self._pre_action_states = None
 
 
 class PdfGraphicsView(QGraphicsView):
@@ -229,49 +227,53 @@ class PdfGraphicsView(QGraphicsView):
     selectionChanged = Signal(object)  # 選択されたアイテム(myCropBox)を通知用
     rectsChanged = Signal(list)  # 枠のリストが変更されたことを通知用
 
-    # プロジェクト固有の変数をプロパティ経由で state へ中継
+    # プロジェクト固有の変数をプロパティ経由で state へ中継 (外部公開が必要なものに限定)
     rects = property(
-        lambda self: self.state.rects, lambda self, v: setattr(self.state, "rects", v)
+        lambda self: self._state._rects, lambda self, v: setattr(self._state, "_rects", v)
     )
-    undo_stack = property(lambda self: self.state.undo_stack)
+    undo_stack = property(lambda self: self._state._undo_stack)
     pdf_path = property(
-        lambda self: self.state.pdf_path,
-        lambda self, v: setattr(self.state, "pdf_path", v),
+        lambda self: self._state._pdf_path,
+        lambda self, v: setattr(self._state, "_pdf_path", v),
     )
     scale_factor = property(
-        lambda self: self.state.scale_factor,
-        lambda self, v: setattr(self.state, "scale_factor", v),
-    )
-    rect_count = property(
-        lambda self: self.state.rect_count,
-        lambda self, v: setattr(self.state, "rect_count", v),
-    )
-    pre_action_states = property(
-        lambda self: self.state.pre_action_states,
-        lambda self, v: setattr(self.state, "pre_action_states", v),
-    )
-    pdf_item = property(
-        lambda self: self.state.pdf_item,
-        lambda self, v: setattr(self.state, "pdf_item", v),
-    )
-    new_rect = property(
-        lambda self: self.state.new_rect,
-        lambda self, v: setattr(self.state, "new_rect", v),
-    )
-    start_pos = property(
-        lambda self: self.state.start_pos,
-        lambda self, v: setattr(self.state, "start_pos", v),
+        lambda self: self._state._scale_factor,
+        lambda self, v: setattr(self._state, "_scale_factor", v),
     )
     current_page_index = property(
-        lambda self: self.state.current_page_index,
-        lambda self, v: setattr(self.state, "current_page_index", v),
+        lambda self: self._state._current_page_index,
+        lambda self, v: setattr(self._state, "_current_page_index", v),
     )
+    rect_count = property(
+        lambda self: self._state._rect_count,
+        lambda self, v: setattr(self._state, "_rect_count", v),
+    )
+    pdf_item = property(
+        lambda self: self._state._pdf_item,
+        lambda self, v: setattr(self._state, "_pdf_item", v),
+    )
+
+    # 内部管理用の変数をプライベートプロパティとして定義
+    @property
+    def _start_pos(self): return self._state._start_pos
+    @_start_pos.setter
+    def _start_pos(self, v): self._state._start_pos = v
+
+    @property
+    def _new_rect(self): return self._state._new_rect
+    @_new_rect.setter
+    def _new_rect(self, v): self._state._new_rect = v
+    
+    @property
+    def _pre_action_states(self): return self._state._pre_action_states
+    @_pre_action_states.setter
+    def _pre_action_states(self, v): self._state._pre_action_states = v
 
     def __init__(self):
         super().__init__()
         self.setAcceptDrops(True)
-        self.scene = None
-        self.state = None
+        self._scene = None
+        self._state = None
         self._current_mode = CropMode(self)  # 初期モードをNormalに変更
         self._setup_new_scene()
 
@@ -369,71 +371,71 @@ class PdfGraphicsView(QGraphicsView):
     def begin_box_drawing(self, pos: QPoint):
         """新規枠の描画を開始する"""
         scene_pos = self.mapToScene(pos)
-        self.start_pos = self.clamp_pos(scene_pos)
+        self._start_pos = self.clamp_pos(scene_pos)
 
-        self.scene.clearSelection()
+        self._scene.clearSelection()
         # 新規作成
-        self.new_rect = myCropBox(QRectF(0, 0, 0, 0))
-        self.new_rect.confirmed = False
-        self.new_rect.setPos(self.start_pos)
-        self.scene.addItem(self.new_rect)
-        print(f"Drawing action started at {self.start_pos}")
+        self._new_rect = myCropBox(QRectF(0, 0, 0, 0))
+        self._new_rect.confirmed = False
+        self._new_rect.setPos(self._start_pos)
+        self._scene.addItem(self._new_rect)
+        print(f"Drawing action started at {self._start_pos}")
 
     def update_box_drawing(self, pos: QPoint):
         """マウス位置に合わせて作成中の枠を更新する"""
-        if not self.start_pos or not self.new_rect:
+        if not self._start_pos or not self._new_rect:
             return
 
         current_pos = self.clamp_pos(self.mapToScene(pos))
-        diff = current_pos - self.start_pos
+        diff = current_pos - self._start_pos
         actual_top_left = QPointF(
-            min(self.start_pos.x(), current_pos.x()),
-            min(self.start_pos.y(), current_pos.y()),
+            min(self._start_pos.x(), current_pos.x()),
+            min(self._start_pos.y(), current_pos.y()),
         )
-        self.new_rect.setPos(actual_top_left)
-        self.new_rect.setRect(QRectF(0, 0, abs(diff.x()), abs(diff.y())))
+        self._new_rect.setPos(actual_top_left)
+        self._new_rect.setRect(QRectF(0, 0, abs(diff.x()), abs(diff.y())))
 
     def finish_box_drawing(self):
         """描画を確定し、正規のアイテムとして登録する"""
-        if not self.start_pos or not self.new_rect:
+        if not self._start_pos or not self._new_rect:
             return True
 
-        rect = self.new_rect.rect()
+        rect = self._new_rect.rect()
 
         # 【重要】小さすぎる枠（クリックミス等）は無視して削除する
         if rect.width() < 5 or rect.height() < 5:
-            self.scene.removeItem(self.new_rect)
+            self._scene.removeItem(self._new_rect)
             print("Drawing canceled: rectangle too small.")
         else:
-            self.new_rect.confirmed = True  # 確定状態にする
-            self.new_rect.tag = "selection_rect"
+            self._new_rect.confirmed = True  # 確定状態にする
+            self._new_rect.tag = "selection_rect"
             self.rect_count += 1
-            self.new_rect.rect_id = self.rect_count
+            self._new_rect.rect_id = self.rect_count
 
             # 同期信号の接続
-            self.new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
-            self.new_rect.deltaResized.connect(self._handle_item_delta_resized)
-            self.new_rect.transformationFinished.connect(
+            self._new_rect.geometryChanged.connect(self._handle_item_geometry_changed)
+            self._new_rect.deltaResized.connect(self._handle_item_delta_resized)
+            self._new_rect.transformationFinished.connect(
                 self._handle_transformation_finished
             )
 
             # --- 番号表示 (バッジ) ---
             # AddCommand -> update_numbers() 内で最終的に再調整されるため、暫定的な番号を渡す
             index = len(self.rects) + 1
-            badge = myBadge(index, parent=self.new_rect)
+            badge = myBadge(index, parent=self._new_rect)
             badge.setPos(rect.topLeft())
 
             # 一旦シーンから除外してから、AddCommand 経由で公式に追加する
-            self.scene.removeItem(self.new_rect)
-            self.undo_stack.push(AddCommand(self, self.new_rect, "枠の作成"))
+            self._scene.removeItem(self._new_rect)
+            self.undo_stack.push(AddCommand(self, self._new_rect, "枠の作成"))
 
             # 新しく作った枠を選択状態にする
-            self.scene.clearSelection()
-            self.new_rect.setSelected(True)
+            self._scene.clearSelection()
+            self._new_rect.setSelected(True)
             print(f"Drawing finished: Rect ID {self.rect_count} created.")
 
-        self.start_pos = None
-        self.new_rect = None
+        self._start_pos = None
+        self._new_rect = None
         return True
 
     def remove_box(self, box_item: myCropBox):
@@ -444,16 +446,16 @@ class PdfGraphicsView(QGraphicsView):
 
     def record_pre_transform_state(self):
         """現在の全枠の状態をバックアップする（Undo用）"""
-        self.pre_action_states = self._get_rect_states_map()
+        self._pre_action_states = self._get_rect_states_map()
 
     def commit_transformation(self, label="移動または変形"):
         """バックアップ時からの差分を確認し、変更があればUndoスタックに登録する"""
-        if not self.pre_action_states:
+        if not self._pre_action_states:
             return
 
         new_states = self._get_rect_states_map()
         transforms = []
-        for item, (old_p, old_r) in self.pre_action_states.items():
+        for item, (old_p, old_r) in self._pre_action_states.items():
             if item in new_states:
                 new_p, new_r = new_states[item]
                 if old_p != new_p or old_r != new_r:
@@ -462,14 +464,18 @@ class PdfGraphicsView(QGraphicsView):
         if transforms:
             self.undo_stack.push(TransformCommand(self, transforms, label))
 
-        self.pre_action_states = None
-        self.start_pos = None
+        self._pre_action_states = None
+        self._start_pos = None
+
+    def selected_cropboxes(self) -> list:
+        """選択されている切り抜き枠のリストを返す"""
+        return [i for i in self._scene.selectedItems() if isinstance(i, myCropBox)]
 
     def clear_candidates(self, item_list):
         """指定された候補アイテムをシーンから一括削除する"""
         for item in item_list:
             if item.scene():
-                self.scene.removeItem(item)
+                self._scene.removeItem(item)
 
     def set_interaction_mode(self, mode_class, *args, **kwargs):
         """操作モードを切り替える"""
@@ -481,9 +487,9 @@ class PdfGraphicsView(QGraphicsView):
 
     def _reset_project_state(self):
         """プロジェクト固有の変数を機械的に一括初期化する"""
-        if self.state:
-            self.state.undo_stack.deleteLater()  # 旧スタックの明示的破棄
-        self.state = ProjectState(self)
+        if hasattr(self, "_state") and self._state:
+            self._state._undo_stack.deleteLater()  # 旧スタックの明示的破棄
+        self._state = ProjectState(self)
 
     def _setup_new_scene(self):
         """新しいシーンを作成し、インフラを再構築して古いシーンを破棄する"""
@@ -502,15 +508,15 @@ class PdfGraphicsView(QGraphicsView):
         new_scene.addItem(self.field_rect)
 
         # シーンの差し替え
-        old_scene = getattr(self, "scene", None)
+        old_scene = getattr(self, "_scene", None)
         self.setScene(new_scene)
-        self.scene = new_scene
+        self._scene = new_scene
 
         if old_scene:
             old_scene.deleteLater()
 
     def detectItemByTag(self, tag):
-        for item in self.scene.items():
+        for item in self._scene.items():
             # プロパティがあれば使い、なければ data() から取得する
             if getattr(item, "tag", item.data(myCropBox.TAG_NAME)) == tag:
                 return item
@@ -519,13 +525,13 @@ class PdfGraphicsView(QGraphicsView):
     def update_scene_limit(self):
         """シーンの範囲を現在のアイテム（主にPDF）に合わせる"""
         if hasattr(self, "pdf_item") and self.pdf_item:
-            self.scene.setSceneRect(
+            self._scene.setSceneRect(
                 self.pdf_item.boundingRect().adjusted(
                     -self.margin, -self.margin, self.margin, self.margin
                 )
             )
         else:
-            self.scene.setSceneRect(QRectF(0, 0, 800, 600))
+            self._scene.setSceneRect(QRectF(0, 0, 800, 600))
 
     def drawForeground(self, painter, rect):
         """キャンバス領域（canvas_rect）に枠線を描画"""
@@ -534,7 +540,7 @@ class PdfGraphicsView(QGraphicsView):
             pen.setCosmetic(True)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
-            painter.drawRect(self.scene.sceneRect())
+            painter.drawRect(self._scene.sceneRect())
 
     def center_A_on_B(self, A, B):
         br = A.boundingRect()
@@ -544,10 +550,10 @@ class PdfGraphicsView(QGraphicsView):
 
     def show_intro_message(self):
         """起動時のメッセージを表示"""
-        # self.scene.clear()
+        # self._scene.clear()
 
         text = myIntroductionText("PDFファイルをここにドラッグ＆ドロップしてください")
-        self.scene.addItem(text)
+        self._scene.addItem(text)
         text.setBrush(QBrush(QColor("gray")))
         font = text.font()
         font.setPointSize(18)
@@ -572,7 +578,7 @@ class PdfGraphicsView(QGraphicsView):
             pixmap, original_width = PdfProcessor.get_page_image(file_path)
             print(f"pdf_image created: {pixmap}")
             # シーンに画像を追加
-            self.pdf_item = self.scene.addPixmap(pixmap)
+            self.pdf_item = self._scene.addPixmap(pixmap)
             print("pdf_item added to new scene")
         except Exception as e:
             print(f"❌ PDFの読み込みに失敗しました: {e}")
@@ -718,10 +724,10 @@ class PdfGraphicsView(QGraphicsView):
 
         super().mouseReleaseEvent(event)
         self.update_scene_limit()
-        if self.pre_action_states is not None:
+        if self._pre_action_states is not None:
             new_states = self._get_rect_states_map()
             transforms = []
-            for item, (old_p, old_r) in self.pre_action_states.items():
+            for item, (old_p, old_r) in self._pre_action_states.items():
                 if item in new_states:
                     new_p, new_r = new_states[item]
                     if old_p != new_p or old_r != new_r:
@@ -732,7 +738,7 @@ class PdfGraphicsView(QGraphicsView):
                     TransformCommand(self, transforms, "枠の移動/変形")
                 )
 
-            self.pre_action_states = None
+            self._pre_action_states = None
 
         self.update_scene_limit()
 
@@ -746,7 +752,7 @@ class PdfGraphicsView(QGraphicsView):
 
     def _on_scene_selection_changed(self):
         """シーンの選択が変更されたら、選択中の myCropBox をシグナルで飛ばす"""
-        items = self.scene.selectedItems()
+        items = self._scene.selectedItems()
         target = None
         if items and isinstance(items[0], myCropBox):
             target = items[0]
@@ -794,7 +800,7 @@ class PdfGraphicsView(QGraphicsView):
             # 個数が違う（追加や削除）場合は、全作成しなおす
             # 1. 現在の全アイテムをシーンから除去
             for item in self.rects:
-                self.scene.removeItem(item)
+                self._scene.removeItem(item)
             self.rects.clear()
 
             # 2. 保存されていた状態からアイテムを再作成
@@ -818,7 +824,7 @@ class PdfGraphicsView(QGraphicsView):
                 box.deltaResized.connect(self._handle_item_delta_resized)
                 box.transformationFinished.connect(self._handle_transformation_finished)
 
-                self.scene.addItem(box)
+                self._scene.addItem(box)
                 self.rects.append(box)
 
                 # バッジ（番号）の追加
@@ -1105,7 +1111,7 @@ class PdfGraphicsView(QGraphicsView):
             c_box = CandidateBox(QRectF(0, 0, w, h))
             c_box.setPos(x, y)
             c_box.setZValue(base_z + (i * 0.1))
-            self.scene.addItem(c_box)
+            self._scene.addItem(c_box)
             candidates.append(c_box)
 
         # 4. モードを切り替え（パネル表示などもモード側で制御）
