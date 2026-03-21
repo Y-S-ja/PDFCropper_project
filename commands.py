@@ -13,25 +13,11 @@ class AddCommand(QUndoCommand):
 
     def undo(self):
         for item in self.items:
-            if item in self.view.rects:
-                self.view.rects.remove(item)
-            if item.scene():
-                self.view.scene.removeItem(item)
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
+            self.view._raw_remove_item(item)
 
     def redo(self):
         for item, idx in zip(self.items, self.indices):
-            if item not in self.view.rects:
-                # 確実に指定位置（通常は末尾）に追加
-                if idx >= len(self.view.rects):
-                    self.view.rects.append(item)
-                else:
-                    self.view.rects.insert(idx, item)
-            if not item.scene():
-                self.view.scene.addItem(item)
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
+            self.view._raw_add_item(item, idx)
 
 
 class RemoveCommand(QUndoCommand):
@@ -51,22 +37,11 @@ class RemoveCommand(QUndoCommand):
         # 元の位置に復元（インデックス順）
         for item, idx in sorted(self.item_data, key=lambda x: x[1]):
             if idx != -1:
-                if idx >= len(self.view.rects):
-                    self.view.rects.append(item)
-                else:
-                    self.view.rects.insert(idx, item)
-                self.view.scene.addItem(item)
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
+                self.view._raw_add_item(item, idx)
 
     def redo(self):
         for item in self.items:
-            if item in self.view.rects:
-                self.view.rects.remove(item)
-            if item.scene():
-                self.view.scene.removeItem(item)
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
+            self.view._raw_remove_item(item)
 
 
 class TransformCommand(QUndoCommand):
@@ -83,28 +58,12 @@ class TransformCommand(QUndoCommand):
         )
 
     def undo(self):
-        for item, old_p, old_r, _, _ in self._transforms:
-            item._block_sync = True  # ループ防止
-            # 先にサイズを戻すことで、後の setPos 時の移動制限計算を正しく行う
-            item.setRect(old_r)
-            item.setPos(old_p)
-            item._block_sync = False
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
-        # プロパティパネルの表示を更新
-        self.view._on_scene_selection_changed()
+        data = [(item, old_p, old_r) for item, old_p, old_r, _, _ in self._transforms]
+        self.view._raw_apply_transforms(data)
 
     def redo(self):
-        for item, _, _, new_p, new_r in self._transforms:
-            item._block_sync = True
-            # 先にサイズを確定させることで、後の setPos 時の移動制限計算を正しく行う
-            item.setRect(new_r)
-            item.setPos(new_p)
-            item._block_sync = False
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
-        # プロパティパネルの表示を更新
-        self.view._on_scene_selection_changed()
+        data = [(item, new_p, new_r) for item, _, _, new_p, new_r in self._transforms]
+        self.view._raw_apply_transforms(data)
 
 
 class ReorderCommand(QUndoCommand):
@@ -117,11 +76,7 @@ class ReorderCommand(QUndoCommand):
         self.new_rects = list(new_rects)
 
     def undo(self):
-        self.view.rects = list(self.old_rects)
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
+        self.view._raw_reorder_rects(self.old_rects)
 
     def redo(self):
-        self.view.rects = list(self.new_rects)
-        self.view.update_numbers()
-        self.view.rectsChanged.emit(self.view.rects)
+        self.view._raw_reorder_rects(self.new_rects)
