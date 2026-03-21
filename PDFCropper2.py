@@ -171,7 +171,9 @@ class CropMode(InteractionMode):
                 self.view.new_rect.geometryChanged.connect(
                     self.view._handle_item_geometry_changed
                 )
-                self.view.new_rect.deltaResized.connect(self.view._handle_item_delta_resized)
+                self.view.new_rect.deltaResized.connect(
+                    self.view._handle_item_delta_resized
+                )
                 self.view.new_rect.transformationFinished.connect(
                     self.view._handle_transformation_finished
                 )
@@ -185,7 +187,9 @@ class CropMode(InteractionMode):
                 # 一旦シーンから除外してから、AddCommand 経由で公式に追加する
                 # これにより、初期作成時とRedo時でロジックが完全に同一になる
                 self.view.scene.removeItem(self.view.new_rect)
-                self.view.undo_stack.push(AddCommand(self.view, self.view.new_rect, "枠の作成"))
+                self.view.undo_stack.push(
+                    AddCommand(self.view, self.view.new_rect, "枠の作成")
+                )
 
                 # 新しく作った枠を選択状態にする
                 self.view.scene.clearSelection()
