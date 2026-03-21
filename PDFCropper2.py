@@ -42,16 +42,195 @@ class InteractionMode:
         print(f"DEBUG: InteractionMode.mousePress (Mode: {self.__class__.__name__})")
         return False  # Falseを返すと既存のロジックを継続
 
-    def mouseMove(self, event): return False
-    def mouseRelease(self, event): return False
-    def keyPress(self, event): return False
-    def on_enter(self): pass
-    def on_exit(self): pass
+    def mouseMove(self, event):
+        return False
+
+    def mouseRelease(self, event):
+        return False
+
+    def keyPress(self, event):
+        return False
+
+    def on_enter(self):
+        pass
+
+    def on_exit(self):
+        pass
 
 
 class DefaultMode(InteractionMode):
     """移行用のデフォルトモード"""
+
     pass
+
+
+class CropMode(InteractionMode):
+    """通常の枠作成・操作モード"""
+
+    def mousePress(self, event):
+        # --- 判定フェーズ：クリックされたものが何かを特定する ---
+        item = self.view.itemAt(event.position().toPoint())
+        target_cropbox = None
+        is_intro_text = False
+
+        temp = item
+        while temp:
+            if isinstance(temp, myCropBox):
+                target_cropbox = temp
+                break
+            if getattr(temp, "tag", temp.data(myCropBox.TAG_NAME)) == "intro_text":
+                is_intro_text = True
+                break
+            temp = temp.parentItem()
+
+        # --- 右クリック：削除 ---
+        if event.button() == Qt.RightButton:
+            if target_cropbox and target_cropbox in self.view.rects:
+                print("Right-clicked: CropBox (Deleting via NormalMode)")
+                self.view.undo_stack.push(RemoveCommand(self.view, target_cropbox))
+                return True
+            elif is_intro_text:
+                print("Right-clicked: Intro Text (Ignoring via NormalMode)")
+                return True
+            else:
+                print(f"Right-clicked: Background (item={item})")
+            return False
+
+        # --- 左クリック：操作 or 新規作成 ---
+        if event.button() == Qt.LeftButton:
+            # アクション開始前のアイテムの状態を個別に保持
+            self.view.pre_action_states = self.view._get_rect_states_map()
+
+            scene_pos = self.view.mapToScene(event.position().toPoint())
+            self.view.start_pos = scene_pos
+
+            if target_cropbox:
+                print(
+                    f"Left-clicked: CropBox (ID:{target_cropbox.rect_id}) (Resizing/Moving via NormalMode)"
+                )
+                self.view.new_rect = None
+                # 親クラスのQGraphicsViewにイベントを届けるためにFalseを返して継続させる
+                return False
+            else:
+                # --- 新規作成の開始判定 ---
+                pdf_rect = self.view.get_pdf_rect()
+                snap_threshold = 30
+                active_area = pdf_rect.adjusted(
+                    -snap_threshold, -snap_threshold, snap_threshold, snap_threshold
+                )
+
+                if not active_area.contains(scene_pos) or is_intro_text:
+                    print("Left-clicked: Far Background (Ignoring via NormalMode)")
+                    self.view.start_pos = None
+                    return True
+
+                # 付近ならクランプ（吸着）して開始位置を確定
+                self.view.start_pos = self.view.clamp_pos(scene_pos)
+
+                self.view.scene.clearSelection()
+                # 新規作成
+                self.view.new_rect = myCropBox(QRectF(0, 0, 0, 0))
+                self.view.new_rect.confirmed = False
+                self.view.new_rect.setPos(self.view.start_pos)
+                self.view.scene.addItem(self.view.new_rect)
+                print("Starting to draw new rect via NormalMode")
+                return True
+        return False
+
+    def mouseMove(self, event):
+        if self.view.start_pos and self.view.new_rect:
+            # 新規枠作成中の更新
+            current_pos = self.view.clamp_pos(
+                self.view.mapToScene(event.position().toPoint())
+            )
+            diff = current_pos - self.view.start_pos
+            actual_top_left = QPointF(
+                min(self.view.start_pos.x(), current_pos.x()),
+                min(self.view.start_pos.y(), current_pos.y()),
+            )
+            self.view.new_rect.setPos(actual_top_left)
+            self.view.new_rect.setRect(QRectF(0, 0, abs(diff.x()), abs(diff.y())))
+            return True
+        return False
+
+    def mouseRelease(self, event):
+        if self.view.start_pos and self.view.new_rect:
+            # 描画終了
+            final_rect = self.view.new_rect.rect()
+            if final_rect.width() < 5 or final_rect.height() < 5:
+                self.view.scene.removeItem(self.view.new_rect)
+            else:
+                self.view.new_rect.confirmed = True
+                self.view.new_rect.tag = "selection_rect"
+                self.view.rect_count += 1
+                self.view.new_rect.rect_id = self.view.rect_count
+                self.view.undo_stack.push(AddCommand(self.view, self.view.new_rect))
+            self.view.new_rect = None
+            self.view.start_pos = None
+            return True
+
+        # 移動・変形の確定
+        if self.view.pre_action_states:
+            new_states = self.view._get_rect_states_map()
+            transforms = []
+            for item, (old_p, old_r) in self.view.pre_action_states.items():
+                if item in new_states:
+                    new_p, new_r = new_states[item]
+                    if old_p != new_p or old_r != new_r:
+                        transforms.append((item, old_p, old_r, new_p, new_r))
+
+            if transforms:
+                self.view.undo_stack.push(
+                    TransformCommand(self.view, transforms, "移動または変形")
+                )
+
+            self.view.pre_action_states = None
+            self.view.start_pos = None
+            return False  # 他の処理（選択解除など）のために継続
+
+        return False
+
+    def keyPress(self, event):
+        """方向キーによる枠の微調整ロジックを移動"""
+        selected_items = [
+            i for i in self.view.scene.selectedItems() if isinstance(i, myCropBox)
+        ]
+        if not selected_items:
+            return False
+
+        step = 10 if event.modifiers() & Qt.ShiftModifier else 1
+        dx, dy = 0, 0
+
+        if event.key() == Qt.Key_Left:
+            dx = -step
+        elif event.key() == Qt.Key_Right:
+            dx = step
+        elif event.key() == Qt.Key_Up:
+            dy = -step
+        elif event.key() == Qt.Key_Down:
+            dy = step
+        else:
+            return False
+
+        # 移動前の状態を記録
+        pre_states = self.view._get_rect_states_map()
+        for item in selected_items:
+            item.setPos(item.pos() + QPointF(dx, dy))
+
+        # 移動後の状態を確認
+        new_states = self.view._get_rect_states_map()
+        transforms = []
+        for item, (old_p, old_r) in pre_states.items():
+            if item in new_states:
+                new_p, new_r = new_states[item]
+                if old_p != new_p or old_r != new_r:
+                    transforms.append((item, old_p, old_r, new_p, new_r))
+
+        if transforms:
+            self.view.undo_stack.push(
+                TransformCommand(self.view, transforms, "キー操作による移動")
+            )
+        return True
 
 
 class ProjectState:
@@ -118,7 +297,7 @@ class PdfGraphicsView(QGraphicsView):
         self.setAcceptDrops(True)
         self.scene = None
         self.state = None
-        self._current_mode = DefaultMode(self)  # 初期モード
+        self._current_mode = CropMode(self)  # 初期モードをNormalに変更
         self._setup_new_scene()
 
         # 2. 【魔法の設定】ズーム時の基準点を「マウスカーソルの下」にする
@@ -341,6 +520,10 @@ class PdfGraphicsView(QGraphicsView):
             super().wheelEvent(event)
 
     def keyPressEvent(self, event):
+        # ステップ2: モードへの委譲
+        if self._current_mode.keyPress(event):
+            return
+
         """方向キーによる枠の微調整"""
         # 選択中のアイテム（myCropBox型）を取得
         selected_items = [
@@ -548,6 +731,9 @@ class PdfGraphicsView(QGraphicsView):
         # TODO: asset に既に切り抜き指示があれば読み込む機能をフェーズ3で実装
 
     def mouseMoveEvent(self, event):
+        if self._current_mode.mouseMove(event):
+            return
+
         if self.start_pos and self.new_rect:
             # 新規枠作成
             # 現在のマウス位置（シーン座標）をPDF内に制限
@@ -569,6 +755,9 @@ class PdfGraphicsView(QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         # 先にアイテム側の処理（正規化など）を終わらせる
+        if self._current_mode.mouseRelease(event):
+            return
+
         super().mouseReleaseEvent(event)
 
         if self.start_pos and self.new_rect:
