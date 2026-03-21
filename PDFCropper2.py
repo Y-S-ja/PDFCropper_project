@@ -271,12 +271,10 @@ class CandidateSelectionMode(InteractionMode):
     def on_enter(self):
         # 確定ボタンパネルを表示
         self.view.candidate_panel.show()
-        self.view.is_candidate_mode = True
 
     def on_exit(self):
         # 確定ボタンパネルを非表示
         self.view.candidate_panel.hide()
-        self.view.is_candidate_mode = False
         # 候補アイテムをクリーンアップ（確定されなかったもの）
         for item in self.candidate_items:
             if item.scene():
@@ -387,10 +385,6 @@ class PdfGraphicsView(QGraphicsView):
         # 初期メッセージを表示
         self.show_intro_message()
 
-        # --- 候補選択モード関連 ---
-        self.is_candidate_mode = False
-        self.candidate_items = []
-
         # 確定ボタンパネル（ビューの右下に浮かせる）
         self.candidate_panel = QFrame(self)
         self.candidate_panel.setStyleSheet("""
@@ -423,11 +417,6 @@ class PdfGraphicsView(QGraphicsView):
         panel_layout.addWidget(self.confirm_btn)
 
         self.candidate_panel.hide()
-
-        # 連打（切り替え）用（モードに移行したが、下位互換のため一旦初期値は残す）
-        self.last_click_pos = QPointF()
-        self.click_rotation_index = 0
-        self.candidate_items = []
 
     def set_interaction_mode(self, mode_class, *args, **kwargs):
         """操作モードを切り替える"""
