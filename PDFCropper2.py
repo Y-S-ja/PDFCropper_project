@@ -1,5 +1,7 @@
 import sys
 import os
+from dataclasses import dataclass
+from typing import Optional
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -9,13 +11,14 @@ from PySide6.QtWidgets import (
     QGraphicsView,
     QGraphicsScene,
     QGraphicsRectItem,
+    QGraphicsItem,
     QTabWidget,
     QDockWidget,
     QStackedWidget,
     QFrame,
     QHBoxLayout,
 )
-from PySide6.QtCore import Qt, QRectF, Signal, QPointF
+from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
 from myModule import myCropBox, myBadge, myIntroductionText, CandidateBox
 from workspace_models import (
@@ -29,6 +32,15 @@ from myDockContent import PreviewPanel, PropertyPanel, AssetShelfWidget
 from pdf_processor import PdfProcessor
 from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
 from preview_view import PdfPreviewView
+
+
+@dataclass
+class HitTestResult:
+    """マウス位置にあるアイテムの判定結果を保持するデータクラス"""
+
+    item: Optional[QGraphicsItem] = None
+    is_cropbox: bool = False
+    is_intro_text: bool = False
 
 
 class InteractionMode:
@@ -364,6 +376,44 @@ class PdfGraphicsView(QGraphicsView):
         lambda self: self.state.current_page_index,
         lambda self, v: setattr(self.state, "current_page_index", v),
     )
+
+    def hit_test(self, pos: QPoint) -> HitTestResult:
+        """指定された座標にあるアイテムの種類を判定する"""
+        item = self.itemAt(pos)
+        res = HitTestResult()
+        if not item:
+            return res
+
+        # 親を辿って種類を特定
+        temp = item
+        while temp:
+            if isinstance(temp, myCropBox):
+                res.item = temp
+                res.is_cropbox = True
+                break
+            if getattr(temp, "tag", temp.data(myCropBox.TAG_NAME)) == "intro_text":
+                res.item = temp
+                res.is_intro_text = True
+                break
+            temp = temp.parentItem()
+
+        # アイテムが見つからなかったが何かはある場合（背景など）、生アイテムを保持
+        if not res.item:
+            res.item = item
+
+        return res
+
+    def is_in_active_area(self, scene_pos: QPointF) -> bool:
+        """シーン座標が操作（新規作成など）可能な領域内にあるか判定"""
+        pdf_rect = self.get_pdf_rect()
+        if pdf_rect.isNull():
+            return False
+
+        snap_threshold = 30
+        active_area = pdf_rect.adjusted(
+            -snap_threshold, -snap_threshold, snap_threshold, snap_threshold
+        )
+        return active_area.contains(scene_pos)
 
     def __init__(self):
         super().__init__()
