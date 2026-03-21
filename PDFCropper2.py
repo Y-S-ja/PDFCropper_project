@@ -542,6 +542,34 @@ class PdfGraphicsView(QGraphicsView):
         self.new_rect = None
         return True
 
+    def remove_box(self, box_item: myCropBox):
+        """指定された枠を削除し、Undoスタックに登録する"""
+        if not box_item:
+            return
+        self.undo_stack.push(RemoveCommand(self, box_item))
+
+    def record_pre_transform_state(self):
+        """現在の全枠の状態をバックアップする（Undo用）"""
+        self.pre_action_states = self._get_rect_states_map()
+
+    def commit_transformation(self, label="移動または変形"):
+        """バックアップ時からの差分を確認し、変更があればUndoスタックに登録する"""
+        if not self.pre_action_states:
+            return
+
+        new_states = self._get_rect_states_map()
+        transforms = []
+        for item, (old_p, old_r) in self.pre_action_states.items():
+            if item in new_states:
+                new_p, new_r = new_states[item]
+                if old_p != new_p or old_r != new_r:
+                    transforms.append((item, old_p, old_r, new_p, new_r))
+
+        if transforms:
+            self.undo_stack.push(TransformCommand(self, transforms, label))
+
+        self.pre_action_states = None
+        self.start_pos = None
 
     def set_interaction_mode(self, mode_class, *args, **kwargs):
         """操作モードを切り替える"""
