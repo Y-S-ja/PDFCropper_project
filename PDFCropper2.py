@@ -233,6 +233,51 @@ class CropMode(InteractionMode):
         return True
 
 
+class CandidateSelectionMode(InteractionMode):
+    """自動認識された候補枠を選択するモード"""
+
+    def __init__(self, view, candidate_items):
+        super().__init__(view)
+        self.candidate_items = candidate_items
+        self.click_rotation_index = 0
+        self.last_click_pos = QPointF()
+
+    def on_enter(self):
+        # 確定ボタンパネルを表示
+        self.view.candidate_panel.show()
+        self.view.is_candidate_mode = True
+
+    def on_exit(self):
+        # 確定ボタンパネルを非表示
+        self.view.candidate_panel.hide()
+        self.view.is_candidate_mode = False
+        # 候補アイテムをクリーンアップ（確定されなかったもの）
+        for item in self.candidate_items:
+            if item.scene():
+                self.view.scene.removeItem(item)
+        self.candidate_items = []
+
+    def mousePress(self, event):
+        if event.button() == Qt.LeftButton:
+            click_pos = event.position().toPoint()
+            items = self.view.items(click_pos)
+            candidates = [it for it in items if isinstance(it, CandidateBox)]
+
+            if candidates:
+                scene_pos = self.view.mapToScene(click_pos)
+                if (scene_pos - self.last_click_pos).manhattanLength() < 5:
+                    self.click_rotation_index = (self.click_rotation_index + 1) % len(
+                        candidates
+                    )
+                else:
+                    self.click_rotation_index = 0
+
+                self.last_click_pos = scene_pos
+                candidates[self.click_rotation_index].toggle()
+                return True
+        return False
+
+
 class ProjectState:
     """プロジェクト（ファイル）ごとの編集状態を保持するコンテナ"""
 
@@ -353,15 +398,16 @@ class PdfGraphicsView(QGraphicsView):
 
         self.candidate_panel.hide()
 
-        # 連打（切り替え）用
+        # 連打（切り替え）用（モードに移行したが、下位互換のため一旦初期値は残す）
         self.last_click_pos = QPointF()
         self.click_rotation_index = 0
+        self.candidate_items = []
 
-    def set_interaction_mode(self, mode_class):
+    def set_interaction_mode(self, mode_class, *args, **kwargs):
         """操作モードを切り替える"""
         if self._current_mode:
             self._current_mode.on_exit()
-        self._current_mode = mode_class(self)
+        self._current_mode = mode_class(self, *args, **kwargs)
         self._current_mode.on_enter()
         print(f"MODE CHANGED: {self._current_mode.__class__.__name__}")
 
@@ -1183,27 +1229,28 @@ class PdfGraphicsView(QGraphicsView):
         rect_data.sort(key=lambda x: x[0], reverse=True)
 
         # 3. 候補表示用アイテムを作成
-        self.is_candidate_mode = True
+        candidates = []
         base_z = 100
         for i, (area, x, y, w, h) in enumerate(rect_data):
             c_box = CandidateBox(QRectF(0, 0, w, h))
             c_box.setPos(x, y)
-            # zValue を少しずつ上げて、小さいもの（リストの後ろの方）が手間に来るようにする
             c_box.setZValue(base_z + (i * 0.1))
             self.scene.addItem(c_box)
-            self.candidate_items.append(c_box)
+            candidates.append(c_box)
 
-        # 4. ボタンパネルを表示
-        self.candidate_panel.show()
-        self.candidate_panel.adjustSize()
-        self.update_candidate_panel_pos()
+        # 4. モードを切り替え（パネル表示などもモード側で制御）
+        self.set_interaction_mode(CandidateSelectionMode, candidates)
         self.setDragMode(QGraphicsView.NoDrag)
         self.viewport().setCursor(Qt.ArrowCursor)
 
     def confirm_candidates(self):
         """採用された候補を確定して cropbox に変換する"""
+        if not isinstance(self._current_mode, CandidateSelectionMode):
+            return
+
         new_boxes = []
-        for c_box in self.candidate_items:
+        # モードが保持している candidate_items を参照
+        for c_box in self._current_mode.candidate_items:
             if c_box.is_active:
                 # 正規の myCropBox に変換
                 r = c_box.rect()
@@ -1230,22 +1277,13 @@ class PdfGraphicsView(QGraphicsView):
         if new_boxes:
             self.undo_stack.push(AddCommand(self, new_boxes, "枠線の自動認識"))
 
-        self.exit_candidate_mode()
+        # モードを切り替えることで後片付け（on_exit）が走る
+        self.set_interaction_mode(CropMode)
 
     def cancel_candidates(self):
         """候補選択を中止して破棄する"""
-        self.exit_candidate_mode()
-
-    def exit_candidate_mode(self):
-        """候補選択モードを終了し、表示をクリアする"""
-        self.is_candidate_mode = False
-        for item in self.candidate_items:
-            self.scene.removeItem(item)
-        self.candidate_items.clear()
-        self.candidate_panel.hide()
-
-        # カーソルを元に戻す
-        self.viewport().setCursor(Qt.CrossCursor)
+        # モードを切り替えることで後片付け（on_exit）が走る
+        self.set_interaction_mode(CropMode)
 
 
 class PdfTabContainer(QStackedWidget):
