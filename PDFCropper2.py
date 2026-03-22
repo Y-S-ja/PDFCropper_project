@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QFrame,
     QHBoxLayout,
+    QMenu,
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
@@ -1285,16 +1286,52 @@ class JoinListWidget(QListWidget):
     """ファイルドロップを受け付けるカスタム連結リストウィジェット"""
 
     fileDropped = Signal(str)
+    orderChanged = Signal()  # 並び替えや削除が行われたときに発火
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setDragDropMode(QListWidget.InternalMove)
         self.setAlternatingRowColors(True)
+        self.setSelectionMode(QListWidget.ExtendedSelection)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+
         self.setStyleSheet("""
-            QListWidget { font-size: 14px; padding: 10px; }
-            QListWidget::item { height: 40px; }
+            QListWidget { font-size: 14px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+            QListWidget::item { height: 45px; border-bottom: 1px solid #eee; }
+            QListWidget::item:selected { background-color: #e3f2fd; color: #0d47a1; }
         """)
+
+        # モデルの変更を検知して orderChanged を発火させる
+        self.model().rowsMoved.connect(lambda: self.orderChanged.emit())
+        self.model().rowsInserted.connect(lambda: self.orderChanged.emit())
+        self.model().rowsRemoved.connect(lambda: self.orderChanged.emit())
+
+    def keyPressEvent(self, event):
+        """Delete / Backspace キーで選択中アイテムを削除"""
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            self.remove_selected_items()
+        else:
+            super().keyPressEvent(event)
+
+    def remove_selected_items(self):
+        """選択されているアイテムをリストから削除"""
+        for item in self.selectedItems():
+            self.takeItem(self.row(item))
+        self.orderChanged.emit()
+
+    def _show_context_menu(self, pos):
+        """右クリックメニューを表示"""
+        menu = QMenu(self)
+        remove_action = menu.addAction("⚠️ 選択したアイテムを削除")
+        remove_action.triggered.connect(self.remove_selected_items)
+        
+        menu.addSeparator()
+        clear_action = menu.addAction("🗑️ リストを空にする")
+        clear_action.triggered.connect(lambda: (self.clear(), self.orderChanged.emit()))
+        
+        menu.exec(self.mapToGlobal(pos))
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
