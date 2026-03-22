@@ -19,7 +19,10 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QFrame,
     QHBoxLayout,
+    QVBoxLayout,
+    QWidget,
     QMenu,
+    QInputDialog,
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack, QAction
@@ -1234,10 +1237,10 @@ class BaseDeskWidget(QStackedWidget):
         self.editor = None  # 子クラスで初期化
         self.preview = PdfPreviewView()
 
-    def finalize_init(self):
+    def finalize_init(self, editor_widget):
         """子クラスでの初期化後にウィジェットを登録する"""
-        if self.editor:
-            self.addWidget(self.editor)
+        if editor_widget:
+            self.addWidget(editor_widget)
         self.addWidget(self.preview)
 
     def set_mode(self, preview_mode: bool):
@@ -1269,7 +1272,7 @@ class CropDeskWidget(BaseDeskWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editor = PdfGraphicsView()
-        self.finalize_init()
+        self.finalize_init(self.editor)
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
@@ -1362,9 +1365,52 @@ class JoinDeskWidget(BaseDeskWidget):
     def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
         self.asset_mgr = asset_mgr
-        # エディタ部（カスタム連結リスト）
+
+        # エディタ部（カスタム連結リスト + 操作バー）
+        self.editor_widget = QWidget()
+        layout = QVBoxLayout(self.editor_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # 保存バー
+        ctrl_bar = QHBoxLayout()
+        self.save_btn = QPushButton("連結内容を素材棚に登録")
+        self.save_btn.setStyleSheet(
+            "font-weight: bold; background-color: #e3f2fd; height: 35px;"
+        )
+        self.save_btn.clicked.connect(self.save_as_asset)
+        ctrl_bar.addWidget(self.save_btn)
+        layout.addLayout(ctrl_bar)
+
         self.editor = JoinListWidget()
-        self.finalize_init()
+        layout.addWidget(self.editor)
+
+        self.finalize_init(self.editor_widget)
+
+    def save_as_asset(self):
+        """現在のリストを JoinedAsset として素材棚に登録する"""
+        if self.editor.count() == 0:
+            QMessageBox.warning(self, "エラー", "連結するアイテムがありません")
+            return
+        elif self.editor.count() == 1:
+            QMessageBox.warning(self, "エラー", "連結するアイテムが1つしかありません")
+            return
+
+        name, ok = QInputDialog.getText(
+            self, "素材として保存", "プロジェクト名:", text="New_Project"
+        )
+        if not ok or not name:
+            return
+
+        item_ids = []
+        for i in range(self.editor.count()):
+            item = self.editor.item(i)
+            item_ids.append(item.data(Qt.UserRole))
+
+        # モデルに登録
+        self.asset_mgr.create_joined(item_ids, name=name)
+        QMessageBox.information(
+            self, "完了", f"アセット '{name}' を素材棚に登録しました。"
+        )
 
     def on_preview_enter(self):
         """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
