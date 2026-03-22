@@ -1375,7 +1375,7 @@ class MainWindow(QMainWindow):
         )
 
         add_join_tab_action = file_menu.addAction("結合タブを追加")
-        add_join_tab_action.setShortcut("Ctrl+Y")
+        add_join_tab_action.setShortcut("Ctrl+J")
         add_join_tab_action.triggered.connect(
             lambda _=False: self.add_new_tab(JoinDeskWidget)
         )
