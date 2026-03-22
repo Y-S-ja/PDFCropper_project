@@ -1359,15 +1359,50 @@ class JoinDeskWidget(BaseDeskWidget):
     1つのタブ内で「ファイル連結順序リスト」と「プレビュー画面」を管理するデスクウィジェット。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
+        self.asset_mgr = asset_mgr
         # エディタ部（カスタム連結リスト）
         self.editor = JoinListWidget()
         self.finalize_init()
 
     def on_preview_enter(self):
-        """連結リストから最終PDFのプレビューを生成（フェーズ4で実装予定）"""
-        pass
+        """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
+        assets_metadata = []
+
+        # リストのアイテムを上から順に走査し、レンダリングに必要なメタデータを収集
+        for i in range(self.editor.count()):
+            item = self.editor.item(i)
+            asset_id = item.data(Qt.UserRole)
+            asset = self.asset_mgr.get_asset(asset_id)
+
+            if not asset:
+                continue
+
+            match asset:
+                case SourceAsset():
+                    assets_metadata.append(
+                        {"path": asset.path, "crop_coords": [], "scale_factor": 1.0}
+                    )
+                case CroppedAsset():
+                    # 親（Source）を取得してパスを特定
+                    parent = self.asset_mgr.get_asset(asset.parent_id)
+                    if parent and isinstance(parent, SourceAsset):
+                        # QRectF のリストを (l,t,r,b) のタプルリストに変換
+                        coords = [
+                            (r.left(), r.top(), r.right(), r.bottom())
+                            for r in asset.crop_rects
+                        ]
+                        assets_metadata.append(
+                            {
+                                "path": parent.path,
+                                "crop_coords": coords,
+                                "scale_factor": asset.scale_factor,
+                            }
+                        )
+
+        # 汎用化された PdfPreviewView の非同期レンダリングを呼び出す
+        self.preview.update_joined_previews(assets_metadata)
 
     def set_asset(self, asset: WorkspaceAsset):
         """結合リストにアイテムを追加する"""
@@ -1672,7 +1707,13 @@ class MainWindow(QMainWindow):
         while new_num in used_numbers:
             new_num += 1
 
-        new_desk = desk_class()
+        # クラスによってプレフィックスと引数を変える
+        if desk_class == JoinDeskWidget:
+            prefix_label = "🔗 Join"
+            new_desk = JoinDeskWidget(self.asset_mgr)
+        else:
+            prefix_label = "✂️ Crop"
+            new_desk = CropDeskWidget()
 
         # クロップデスク固有の初期接続
         if isinstance(new_desk, CropDeskWidget):
@@ -1684,7 +1725,7 @@ class MainWindow(QMainWindow):
             # ジョインタブ固有のドロップ信号を接続
             new_desk.editor.fileDropped.connect(self.load_new_pdf)
 
-        index = self.tab_widget.addTab(new_desk, f"{prefix} {new_num}")
+        index = self.tab_widget.addTab(new_desk, f"{prefix_label} {new_num}")
         self.tab_widget.setCurrentIndex(index)
         self.update_window_title()
 
