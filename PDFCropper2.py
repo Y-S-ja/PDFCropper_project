@@ -229,7 +229,8 @@ class PdfGraphicsView(QGraphicsView):
 
     # プロジェクト固有の変数をプロパティ経由で state へ中継 (外部公開が必要なものに限定)
     rects = property(
-        lambda self: self._state._rects, lambda self, v: setattr(self._state, "_rects", v)
+        lambda self: self._state._rects,
+        lambda self, v: setattr(self._state, "_rects", v),
     )
     undo_stack = property(lambda self: self._state._undo_stack)
     pdf_path = property(
@@ -255,19 +256,28 @@ class PdfGraphicsView(QGraphicsView):
 
     # 内部管理用の変数をプライベートプロパティとして定義
     @property
-    def _start_pos(self): return self._state._start_pos
+    def _start_pos(self):
+        return self._state._start_pos
+
     @_start_pos.setter
-    def _start_pos(self, v): self._state._start_pos = v
+    def _start_pos(self, v):
+        self._state._start_pos = v
 
     @property
-    def _new_rect(self): return self._state._new_rect
+    def _new_rect(self):
+        return self._state._new_rect
+
     @_new_rect.setter
-    def _new_rect(self, v): self._state._new_rect = v
-    
+    def _new_rect(self, v):
+        self._state._new_rect = v
+
     @property
-    def _pre_action_states(self): return self._state._pre_action_states
+    def _pre_action_states(self):
+        return self._state._pre_action_states
+
     @_pre_action_states.setter
-    def _pre_action_states(self, v): self._state._pre_action_states = v
+    def _pre_action_states(self, v):
+        self._state._pre_action_states = v
 
     def __init__(self):
         super().__init__()
@@ -488,10 +498,10 @@ class PdfGraphicsView(QGraphicsView):
                 self.rects.append(item)
             else:
                 self.rects.insert(index, item)
-        
+
         if not item.scene():
             self._scene.addItem(item)
-            
+
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
 
@@ -499,10 +509,10 @@ class PdfGraphicsView(QGraphicsView):
         """アイテムをリストとシーンから除外する"""
         if item in self.rects:
             self.rects.remove(item)
-        
+
         if item.scene():
             self._scene.removeItem(item)
-            
+
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
 
@@ -514,7 +524,7 @@ class PdfGraphicsView(QGraphicsView):
             item.setRect(r)
             item.setPos(p)
             item._block_sync = False
-            
+
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
         self._on_scene_selection_changed()
