@@ -1357,6 +1357,16 @@ class JoinListWidget(QListWidget):
         self.model().rowsInserted.connect(lambda: self.orderChanged.emit())
         self.model().rowsRemoved.connect(lambda: self.orderChanged.emit())
 
+    def get_item_ids(self):
+        """現在のリストの並び順に基づいてアセットIDのリストを返す"""
+        ids = []
+        for i in range(self.count()):
+            item = self.item(i)
+            asset_id = item.data(Qt.UserRole)
+            if asset_id:
+                ids.append(asset_id)
+        return ids
+
     def keyPressEvent(self, event):
         """Delete / Backspace キーで選択中アイテムを削除"""
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
@@ -1456,10 +1466,7 @@ class JoinDeskWidget(BaseDeskWidget):
         if not ok or not name:
             return
 
-        item_ids = []
-        for i in range(self.editor.count()):
-            item = self.editor.item(i)
-            item_ids.append(item.data(Qt.UserRole))
+        item_ids = self.editor.get_item_ids()
 
         # モデルに登録
         self.asset_mgr.create_joined(item_ids, name=name)
@@ -1469,7 +1476,8 @@ class JoinDeskWidget(BaseDeskWidget):
 
     def export_as_pdf(self):
         """現在のリストを物理PDFファイルとして出力保存する"""
-        if self.editor.count() == 0:
+        item_ids = self.editor.get_item_ids()
+        if not item_ids:
             QMessageBox.warning(self, "エラー", "書き出すアイテムがありません")
             return
 
@@ -1480,13 +1488,10 @@ class JoinDeskWidget(BaseDeskWidget):
         if not file_path:
             return
 
-        # 2. メタデータの収集（on_preview_enter と同様のロジック）
+        # 2. メタデータの収集
         assets_metadata = []
-        for i in range(self.editor.count()):
-            item = self.editor.item(i)
-            asset_id = item.data(Qt.UserRole)
+        for asset_id in item_ids:
             asset = self.asset_mgr.get_asset(asset_id)
-
             if not asset:
                 continue
 
@@ -1521,14 +1526,16 @@ class JoinDeskWidget(BaseDeskWidget):
 
     def on_preview_enter(self):
         """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
+        item_ids = self.editor.get_item_ids()
+        if not item_ids:
+            self.preview.clear_display()
+            return
+
         assets_metadata = []
 
         # リストのアイテムを上から順に走査し、レンダリングに必要なメタデータを収集
-        for i in range(self.editor.count()):
-            item = self.editor.item(i)
-            asset_id = item.data(Qt.UserRole)
+        for asset_id in item_ids:
             asset = self.asset_mgr.get_asset(asset_id)
-
             if not asset:
                 continue
 
