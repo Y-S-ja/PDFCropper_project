@@ -1315,9 +1315,13 @@ class MainWindow(QMainWindow):
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
 
-        add_tab_action = file_menu.addAction("タブを追加")
+        add_tab_action = file_menu.addAction("切り抜きタブを追加")
         add_tab_action.setShortcut("Ctrl+T")
-        add_tab_action.triggered.connect(self.add_new_tab)
+        add_tab_action.triggered.connect(lambda: self.add_new_tab(CropDeskWidget))
+
+        add_join_tab_action = file_menu.addAction("結合タブを追加")
+        add_join_tab_action.setShortcut("Ctrl+Y")
+        add_join_tab_action.triggered.connect(lambda: self.add_new_tab(JoinDeskWidget))
 
         save_action = file_menu.addAction("保存")
         save_action.setShortcut("Ctrl+S")
@@ -1356,6 +1360,22 @@ class MainWindow(QMainWindow):
                 self.current_view().clear_selections() if self.current_view() else None
             )
         )
+
+        # ワークスペース操作ツールバー
+        self.workspace_toolbar = self.addToolBar("ワークスペース")
+        self.workspace_toolbar.setMovable(False)
+
+        self.action_new_crop = QAction("✂️ クロップ", self)
+        self.action_new_crop.setToolTip("新しい切り抜きタブを作成")
+        self.action_new_crop.triggered.connect(lambda: self.add_new_tab(CropDeskWidget))
+
+        self.action_new_join = QAction("🔗 ジョイン", self)
+        self.action_new_join.setToolTip("新しい結合タブを作成")
+        self.action_new_join.triggered.connect(lambda: self.add_new_tab(JoinDeskWidget))
+
+        self.workspace_toolbar.addAction(self.action_new_crop)
+        self.workspace_toolbar.addAction(self.action_new_join)
+        self.workspace_toolbar.addSeparator()
 
         # 表示モード切替ツールバー
         self.mode_toolbar = self.addToolBar("表示モード")
