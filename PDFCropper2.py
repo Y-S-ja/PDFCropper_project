@@ -1373,12 +1373,21 @@ class JoinDeskWidget(BaseDeskWidget):
 
         # 保存バー
         ctrl_bar = QHBoxLayout()
-        self.save_btn = QPushButton("連結内容を素材棚に登録")
+
+        self.save_btn = QPushButton("素材棚に登録")
         self.save_btn.setStyleSheet(
             "font-weight: bold; background-color: #e3f2fd; height: 35px;"
         )
         self.save_btn.clicked.connect(self.save_as_asset)
         ctrl_bar.addWidget(self.save_btn)
+
+        self.export_btn = QPushButton("PDFとして書き出し")
+        self.export_btn.setStyleSheet(
+            "font-weight: bold; background-color: #e8f5e9; height: 35px;"
+        )
+        self.export_btn.clicked.connect(self.export_as_pdf)
+        ctrl_bar.addWidget(self.export_btn)
+
         layout.addLayout(ctrl_bar)
 
         self.editor = JoinListWidget()
@@ -1411,6 +1420,58 @@ class JoinDeskWidget(BaseDeskWidget):
         QMessageBox.information(
             self, "完了", f"アセット '{name}' を素材棚に登録しました。"
         )
+
+    def export_as_pdf(self):
+        """現在のリストを物理PDFファイルとして出力保存する"""
+        if self.editor.count() == 0:
+            QMessageBox.warning(self, "エラー", "書き出すアイテムがありません")
+            return
+
+        # 1. 保存先の決定
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "PDFとして書き出し", "joined_output.pdf", "PDF Files (*.pdf)"
+        )
+        if not file_path:
+            return
+
+        # 2. メタデータの収集（on_preview_enter と同様のロジック）
+        assets_metadata = []
+        for i in range(self.editor.count()):
+            item = self.editor.item(i)
+            asset_id = item.data(Qt.UserRole)
+            asset = self.asset_mgr.get_asset(asset_id)
+
+            if not asset:
+                continue
+
+            match asset:
+                case SourceAsset():
+                    assets_metadata.append(
+                        {"path": asset.path, "crop_coords": [], "scale_factor": 1.0}
+                    )
+                case CroppedAsset():
+                    parent = self.asset_mgr.get_asset(asset.parent_id)
+                    if parent and isinstance(parent, SourceAsset):
+                        coords = [
+                            (r.left(), r.top(), r.right(), r.bottom())
+                            for r in asset.crop_rects
+                        ]
+                        assets_metadata.append(
+                            {
+                                "path": parent.path,
+                                "crop_coords": coords,
+                                "scale_factor": asset.scale_factor,
+                            }
+                        )
+
+        # 3. 物理書き出し実行
+        try:
+            PdfProcessor.join_and_save(file_path, assets_metadata)
+            QMessageBox.information(self, "完了", f"PDFを書き出しました：\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(
+                self, "書き出しエラー", f"PDFの作成に失敗しました：\n{str(e)}"
+            )
 
     def on_preview_enter(self):
         """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
