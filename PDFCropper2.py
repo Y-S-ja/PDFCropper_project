@@ -1281,6 +1281,42 @@ class CropDeskWidget(BaseDeskWidget):
         self.editor.set_asset(asset)
 
 
+class JoinListWidget(QListWidget):
+    """ファイルドロップを受け付けるカスタム連結リストウィジェット"""
+
+    fileDropped = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QListWidget.InternalMove)
+        self.setAlternatingRowColors(True)
+        self.setStyleSheet("""
+            QListWidget { font-size: 14px; padding: 10px; }
+            QListWidget::item { height: 40px; }
+        """)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        # 外部ファイルがドロップされた場合のみ処理
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path.lower().endswith(".pdf"):
+                    self.fileDropped.emit(file_path)
+            event.acceptProposedAction()
+        else:
+            # 内部の並び替えドロップなどは親クラス（QListWidget）に任せる
+            super().dropEvent(event)
+
+
 class JoinDeskWidget(BaseDeskWidget):
     """
     1つのタブ内で「ファイル連結順序リスト」と「プレビュー画面」を管理するデスクウィジェット。
@@ -1288,14 +1324,8 @@ class JoinDeskWidget(BaseDeskWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # エディタ部（ファイルの並び替えリスト）
-        self.editor = QListWidget()
-        self.editor.setDragDropMode(QListWidget.InternalMove)
-        self.editor.setAlternatingRowColors(True)
-        self.editor.setStyleSheet("""
-            QListWidget { font-size: 14px; padding: 10px; }
-            QListWidget::item { height: 40px; }
-        """)
+        # エディタ部（カスタム連結リスト）
+        self.editor = JoinListWidget()
         self.finalize_init()
 
     def on_preview_enter(self):
@@ -1613,6 +1643,9 @@ class MainWindow(QMainWindow):
             new_view.fileDropped.connect(self.load_new_pdf)
             new_view.selectionChanged.connect(self._handle_selection_changed)
             new_view.rectsChanged.connect(self._handle_rects_changed)
+        elif isinstance(new_desk, JoinDeskWidget):
+            # ジョインタブ固有のドロップ信号を接続
+            new_desk.editor.fileDropped.connect(self.load_new_pdf)
 
         index = self.tab_widget.addTab(new_desk, f"{prefix} {new_num}")
         self.tab_widget.setCurrentIndex(index)
@@ -1703,16 +1736,29 @@ class MainWindow(QMainWindow):
                 break
 
     def load_new_pdf(self, file_path):
-        view = self.current_view()
-        if not view:
-            return
+        """指定されたまたは現在のビューに、素材棚を経由してPDFをロードする"""
+        # 1. 何はともあれ素材棚（AssetManager）に登録し、アイコンが並ぶようにする
+        asset = self.asset_mgr.create_source(file_path)
 
-        view.load_pdf_page(file_path)
-        # タブの名前をファイル名に変える
-        current_index = self.tab_widget.currentIndex()
-        self.tab_widget.setTabText(current_index, os.path.basename(file_path))
-        # ウィンドウタイトルも更新
-        self.update_window_title()
+        # 2. ロード対象のデスクを特定
+        desk = self.current_desk()
+        if not desk:
+            # タブがない場合は自動的にクロップタブを作成
+            desk = self.add_new_tab(CropDeskWidget)
+
+        # 3. デスクの種類に関わらずアセットを流し込む（set_asset 側で処理を分岐）
+        if isinstance(desk, CropDeskWidget):
+            # キャンバスへの読み込み時は、破棄確認を行う
+            if not desk.editor.ask_discard_changes():
+                return
+            desk.set_asset(asset)
+            # クロップタブのみ、タブ名とタイトルをファイル名に同期
+            idx = self.tab_widget.indexOf(desk)
+            self.tab_widget.setTabText(idx, asset.name)
+            self.update_window_title()
+        else:
+            # 他のデスク（Join等）なら単純に追加
+            desk.set_asset(asset)
 
     def process_crop(self):
         view = self.current_view()
