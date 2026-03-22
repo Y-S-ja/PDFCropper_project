@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject, Signal, Qt, QThread
+from PySide6.QtGui import QImage
 from pdf_processor import PdfProcessor
 import fitz
 
@@ -82,6 +83,101 @@ class PreviewWorker(QObject):
                 # 最後の未送信分があれば送信
                 if batch and not self._is_cancelled:
                     self.page_ready.emit(batch)
+
+        except Exception as e:
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit()
+
+
+class JoinPreviewWorker(QObject):
+    """
+    連結リストのアセット群からプレビュー画像を順次生成する
+    """
+
+    page_ready = Signal(list)  # [(index, QImageのリスト), ...]
+    progress_updated = Signal(int, int)  # current, total
+    finished = Signal()
+    error = Signal(str)
+
+    def __init__(self, assets_metadata, preview_dpi=144):
+        super().__init__()
+        self.assets_metadata = assets_metadata
+        self.preview_dpi = preview_dpi
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def run(self):
+        """リスト上の全アセットを順に処理し、画像を生成する"""
+        try:
+            total_items = len(self.assets_metadata)
+            if total_items == 0:
+                return
+
+            batch = []
+            batch_size = 5
+            global_idx = 0
+
+            for i, meta in enumerate(self.assets_metadata):
+                if self._is_cancelled:
+                    return
+
+                path = meta["path"]
+                crop_coords = meta["crop_coords"]
+                scale_factor = meta["scale_factor"]
+
+                try:
+                    with fitz.open(path) as doc:
+                        for page_idx in range(len(doc)):
+                            if self._is_cancelled:
+                                return
+
+                            if not crop_coords:
+                                # 全ページ表示の場合
+                                pix = doc[page_idx].get_pixmap(dpi=self.preview_dpi)
+                                img = QImage(
+                                    pix.samples,
+                                    pix.width,
+                                    pix.height,
+                                    pix.stride,
+                                    QImage.Format_RGB888,
+                                ).copy()
+                                batch.append((global_idx, [img]))
+                                global_idx += 1
+                            else:
+                                # 切り抜き表示の場合
+                                page_previews = PdfProcessor._get_previews_for_page(
+                                    doc,
+                                    page_idx,
+                                    crop_coords,
+                                    scale_factor,
+                                    self.preview_dpi,
+                                )
+                                # 有効な画像だけを抽出
+                                valid_imgs = [img for img in page_previews if img]
+                                if valid_imgs:
+                                    batch.append((global_idx, valid_imgs))
+                                    global_idx += 1
+
+                            # 進捗通知（アセット単位 + 詳細の微調整などは呼び出し側で想定）
+                            self.progress_updated.emit(i + 1, total_items)
+
+                            # バッチ送信
+                            if len(batch) >= batch_size:
+                                self.page_ready.emit(batch)
+                                batch = []
+                                QThread.msleep(30)
+                            else:
+                                QThread.msleep(5)
+
+                except Exception as e:
+                    print(f"Error processing {path} in JoinWorker: {e}")
+
+            # 残りのバッチを送信
+            if batch and not self._is_cancelled:
+                self.page_ready.emit(batch)
 
         except Exception as e:
             self.error.emit(str(e))
