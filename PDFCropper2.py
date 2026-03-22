@@ -1210,9 +1210,9 @@ class PdfGraphicsView(QGraphicsView):
         self.set_interaction_mode(CropMode)
 
 
-class PdfTabContainer(QStackedWidget):
+class CropDeskWidget(QStackedWidget):
     """
-    1つのタブ内で「編集画面」と「プレビュー画面」を管理するコンテナ。
+    1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
 
     def __init__(self, parent=None):
@@ -1412,7 +1412,7 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, index):
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
         self.update_window_title()
-        container = self.current_tab_container()
+        container = self.current_desk()
         if not container:
             return
 
@@ -1435,9 +1435,9 @@ class MainWindow(QMainWindow):
 
     def _handle_mode_change(self, preview_mode):
         """ツールバーでのモード切替を処理"""
-        container = self.current_tab_container()
-        if container:
-            container.set_mode(preview_mode)
+        desk = self.current_desk()
+        if desk and isinstance(desk, CropDeskWidget):
+            desk.set_mode(preview_mode)
             self.action_editor.setChecked(not preview_mode)
             self.action_preview.setChecked(preview_mode)
 
@@ -1470,12 +1470,15 @@ class MainWindow(QMainWindow):
         if view:
             view.sync_symmetry = enabled
 
-    def current_tab_container(self):
+    def current_desk(self):
+        """現在のアクティブなタブに含まれるデスクウィジェットを返す"""
         return self.tab_widget.currentWidget()
 
     def current_view(self):
-        container = self.current_tab_container()
-        return container.editor if container else None
+        desk = self.current_desk()
+        if isinstance(desk, CropDeskWidget):
+            return desk.editor
+        return None
 
     def add_new_tab(self):
         """新しいタブを追加する。空いている最小の番号を割り振る"""
@@ -1495,14 +1498,14 @@ class MainWindow(QMainWindow):
         while new_num in used_numbers:
             new_num += 1
 
-        new_container = PdfTabContainer()
-        new_view = new_container.editor
+        new_desk = CropDeskWidget()
+        new_view = new_desk.editor
         new_view.fileDropped.connect(self.load_new_pdf)
         # 信号を一度だけ中継用メソッドに接続する（disconnect不要にするため）
         new_view.selectionChanged.connect(self._handle_selection_changed)
         new_view.rectsChanged.connect(self._handle_rects_changed)
 
-        index = self.tab_widget.addTab(new_container, f"無題 {new_num}")
+        index = self.tab_widget.addTab(new_desk, f"無題 {new_num}")
         self.tab_widget.setCurrentIndex(index)
         self.update_window_title()
         return new_view
