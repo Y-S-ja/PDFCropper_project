@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QEvent, QThread
 from PySide6.QtGui import QPixmap, QColor, QBrush, QPen, QTransform, QPainter
 import fitz
-from worker import PreviewWorker
+from worker import PreviewWorker, JoinPreviewWorker
 
 
 class PdfPreviewView(QWidget):
@@ -69,6 +69,8 @@ class PdfPreviewView(QWidget):
         self.worker = None
         self.thread = None
         self.page_slots = {}  # (page_idx, rect_idx) -> (RectItem, TextItem, y_pos, w, h)
+        self.current_y = 20  # 逐次描画（連結用）で使用するY座標
+        self.spacing = 30  # 画像間の余白
 
         # ズーム用イベントフィルタ（QGraphicsViewのViewportに設置）
         self.view.viewport().installEventFilter(self)
@@ -209,10 +211,10 @@ class PdfPreviewView(QWidget):
         self.worker.page_ready.connect(self._add_page_images)
         self.worker.progress_updated.connect(self._update_progress)
         self.worker.finished.connect(self._on_finished)
-        
+
         # 終了処理の接続（スレッドを止めるだけにする）
         self.worker.finished.connect(self.thread.quit)
-        
+
         self.thread.start()
 
     def _update_progress(self, current, total):
@@ -231,7 +233,7 @@ class PdfPreviewView(QWidget):
         """Workerから届いたバッチ（複数ページ分）の画像をシーン上のプレースホルダーの位置に配置する"""
         if not batch_data:
             return
-            
+
         for page_idx, images in batch_data:
             for i, q_img in enumerate(images):
                 if q_img is None:
@@ -255,3 +257,76 @@ class PdfPreviewView(QWidget):
                 self.scene.addItem(pix_item)
                 rect_item.setVisible(False)
                 text_item.setVisible(False)
+
+    def update_joined_previews(self, assets_metadata):
+        """
+        複数アセットのメタデータリストに基づいて連結プレビューの生成を開始する
+        """
+        self.stop_rendering()
+        self.scene.clear()
+        self.page_slots.clear()
+        self.current_y = 20  # 初期位置をリセット
+
+        # ズームをリセット
+        self.view.setTransform(QTransform())
+        self.zoom_factor = 1.0
+
+        if not assets_metadata:
+            msg = self.scene.addSimpleText("連結するアイテムがありません")
+            msg.setBrush(QBrush(QColor("gray")))
+            self.progress_bar.hide()
+            return
+
+        total_assets = len(assets_metadata)
+        self.progress_bar.setRange(0, total_assets)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat(f"0 / {total_assets} ファイルを解析中...")
+        self.progress_bar.show()
+
+        # スレッドの準備
+        self.thread = QThread()
+        self.worker = JoinPreviewWorker(assets_metadata)
+        self.worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.worker.run)
+        self.worker.page_ready.connect(self._append_joined_images)  # こちらは逐次追加
+        self.worker.progress_updated.connect(self._update_progress_for_join)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.finished.connect(self.thread.quit)
+
+        self.thread.start()
+
+    def _update_progress_for_join(self, current, total):
+        self.progress_bar.setValue(current)
+        self.progress_bar.setFormat(f"{current} / {total} ファイルを解析中...")
+
+    def _append_joined_images(self, batch_data):
+        """JoinWorkerから届いたバッチ（ページ単位）を描画"""
+        if not batch_data:
+            return
+
+        for _, images in batch_data:
+            for q_img in images:
+                if q_img is None:
+                    continue
+
+                pixmap = QPixmap.fromImage(q_img)
+                pix_item = QGraphicsPixmapItem(pixmap)
+
+                # 白い背景（紙）を描画
+                bg_rect = QGraphicsRectItem(
+                    0, self.current_y, pixmap.width(), pixmap.height()
+                )
+                bg_rect.setBrush(QBrush(Qt.white))
+                bg_rect.setPen(QPen(QColor("#cccccc"), 1))
+                self.scene.addItem(bg_rect)
+
+                pix_item.setPos(0, self.current_y)
+                pix_item.setTransformationMode(Qt.SmoothTransformation)
+                self.scene.addItem(pix_item)
+
+                self.current_y += pixmap.height() + self.spacing
+
+        self.scene.setSceneRect(
+            self.scene.itemsBoundingRect().adjusted(-50, -50, 50, 50)
+        )
