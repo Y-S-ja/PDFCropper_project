@@ -1269,8 +1269,10 @@ class CropDeskWidget(BaseDeskWidget):
     1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
+        self.asset_mgr = asset_mgr
+        self.parent_asset_id = None  # 現在読み込んでいる素材のID
 
         # エディタ部（PDF表示部 + 操作バー）
         self.editor_widget = QWidget()
@@ -1300,6 +1302,7 @@ class CropDeskWidget(BaseDeskWidget):
 
     def set_asset(self, asset: WorkspaceAsset):
         """切り抜き用キャンバスに読み込む"""
+        self.parent_asset_id = asset.id
         self.editor.set_asset(asset)
 
 
@@ -1838,7 +1841,7 @@ class MainWindow(QMainWindow):
             new_desk = JoinDeskWidget(self.asset_mgr)
         else:
             prefix_label = "✂️ Crop"
-            new_desk = CropDeskWidget()
+            new_desk = CropDeskWidget(self.asset_mgr)
 
         # クロップデスク固有の初期接続
         if isinstance(new_desk, CropDeskWidget):
