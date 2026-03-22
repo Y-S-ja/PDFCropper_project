@@ -1554,13 +1554,15 @@ class MainWindow(QMainWindow):
             return desk.editor
         return None
 
-    def add_new_tab(self):
+    def add_new_tab(self, desk_class=CropDeskWidget):
         """新しいタブを追加する。空いている最小の番号を割り振る"""
-        # 現在使用されている「無題 X」の番号をすべて取得
+        prefix = "Crop" if desk_class == CropDeskWidget else "Join"
+
+        # 現在使用されている番号をすべて取得
         used_numbers = set()
         for i in range(self.tab_widget.count()):
             text = self.tab_widget.tabText(i)
-            if text.startswith("無題 "):
+            if text.startswith(f"{prefix} "):
                 try:
                     num = int(text.split(" ")[1])
                     used_numbers.add(num)
@@ -1572,17 +1574,23 @@ class MainWindow(QMainWindow):
         while new_num in used_numbers:
             new_num += 1
 
-        new_desk = CropDeskWidget()
-        new_view = new_desk.editor
-        new_view.fileDropped.connect(self.load_new_pdf)
-        # 信号を一度だけ中継用メソッドに接続する（disconnect不要にするため）
-        new_view.selectionChanged.connect(self._handle_selection_changed)
-        new_view.rectsChanged.connect(self._handle_rects_changed)
+        new_desk = desk_class()
 
-        index = self.tab_widget.addTab(new_desk, f"無題 {new_num}")
+        # クロップデスク固有の初期接続
+        if isinstance(new_desk, CropDeskWidget):
+            new_view = new_desk.editor
+            new_view.fileDropped.connect(self.load_new_pdf)
+            new_view.selectionChanged.connect(self._handle_selection_changed)
+            new_view.rectsChanged.connect(self._handle_rects_changed)
+
+        index = self.tab_widget.addTab(new_desk, f"{prefix} {new_num}")
         self.tab_widget.setCurrentIndex(index)
         self.update_window_title()
-        return new_view
+
+        # ツールバーの状態を更新
+        self._on_tab_changed(index)
+
+        return new_desk
 
     def update_window_title(self):
         """現在のタブの名前に基づいてウィンドウタイトルを更新する"""
