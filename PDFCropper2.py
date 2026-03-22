@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QDockWidget,
     QStackedWidget,
+    QListWidget,
     QFrame,
     QHBoxLayout,
 )
@@ -1243,6 +1244,41 @@ class CropDeskWidget(QStackedWidget):
             )
         else:
             # 編集に戻る際は生成を止める
+            self.preview.stop_rendering()
+            self.setCurrentWidget(self.editor)
+
+    def is_preview_mode(self):
+        return self.currentWidget() == self.preview
+
+
+class JoinDeskWidget(QStackedWidget):
+    """
+    1つのタブ内で「ファイル連結順序リスト」と「プレビュー画面」を管理するデスクウィジェット。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # エディタ部（ファイルの並び替えリスト）
+        self.editor = QListWidget()
+        self.editor.setDragDropMode(QListWidget.InternalMove)
+        self.editor.setAlternatingRowColors(True)
+        self.editor.setStyleSheet("""
+            QListWidget { font-size: 14px; padding: 10px; }
+            QListWidget::item { height: 40px; }
+        """)
+
+        # プレビュー部
+        self.preview = PdfPreviewView()
+
+        self.addWidget(self.editor)
+        self.addWidget(self.preview)
+
+    def set_mode(self, preview_mode: bool):
+        """表示モードを切り替える"""
+        if preview_mode:
+            self.setCurrentWidget(self.preview)
+            # TODO: フェーズ4で結合リストからプレビューを生成するロジックを実装
+        else:
             self.preview.stop_rendering()
             self.setCurrentWidget(self.editor)
 
