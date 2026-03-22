@@ -1285,7 +1285,7 @@ class CropDeskWidget(BaseDeskWidget):
         self.save_btn.setStyleSheet(
             "font-weight: bold; background-color: #fce4ec; height: 35px;"
         )
-        # self.save_btn.clicked.connect(self.save_as_asset) # ステップ1.3で接続
+        self.save_btn.clicked.connect(self.save_as_asset)
         ctrl_bar.addWidget(self.save_btn)
         layout.addLayout(ctrl_bar)
 
@@ -1293,6 +1293,31 @@ class CropDeskWidget(BaseDeskWidget):
         layout.addWidget(self.editor)
 
         self.finalize_init(self.editor_widget)
+
+    def save_as_asset(self):
+        """現在の切り抜き設定を CroppedAsset として素材棚に登録する"""
+        if not self.parent_asset_id:
+            QMessageBox.warning(self, "エラー", "素材が読み込まれていません")
+            return
+
+        rects = self.editor.rects
+        if not rects:
+            QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
+            return
+
+        name, ok = QInputDialog.getText(
+            self, "パーツとして保存", "素材名:", text="New_Part"
+        )
+        if not ok or not name:
+            return
+
+        # 素材棚に登録
+        self.asset_mgr.create_cropped(
+            self.parent_asset_id, rects, self.editor.scale_factor, name=name
+        )
+        QMessageBox.information(
+            self, "完了", f"パーツ '{name}' を素材棚に登録しました。"
+        )
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
