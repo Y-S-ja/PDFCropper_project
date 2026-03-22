@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QStackedWidget,
     QListWidget,
+    QListWidgetItem,
     QFrame,
     QHBoxLayout,
 )
@@ -1251,6 +1252,10 @@ class BaseDeskWidget(QStackedWidget):
         """プレビュー開始時のロジック。各子クラスでオーバーライドする"""
         pass
 
+    def set_asset(self, asset: WorkspaceAsset):
+        """アセットをこのデスクに読み込む。挙動はデスクの種類による"""
+        pass
+
     def is_preview_mode(self):
         return self.currentWidget() == self.preview
 
@@ -1270,6 +1275,10 @@ class CropDeskWidget(BaseDeskWidget):
         self.preview.update_previews(
             self.editor.pdf_path, self.editor.rects, self.editor.scale_factor
         )
+
+    def set_asset(self, asset: WorkspaceAsset):
+        """切り抜き用キャンバスに読み込む"""
+        self.editor.set_asset(asset)
 
 
 class JoinDeskWidget(BaseDeskWidget):
@@ -1292,6 +1301,20 @@ class JoinDeskWidget(BaseDeskWidget):
     def on_preview_enter(self):
         """連結リストから最終PDFのプレビューを生成（フェーズ4で実装予定）"""
         pass
+
+    def set_asset(self, asset: WorkspaceAsset):
+        """結合リストにアイテムを追加する"""
+        match asset:
+            case SourceAsset():
+                icon = "📄"
+            case JoinedAsset():
+                icon = "🔗"
+            case _:
+                icon = "✂️"  # CroppedAsset 等
+
+        item = QListWidgetItem(f"{icon} {asset.name}")
+        item.setData(Qt.UserRole, asset.id)
+        self.editor.addItem(item)
 
 
 class MainWindow(QMainWindow):
@@ -1637,17 +1660,22 @@ class MainWindow(QMainWindow):
             print(f"Asset {asset_id} not found")
             return
 
-        # 切り抜きデスク（現在は一画面なのでgraphics_view）
-        view = self.current_view()
-        if not view:
-            print("No view found")
-            return
+        # 現在のデスク（タブ）を取得
+        desk = self.current_desk()
+        if not desk:
+            # タブが全くない場合は新規作成してロード
+            desk = self.add_new_tab(CropDeskWidget)
 
-        # 安全確認をしてからロード
-        if view.ask_discard_changes():
-            print(f"Loading asset {asset.path}")
-            view.set_asset(asset)
-            # 名前の同期
+        # 許可を求めてからロード（切り抜きデスクの場合のみ）
+        if isinstance(desk, CropDeskWidget):
+            if not desk.editor.ask_discard_changes():
+                return
+
+        # ロード実行
+        desk.set_asset(asset)
+
+        # 切り抜きデスクの場合はタブ名をファイル名に同期
+        if isinstance(desk, CropDeskWidget):
             current_index = self.tab_widget.currentIndex()
             self.tab_widget.setTabText(current_index, asset.name)
             self.update_window_title()
