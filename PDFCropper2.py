@@ -1326,11 +1326,11 @@ class JoinListWidget(QListWidget):
         menu = QMenu(self)
         remove_action = menu.addAction("⚠️ 選択したアイテムを削除")
         remove_action.triggered.connect(self.remove_selected_items)
-        
+
         menu.addSeparator()
         clear_action = menu.addAction("🗑️ リストを空にする")
         clear_action.triggered.connect(lambda: (self.clear(), self.orderChanged.emit()))
-        
+
         menu.exec(self.mapToGlobal(pos))
 
     def dragEnterEvent(self, event):
