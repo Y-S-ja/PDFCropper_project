@@ -1271,8 +1271,26 @@ class CropDeskWidget(BaseDeskWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # エディタ部（PDF表示部 + 操作バー）
+        self.editor_widget = QWidget()
+        layout = QVBoxLayout(self.editor_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # 操作バー
+        ctrl_bar = QHBoxLayout()
+        self.save_btn = QPushButton("切り抜きを素材棚に登録")
+        self.save_btn.setStyleSheet(
+            "font-weight: bold; background-color: #fce4ec; height: 35px;"
+        )
+        # self.save_btn.clicked.connect(self.save_as_asset) # ステップ1.3で接続
+        ctrl_bar.addWidget(self.save_btn)
+        layout.addLayout(ctrl_bar)
+
         self.editor = PdfGraphicsView()
-        self.finalize_init(self.editor)
+        layout.addWidget(self.editor)
+
+        self.finalize_init(self.editor_widget)
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
