@@ -64,11 +64,13 @@ class CroppedAsset(WorkspaceAsset):
         name: str,
         parent_id: str,
         crop_rects: List[QRectF],
+        scale_factor: float = 1.0,  # シーン座標からPDF座標への変換係数
         asset_id: str = None,
     ):
         super().__init__(name, asset_id)
         self.parent_id = parent_id
         self.crop_rects = crop_rects
+        self.scale_factor = scale_factor
         self.is_intermediate = True
 
     def _rect_to_list(self, rect: QRectF) -> list:
@@ -82,12 +84,19 @@ class CroppedAsset(WorkspaceAsset):
         d = super().to_dict()
         d["parent_id"] = self.parent_id
         d["crop_rects"] = [self._rect_to_list(rect) for rect in self.crop_rects]
+        d["scale_factor"] = self.scale_factor
         return d
 
     @classmethod
     def from_dict(cls, data: dict):
         rects = [cls._list_to_rect(rect) for rect in data["crop_rects"]]
-        return cls(data["name"], data["parent_id"], rects, data["id"])
+        return cls(
+            data["name"],
+            data["parent_id"],
+            rects,
+            data.get("scale_factor", 1.0),
+            data["id"],
+        )
 
 
 class JoinedAsset(WorkspaceAsset):
@@ -191,12 +200,16 @@ class AssetManager(QObject):
         return asset
 
     def create_cropped(
-        self, parent_id: str, crop_rects: List[QRectF], name: str = None
+        self,
+        parent_id: str,
+        crop_rects: List[QRectF],
+        scale_factor: float,
+        name: str = None,
     ):
         """既存のアセットを切り抜いた中間生成物を生成・登録する。"""
         if not name:
             name = f"part_{str(uuid.uuid4())[:4]}"
-        asset = CroppedAsset(name, parent_id, crop_rects)
+        asset = CroppedAsset(name, parent_id, crop_rects, scale_factor)
         self.register_asset(asset)
         return asset
 
