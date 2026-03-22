@@ -156,3 +156,48 @@ class PdfProcessor:
                 page_images.append(None)
 
         return page_images
+
+    @staticmethod
+    def join_and_save(output_path: str, assets_metadata: list):
+        """
+        リスト上の全アセットを一本の物理PDFとして結合保存する。
+        assets_metadata: [
+            {"path": str, "crop_coords": [(l,t,r,b), ...], "scale_factor": float},
+            ...
+        ]
+        """
+        with fitz.open() as new_doc:
+            for meta in assets_metadata:
+                path = meta["path"]
+                crop_coords = meta["crop_coords"]
+                scale_factor = meta["scale_factor"]
+
+                try:
+                    with fitz.open(path) as src_doc:
+                        if not crop_coords:
+                            # 1. 生ファイルの場合は全ページをそのまま挿入
+                            new_doc.insert_pdf(src_doc)
+                        else:
+                            # 2. 切り抜きパーツの場合は全ページにレシピを適用して挿入
+                            for page_index in range(len(src_doc)):
+                                for rect in crop_coords:
+                                    # 原本の1ページを新しいドキュメントの末尾に追加
+                                    new_doc.insert_pdf(
+                                        src_doc, from_page=page_index, to_page=page_index
+                                    )
+                                    
+                                    # 追加したページに切り抜き枠を適用
+                                    left, top, right, bottom = rect
+                                    pdf_rect = fitz.Rect(
+                                        left * scale_factor,
+                                        top * scale_factor,
+                                        right * scale_factor,
+                                        bottom * scale_factor,
+                                    )
+                                    new_doc[-1].set_cropbox(pdf_rect)
+                                    
+                except Exception as e:
+                    print(f"Error merging {path}: {e}")
+
+            # 最終的なPDFを物理ファイルに書き出す
+            new_doc.save(output_path)
