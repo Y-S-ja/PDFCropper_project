@@ -1221,7 +1221,41 @@ class PdfGraphicsView(QGraphicsView):
         self.set_interaction_mode(CropMode)
 
 
-class CropDeskWidget(QStackedWidget):
+class BaseDeskWidget(QStackedWidget):
+    """
+    すべての作業デスク（タブ）の基底クラス。
+    「編集画面」と「プレビュー画面」をパタッと裏返して切り替える機能を共通化。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.editor = None  # 子クラスで初期化
+        self.preview = PdfPreviewView()
+
+    def finalize_init(self):
+        """子クラスでの初期化後にウィジェットを登録する"""
+        if self.editor:
+            self.addWidget(self.editor)
+        self.addWidget(self.preview)
+
+    def set_mode(self, preview_mode: bool):
+        """表示モードを切り替える（共通ロジック）"""
+        if preview_mode:
+            self.setCurrentWidget(self.preview)
+            self.on_preview_enter()
+        else:
+            self.preview.stop_rendering()
+            self.setCurrentWidget(self.editor)
+
+    def on_preview_enter(self):
+        """プレビュー開始時のロジック。各子クラスでオーバーライドする"""
+        pass
+
+    def is_preview_mode(self):
+        return self.currentWidget() == self.preview
+
+
+class CropDeskWidget(BaseDeskWidget):
     """
     1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
@@ -1229,29 +1263,16 @@ class CropDeskWidget(QStackedWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editor = PdfGraphicsView()
-        self.preview = PdfPreviewView()
+        self.finalize_init()
 
-        self.addWidget(self.editor)
-        self.addWidget(self.preview)
-
-    def set_mode(self, preview_mode: bool):
-        """表示モードを切り替える"""
-        if preview_mode:
-            # UIを即座に切り替えてから生成を開始
-            self.setCurrentWidget(self.preview)
-            self.preview.update_previews(
-                self.editor.pdf_path, self.editor.rects, self.editor.scale_factor
-            )
-        else:
-            # 編集に戻る際は生成を止める
-            self.preview.stop_rendering()
-            self.setCurrentWidget(self.editor)
-
-    def is_preview_mode(self):
-        return self.currentWidget() == self.preview
+    def on_preview_enter(self):
+        """切り抜き枠の状態からプレビューを生成"""
+        self.preview.update_previews(
+            self.editor.pdf_path, self.editor.rects, self.editor.scale_factor
+        )
 
 
-class JoinDeskWidget(QStackedWidget):
+class JoinDeskWidget(BaseDeskWidget):
     """
     1つのタブ内で「ファイル連結順序リスト」と「プレビュー画面」を管理するデスクウィジェット。
     """
@@ -1266,24 +1287,11 @@ class JoinDeskWidget(QStackedWidget):
             QListWidget { font-size: 14px; padding: 10px; }
             QListWidget::item { height: 40px; }
         """)
+        self.finalize_init()
 
-        # プレビュー部
-        self.preview = PdfPreviewView()
-
-        self.addWidget(self.editor)
-        self.addWidget(self.preview)
-
-    def set_mode(self, preview_mode: bool):
-        """表示モードを切り替える"""
-        if preview_mode:
-            self.setCurrentWidget(self.preview)
-            # TODO: フェーズ4で結合リストからプレビューを生成するロジックを実装
-        else:
-            self.preview.stop_rendering()
-            self.setCurrentWidget(self.editor)
-
-    def is_preview_mode(self):
-        return self.currentWidget() == self.preview
+    def on_preview_enter(self):
+        """連結リストから最終PDFのプレビューを生成（フェーズ4で実装予定）"""
+        pass
 
 
 class MainWindow(QMainWindow):
@@ -1482,7 +1490,7 @@ class MainWindow(QMainWindow):
     def _handle_mode_change(self, preview_mode):
         """ツールバーでのモード切替を処理"""
         desk = self.current_desk()
-        if desk and isinstance(desk, CropDeskWidget):
+        if desk and isinstance(desk, BaseDeskWidget):
             desk.set_mode(preview_mode)
             self.action_editor.setChecked(not preview_mode)
             self.action_preview.setChecked(preview_mode)
