@@ -1411,7 +1411,9 @@ class JoinListWidget(QListWidget):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
                 file_path = url.toLocalFile()
-                if file_path.lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
+                if file_path.lower().endswith(
+                    (".pdf", ".png", ".jpg", ".jpeg", ".bmp")
+                ):
                     self.fileDropped.emit(file_path)
             event.acceptProposedAction()
         else:
