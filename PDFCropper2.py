@@ -1250,7 +1250,7 @@ class BaseDeskWidget(QStackedWidget):
             self.on_preview_enter()
         else:
             self.preview.stop_rendering()
-            self.setCurrentWidget(self.editor)
+            self.setCurrentWidget(self.editor_widget)
 
     def on_preview_enter(self):
         """プレビュー開始時のロジック。各子クラスでオーバーライドする"""
