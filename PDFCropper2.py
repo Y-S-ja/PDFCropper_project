@@ -1961,14 +1961,22 @@ class MainWindow(QMainWindow):
         if event.mimeData().hasUrls():
             # 渡されたURL（ファイルパス）が対象ファイルかチェック
             for url in event.mimeData().urls():
-                if url.toLocalFile().lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
+                if (
+                    url.toLocalFile()
+                    .lower()
+                    .endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp"))
+                ):
                     event.acceptProposedAction()
                     return
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
-                if url.toLocalFile().lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
+                if (
+                    url.toLocalFile()
+                    .lower()
+                    .endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp"))
+                ):
                     event.acceptProposedAction()
                     return
 
