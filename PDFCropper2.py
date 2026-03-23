@@ -1311,9 +1311,14 @@ class CropDeskWidget(BaseDeskWidget):
         if not ok or not name:
             return
 
+        # myCropBox (UIオブジェクト) のリストから実際のシーン座標 (QRectF) を抽出する
+        scene_rects = [
+            box.mapToScene(box.rect()).boundingRect() for box in self.editor.rects
+        ]
+
         # 素材棚に登録
         self.asset_mgr.create_cropped(
-            self.parent_asset_id, rects, self.editor.scale_factor, name=name
+            self.parent_asset_id, scene_rects, self.editor.scale_factor, name=name
         )
         QMessageBox.information(
             self, "完了", f"パーツ '{name}' を素材棚に登録しました。"
