@@ -85,21 +85,9 @@ class PdfProcessor:
             with fitz.open() as new_doc:
                 for page_index in range(len(src_doc)):
                     for rect in crop_rects:
-                        new_doc.insert_pdf(
-                            src_doc, from_page=page_index, to_page=page_index
+                        PdfProcessor._append_cropped_page(
+                            new_doc, src_doc, page_index, rect, scale_factor
                         )
-
-                        # UIのオブジェクト(QRectF等)ではなく、ただの数値(タプル)として受け取る
-                        left, top, right, bottom = rect
-
-                        # シーン座標をPDFのピクセル座標に変換
-                        pdf_rect = fitz.Rect(
-                            left * scale_factor,
-                            top * scale_factor,
-                            right * scale_factor,
-                            bottom * scale_factor,
-                        )
-                        new_doc[-1].set_cropbox(pdf_rect)
 
                 new_doc.save(output_path)
 
@@ -158,6 +146,29 @@ class PdfProcessor:
         return page_images
 
     @staticmethod
+    def _append_cropped_page(
+        new_doc: fitz.Document,
+        src_doc: fitz.Document,
+        page_index: int,
+        rect: tuple,
+        scale_factor: float,
+    ):
+        """
+        [内部専用] 元のドキュメントの指定ページを新しいドキュメントの末尾に追加し、切り抜き枠を適用する
+        """
+        new_doc.insert_pdf(src_doc, from_page=page_index, to_page=page_index)
+
+        # UIの数値(タプル)を受け取り、シーン座標をPDFのポイント座標に変換
+        left, top, right, bottom = rect
+        pdf_rect = fitz.Rect(
+            left * scale_factor,
+            top * scale_factor,
+            right * scale_factor,
+            bottom * scale_factor,
+        )
+        new_doc[-1].set_cropbox(pdf_rect)
+
+    @staticmethod
     def join_and_save(output_path: str, assets_metadata: list):
         """
         リスト上の全アセットを一本の物理PDFとして結合保存する。
@@ -178,24 +189,12 @@ class PdfProcessor:
                             # 1. 生ファイルの場合は全ページをそのまま挿入
                             new_doc.insert_pdf(src_doc)
                         else:
-                            # 2. 切り抜きパーツの場合は全ページにレシピを適用して挿入
+                            # 2. 切り抜きパーツの場合は専門関数を使って1ページずつ処理して挿入
                             for page_index in range(len(src_doc)):
                                 for rect in crop_coords:
-                                    # 原本の1ページを新しいドキュメントの末尾に追加
-                                    new_doc.insert_pdf(
-                                        src_doc, from_page=page_index, to_page=page_index
+                                    PdfProcessor._append_cropped_page(
+                                        new_doc, src_doc, page_index, rect, scale_factor
                                     )
-                                    
-                                    # 追加したページに切り抜き枠を適用
-                                    left, top, right, bottom = rect
-                                    pdf_rect = fitz.Rect(
-                                        left * scale_factor,
-                                        top * scale_factor,
-                                        right * scale_factor,
-                                        bottom * scale_factor,
-                                    )
-                                    new_doc[-1].set_cropbox(pdf_rect)
-                                    
                 except Exception as e:
                     print(f"Error merging {path}: {e}")
 
