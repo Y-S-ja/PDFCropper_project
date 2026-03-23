@@ -1411,7 +1411,7 @@ class JoinListWidget(QListWidget):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
                 file_path = url.toLocalFile()
-                if file_path.lower().endswith(".pdf"):
+                if file_path.lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
                     self.fileDropped.emit(file_path)
             event.acceptProposedAction()
         else:
@@ -1959,23 +1959,23 @@ class MainWindow(QMainWindow):
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
-            # 渡されたURL（ファイルパス）がPDFかどうかをチェック
+            # 渡されたURL（ファイルパス）が対象ファイルかチェック
             for url in event.mimeData().urls():
-                if url.toLocalFile().lower().endswith(".pdf"):
+                if url.toLocalFile().lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
                     event.acceptProposedAction()
                     return
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
-                if url.toLocalFile().lower().endswith(".pdf"):
+                if url.toLocalFile().lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
                     event.acceptProposedAction()
                     return
 
     def dropEvent(self, event):
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
-            if file_path.lower().endswith(".pdf"):
+            if file_path.lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
                 self.load_new_pdf(file_path)
                 break
 

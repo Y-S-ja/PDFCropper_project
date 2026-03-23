@@ -74,6 +74,16 @@ class PdfProcessor:
             return []
 
     @staticmethod
+    def _open_as_pdf(path: str) -> fitz.Document:
+        """指定パスのファイルを開き、画像の場合はメモリ上でPDFに変換して返す（with構文対応）"""
+        doc = fitz.open(path)
+        if not doc.is_pdf:
+            pdf_bytes = doc.convert_to_pdf()
+            doc.close()
+            return fitz.open("pdf", pdf_bytes)
+        return doc
+
+    @staticmethod
     def crop_and_save(
         input_path: str, output_path: str, crop_rects: list, scale_factor: float
     ):
@@ -81,7 +91,7 @@ class PdfProcessor:
         クロップ処理を行い、新しいPDFとして保存する
         crop_rects: [(left, top, right, bottom), ...] のような数値タプルのリスト
         """
-        with fitz.open(input_path) as src_doc:
+        with PdfProcessor._open_as_pdf(input_path) as src_doc:
             with fitz.open() as new_doc:
                 for page_index in range(len(src_doc)):
                     for rect in crop_rects:
@@ -184,7 +194,7 @@ class PdfProcessor:
                 scale_factor = meta["scale_factor"]
 
                 try:
-                    with fitz.open(path) as src_doc:
+                    with PdfProcessor._open_as_pdf(path) as src_doc:
                         if not crop_coords:
                             # 1. 生ファイルの場合は全ページをそのまま挿入
                             new_doc.insert_pdf(src_doc)
