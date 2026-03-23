@@ -1339,7 +1339,9 @@ class JoinListWidget(QListWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setDragEnabled(True)
         self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
         self.setDragDropMode(QListWidget.InternalMove)
         self.setAlternatingRowColors(True)
         self.setSelectionMode(QListWidget.ExtendedSelection)
@@ -1395,10 +1397,14 @@ class JoinListWidget(QListWidget):
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
 
     def dropEvent(self, event):
         # 外部ファイルがドロップされた場合のみ処理
