@@ -1280,6 +1280,7 @@ class CropDeskWidget(BaseDeskWidget):
     """
     1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
+    requestRouting = Signal(WorkspaceAsset)  # 他のタブで開くことを要求するシグナル
 
     def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
@@ -1343,9 +1344,26 @@ class CropDeskWidget(BaseDeskWidget):
         )
 
     def set_asset(self, asset: WorkspaceAsset):
-        """切り抜き用キャンバスに読み込む"""
-        self.parent_asset_id = asset.id
-        self.editor.set_asset(asset)
+        """アセットの種類を判別して、キャンバスの初期化と復元を行う"""
+        match asset:
+            case SourceAsset():
+                self.parent_asset_id = asset.id
+                self.editor.load_from_path(asset.path)
+
+            case CroppedAsset():
+                parent = self.asset_mgr.get_asset(asset.parent_id)
+                if not parent:
+                    QMessageBox.warning(self, "エラー", "親となる素材が見つからないため復元できません。")
+                    return
+                # 親としてロード
+                self.parent_asset_id = parent.id
+                self.editor.load_from_path(parent.path)
+                # 枠を復元
+                self.editor.restore_boxes(asset.crop_rects)
+
+            case JoinedAsset():
+                # メインウィンドウにルーティングを要求（ステップ3で処理）
+                self.requestRouting.emit(asset)
 
 
 class JoinListWidget(QListWidget):
