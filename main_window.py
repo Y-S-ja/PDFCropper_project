@@ -15,7 +15,7 @@ from workspace_models import (
     JoinedAsset,
     WorkspaceAsset,
 )
-from myDockContent import PreviewPanel, PropertyPanel, AssetShelfWidget
+from dock_panels import PreviewPanel, PropertyPanel, AssetShelfWidget
 from pdf_processor import PdfProcessor
 from desk_widgets import BaseDeskWidget, CropDeskWidget, JoinDeskWidget
 from graphics_view import PdfGraphicsView
