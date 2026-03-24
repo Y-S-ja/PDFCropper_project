@@ -302,13 +302,19 @@ class MainWindow(QMainWindow):
         self, desk_class: Type[BaseDeskWidget] = CropDeskWidget
     ) -> BaseDeskWidget:
         """新しいタブを追加する。空いている最小の番号を割り振る"""
-        prefix = "Crop" if desk_class == CropDeskWidget else "Join"
+        # クラスによってプレフィックスと引数を変える
+        if desk_class == JoinDeskWidget:
+            prefix_label = "🔗_Join"
+            new_desk = JoinDeskWidget(self.asset_mgr)
+        else:
+            prefix_label = "✂️_Crop"
+            new_desk = CropDeskWidget(self.asset_mgr)
 
         # 現在使用されている番号をすべて取得
         used_numbers = set()
         for i in range(self.tab_widget.count()):
             text = self.tab_widget.tabText(i)
-            if text.startswith(f"{prefix} "):
+            if text.startswith(f"{prefix_label} "):
                 try:
                     num = int(text.split(" ")[1])
                     used_numbers.add(num)
@@ -319,14 +325,6 @@ class MainWindow(QMainWindow):
         new_num = 1
         while new_num in used_numbers:
             new_num += 1
-
-        # クラスによってプレフィックスと引数を変える
-        if desk_class == JoinDeskWidget:
-            prefix_label = "🔗 Join"
-            new_desk = JoinDeskWidget(self.asset_mgr)
-        else:
-            prefix_label = "✂️ Crop"
-            new_desk = CropDeskWidget(self.asset_mgr)
 
         # クロップデスク固有の初期接続
         if isinstance(new_desk, CropDeskWidget):
