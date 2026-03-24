@@ -1924,6 +1924,7 @@ class MainWindow(QMainWindow):
             new_view.fileDropped.connect(self.load_new_pdf)
             new_view.selectionChanged.connect(self._handle_selection_changed)
             new_view.rectsChanged.connect(self._handle_rects_changed)
+            new_desk.requestRouting.connect(self._handle_routing_request)
         elif isinstance(new_desk, JoinDeskWidget):
             # ジョインタブ固有のドロップ信号を接続
             new_desk.editor.fileDropped.connect(self.load_new_pdf)
@@ -1952,6 +1953,13 @@ class MainWindow(QMainWindow):
         if current_index != -1:
             self.remove_tab(current_index)
 
+    def _handle_routing_request(self, asset: WorkspaceAsset):
+        """CropDeskWidgetから送信された、別タブでのロード要求を処理する"""
+        if isinstance(asset, JoinedAsset):
+            # 新しいジョインタブを開いて、そこにアセットをロードする
+            new_desk = self.add_new_tab(JoinDeskWidget)
+            new_desk.set_asset(asset)
+
     def remove_tab(self, index):
         """指定したインデックスのタブを閉じる"""
         self.tab_widget.removeTab(index)
@@ -1977,8 +1985,11 @@ class MainWindow(QMainWindow):
         # 現在のデスク（タブ）を取得
         desk = self.current_desk()
         if not desk:
-            # タブが全くない場合は新規作成してロード
-            desk = self.add_new_tab(CropDeskWidget)
+            # タブが全くない場合は、アセットに適したタブを新規作成する
+            if isinstance(asset, JoinedAsset):
+                desk = self.add_new_tab(JoinDeskWidget)
+            else:
+                desk = self.add_new_tab(CropDeskWidget)
 
         # 許可を求めてからロード（切り抜きデスクの場合のみ）
         if isinstance(desk, CropDeskWidget):
