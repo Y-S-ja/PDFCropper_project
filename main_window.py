@@ -31,7 +31,7 @@ class MainWindow(QMainWindow):
         self._init_toolbars()
         self._init_central_widget()
         self._init_docks()
-        
+
         # 最初のタブを追加
         self.add_new_tab()
 
@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
 
         # ドックウィジェットのタブ位置を上部に設定
         self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
-        
+
         # プロパティパネル
         self.dock = QDockWidget("プロパティ", self)
         self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -468,7 +468,7 @@ class MainWindow(QMainWindow):
     def process_crop(self) -> None:
         """切り抜き処理のメインフローを制御する"""
         view = self.current_view()
-        
+
         # 1. バリデーション
         if not self._validate_crop_request(view):
             return
@@ -520,10 +520,9 @@ class MainWindow(QMainWindow):
         output_path, _ = QFileDialog.getSaveFileName(
             self, "保存", default_name, "PDF Files (*.pdf)"
         )
-        
+
         if not output_path:
             print("QFileDialog.getSaveFileName() returned empty path")
             return None
-            
-        return output_path
 
+        return output_path
