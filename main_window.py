@@ -469,48 +469,64 @@ class MainWindow(QMainWindow):
             desk.set_asset(asset)
 
     def process_crop(self) -> None:
+        """切り抜き処理のメインフローを制御する"""
         view = self.current_view()
-        if not view:
-            return
-        target_pdf = view.pdf_path
-
-        if not target_pdf:
-            QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
-            return
-        if not view.rects:
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("警告")
-            msg.setText("範囲を選択してください" + " " * 15)
-            msg.exec()
+        
+        # 1. バリデーション
+        if not self._validate_crop_request(view):
             return
 
-        base, ext = os.path.splitext(os.path.basename(target_pdf))
-        default_name = f"{base}_cropped{ext}"
-        output_path, _ = QFileDialog.getSaveFileName(
-            self, "保存", default_name, "PDF Files (*.pdf)"
-        )
+        # 2. 保存パスの取得
+        output_path = self._get_save_path_from_dialog(view.pdf_path)
         if not output_path:
-            print("QFileDialog.getSaveFileName() returned empty path")
             return
 
         try:
-            # 1. UIの部品(myCropBox)から、純粋な座標データ(タプル)だけを抽出する
-            crop_coordinates = []
-            for item in view.rects:
-                s_rect = item.mapToScene(item.rect()).boundingRect()
-                crop_coordinates.append(
-                    (s_rect.left(), s_rect.top(), s_rect.right(), s_rect.bottom())
-                )
+            # 3. 座標の抽出
+            crop_rects = view.get_crop_coordinates()
 
-            # 2. PDF処理の専門家にデータを丸投げする
+            # 4. PDF処理の実行
             PdfProcessor.crop_and_save(
-                input_path=target_pdf,
+                input_path=view.pdf_path,
                 output_path=output_path,
-                crop_rects=crop_coordinates,
+                crop_rects=crop_rects,
                 scale_factor=view.scale_factor,
             )
 
             QMessageBox.information(self, "完了", "保存しました")
         except Exception as e:
             QMessageBox.critical(self, "エラー", str(e))
+
+    def _validate_crop_request(self, view: Optional[PdfGraphicsView]) -> bool:
+        """切り抜き処理が実行可能かチェックする"""
+        if not view:
+            return False
+
+        if not view.pdf_path:
+            QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
+            return False
+
+        if not view.rects:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Warning)
+            msg.setWindowTitle("警告")
+            msg.setText("範囲を選択してください" + " " * 15)
+            msg.exec()
+            return False
+
+        return True
+
+    def _get_save_path_from_dialog(self, input_path: str) -> Optional[str]:
+        """保存先を選択するダイアログを表示し、パスを返す"""
+        base, ext = os.path.splitext(os.path.basename(input_path))
+        default_name = f"{base}_cropped{ext}"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self, "保存", default_name, "PDF Files (*.pdf)"
+        )
+        
+        if not output_path:
+            print("QFileDialog.getSaveFileName() returned empty path")
+            return None
+            
+        return output_path
+

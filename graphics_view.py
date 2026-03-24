@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Tuple
 from PySide6.QtWidgets import (
     QPushButton,
     QMessageBox,
@@ -650,6 +650,14 @@ class PdfGraphicsView(QGraphicsView):
         if items and isinstance(items[0], myCropBox):
             target = items[0]
         self.selectionChanged.emit(target)
+
+    def get_crop_coordinates(self) -> List[Tuple[float, float, float, float]]:
+        """UI部品(myCropBox)から正規化された(シーン上の)座標リストを取得する"""
+        coords = []
+        for item in self.rects:
+            s_rect = item.mapToScene(item.rect()).boundingRect()
+            coords.append((s_rect.left(), s_rect.top(), s_rect.right(), s_rect.bottom()))
+        return coords
 
     def get_snapshot(self):
         """座標、サイズ、および固有ID、同期用IDを含めたスナップショットを取る"""
