@@ -22,6 +22,8 @@ from graphics_view import PdfGraphicsView
 
 
 class MainWindow(QMainWindow):
+    SUPPORTED_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".bmp")
+
     def __init__(self) -> None:
         super().__init__()
         self._init_settings()
@@ -377,9 +379,8 @@ class MainWindow(QMainWindow):
             self.add_new_tab()
 
     def open_file(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "素材を追加", "", "PDF/Image Files (*.pdf *.png *.jpg *.jpeg *.bmp)"
-        )
+        filter_str = f"Supported Files ({' '.join(['*' + ext for ext in self.SUPPORTED_EXTENSIONS])})"
+        file_path, _ = QFileDialog.getOpenFileName(self, "素材を追加", "", filter_str)
         if file_path:
             # マネージャーを通じて棚へ追加
             self.asset_mgr.create_source(file_path)
@@ -417,31 +418,27 @@ class MainWindow(QMainWindow):
         if event.mimeData().hasUrls():
             # 渡されたURL（ファイルパス）が対象ファイルかチェック
             for url in event.mimeData().urls():
-                if (
-                    url.toLocalFile()
-                    .lower()
-                    .endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp"))
-                ):
+                if self._is_supported_file(url.toLocalFile()):
                     event.acceptProposedAction()
                     return
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
-                if (
-                    url.toLocalFile()
-                    .lower()
-                    .endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp"))
-                ):
+                if self._is_supported_file(url.toLocalFile()):
                     event.acceptProposedAction()
                     return
 
     def dropEvent(self, event: QDropEvent) -> None:
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
-            if file_path.lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
+            if self._is_supported_file(file_path):
                 self.load_new_pdf(file_path)
                 break
+
+    def _is_supported_file(self, file_path: str) -> bool:
+        """指定されたファイルパスがサポートされている形式かチェックする"""
+        return file_path.lower().endswith(self.SUPPORTED_EXTENSIONS)
 
     def load_new_pdf(self, file_path: str) -> None:
         """指定されたまたは現在のビューに、素材棚を経由してPDFをロードする"""
