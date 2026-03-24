@@ -436,7 +436,7 @@ class MainWindow(QMainWindow):
 
         # 2. クロップデスクへの読み込み時の固有処理
         if isinstance(desk, CropDeskWidget):
-            if not desk.editor.ask_discard_changes():
+            if not desk.is_ready_to_load():
                 return
 
             desk.set_asset(asset)

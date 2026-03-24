@@ -153,6 +153,10 @@ class CropDeskWidget(BaseDeskWidget):
                 # メインウィンドウにルーティングを要求（ステップ3で処理）
                 self.requestRouting.emit(asset)
 
+    def is_ready_to_load(self) -> bool:
+        """このデスクに新しいアセットをロードしてもよいか判定する"""
+        return self.editor.ask_discard_changes()
+
 
 class JoinListWidget(QListWidget):
     """ファイルドロップを受け付けるカスタム連結リストウィジェット"""
