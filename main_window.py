@@ -348,11 +348,8 @@ class MainWindow(QMainWindow):
             self.remove_tab(current_index)
 
     def _handle_routing_request(self, asset: WorkspaceAsset) -> None:
-        """CropDeskWidgetから送信された、別タブでのロード要求を処理する"""
-        if isinstance(asset, JoinedAsset):
-            # 新しいジョインタブを開いて、そこにアセットをロードする
-            new_desk = self.add_new_tab(JoinDeskWidget)
-            new_desk.set_asset(asset)
+        """他のタブでの展開要求（別種のアセットなど）が来た場合に、強制的に新規タブで開く"""
+        self.open_asset(asset, force_new_tab=True)
 
     def remove_tab(self, index: int) -> None:
         """指定したインデックスのタブを閉じる"""
@@ -372,7 +369,7 @@ class MainWindow(QMainWindow):
     def on_asset_from_shelf(self, asset_id: str) -> None:
         asset = self.asset_mgr.get_asset(asset_id)
         if asset:
-            self._route_and_load_asset(asset)
+            self.open_asset(asset)
         else:
             print(f"Asset {asset_id} not found")
 
@@ -403,35 +400,39 @@ class MainWindow(QMainWindow):
         return file_path.lower().endswith(self.SUPPORTED_EXTENSIONS)
 
     def load_new_pdf(self, file_path: str) -> None:
-        """指定されたまたは現在のビューに、素材棚を経由してPDFをロードする"""
+        """外部から持ち込まれたファイルを素材棚に登録し、そのままワークスペースで開く"""
         asset = self.asset_mgr.create_source(file_path)
-        self._route_and_load_asset(asset)
+        self.open_asset(asset)
 
-    def _route_and_load_asset(self, asset: WorkspaceAsset) -> None:
-        """アセットを適切なデスク（タブ）に選別してロードし、UIの状態を更新する"""
+    def open_asset(self, asset: WorkspaceAsset, force_new_tab: bool = False) -> None:
+        """
+        アセットを最適なデスク（タブ）に選別してロードし、UIの状態を更新する。
+        （アセット・ロード・ルーティングの統合窓口）
+        """
         desk = self.current_desk()
 
-        # 1. そもそもタブがない場合は新規作成（アセットの種類に最適化）
-        if not desk:
-            if isinstance(asset, JoinedAsset):
-                desk = self.add_new_tab(JoinDeskWidget)
-            else:
-                desk = self.add_new_tab(CropDeskWidget)
+        # 1. デスクの選定：強制新規、またはデスク不在の場合は自動生成
+        if force_new_tab or not desk:
+            # アセットの種類に応じてデフォルトのデスククラスを選択
+            desk_class = (
+                JoinDeskWidget if isinstance(asset, JoinedAsset) else CropDeskWidget
+            )
+            desk = self.add_new_tab(desk_class)
 
         # 2. クロップデスクへの読み込み時の固有処理
         if isinstance(desk, CropDeskWidget):
             if not desk.is_ready_to_load():
                 return
 
-            desk.set_asset(asset)
+        # 3. アセットのロード実行
+        desk.set_asset(asset)
 
-            # タブ名とウィンドウタイトルを同期
+        # 4. 事後処理：クロップデスクならタブ名とタイトルをアセット名に同期
+        if isinstance(desk, CropDeskWidget):
             idx = self.tab_widget.indexOf(desk)
             self.tab_widget.setTabText(idx, asset.name)
-            self.update_window_title()
-        else:
-            # 結合デスクなどの他デスクなら単純にアセットを渡す（内部リストへの追加などの期待動作）
-            desk.set_asset(asset)
+
+        self.update_window_title()
 
     def process_crop(self) -> None:
         """切り抜き処理のメインフローを制御する"""
