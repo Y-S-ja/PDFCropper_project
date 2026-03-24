@@ -777,7 +777,7 @@ class PdfGraphicsView(QGraphicsView):
             box.confirmed = True
             box.tag = "selection_rect"
             box.rect_id = len(self.rects) + 1
-            
+
             # イベントシグナルの接続
             box.geometryChanged.connect(self._handle_item_geometry_changed)
             box.deltaResized.connect(self._handle_item_delta_resized)
@@ -1280,6 +1280,7 @@ class CropDeskWidget(BaseDeskWidget):
     """
     1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
+
     requestRouting = Signal(WorkspaceAsset)  # 他のタブで開くことを要求するシグナル
 
     def __init__(self, asset_mgr, parent=None):
@@ -1353,7 +1354,9 @@ class CropDeskWidget(BaseDeskWidget):
             case CroppedAsset():
                 parent = self.asset_mgr.get_asset(asset.parent_id)
                 if not parent:
-                    QMessageBox.warning(self, "エラー", "親となる素材が見つからないため復元できません。")
+                    QMessageBox.warning(
+                        self, "エラー", "親となる素材が見つからないため復元できません。"
+                    )
                     return
                 # 親としてロード
                 self.parent_asset_id = parent.id
