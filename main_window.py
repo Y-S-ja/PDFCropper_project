@@ -22,17 +22,24 @@ from graphics_view import PdfGraphicsView
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
+        self._init_settings()
+        self._init_menu_bar()
+        self._init_toolbars()
+        self._init_central_widget()
+        self._init_docks()
+        
+        # 最初のタブを追加
+        self.add_new_tab()
+
+    def _init_settings(self) -> None:
         self.setWindowTitle("PDFCropper2")
         self.resize(1200, 850)
         self.setAcceptDrops(True)  # ドラッグ＆ドロップを許可
-
-        # 素材管理マネージャー
         self.asset_mgr = AssetManager()
 
-        # カスタムメニューバーを使用
-        # self.setMenuBar(HoverMenuBar(self))
+    def _init_menu_bar(self) -> None:
         menu_bar = self.menuBar()
 
         # ファイルメニュー
@@ -92,6 +99,7 @@ class MainWindow(QMainWindow):
             )
         )
 
+    def _init_toolbars(self) -> None:
         # ワークスペース操作ツールバー
         self.workspace_toolbar = self.addToolBar("ワークスペース")
         self.workspace_toolbar.setMovable(False)
@@ -128,54 +136,6 @@ class MainWindow(QMainWindow):
         self.mode_toolbar.addAction(self.action_editor)
         self.mode_toolbar.addAction(self.action_preview)
 
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)
-        self.tab_widget.tabCloseRequested.connect(self.remove_tab)
-        # タブ切り替え時にタイトルとプロパティの接続を更新
-        self.tab_widget.currentChanged.connect(self._on_tab_changed)
-        self.setCentralWidget(self.tab_widget)
-
-        # 素材棚サイドバーを構築
-        self.shelf_dock = QDockWidget("素材棚", self)
-        self.shelf_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
-        self.shelf_widget = AssetShelfWidget(self.asset_mgr)
-        self.shelf_dock.setWidget(self.shelf_widget)
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.shelf_dock)
-
-        # 棚のアイテムがダブルクリックされたときの処理
-        self.shelf_widget.assetSelected.connect(self.on_asset_from_shelf)
-
-        # ドックウィジェット
-        # ドックウィジェットのタブ位置を上部に設定
-        self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
-        # プロパティパネル
-        self.dock = QDockWidget("プロパティ", self)
-        self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        self.prop_panel = PropertyPanel()
-        self.prop_panel.orderChanged.connect(self._handle_reorder)
-        self.prop_panel.syncSizeChanged.connect(self._handle_sync_size_changed)
-        self.prop_panel.syncSymmetryChanged.connect(self._handle_sync_symmetry_changed)
-        self.dock.setWidget(self.prop_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
-
-        # 表示メニュー
-        view_menu = menu_bar.addMenu("表示")
-        view_menu.addAction(self.dock.toggleViewAction())
-
-        # プレビュー用のドックを追加
-        self.preview_dock = QDockWidget("切り抜きプレビュー", self)
-        self.preview_panel = PreviewPanel()
-        self.preview_dock.setWidget(self.preview_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
-
-        view_menu.addAction(self.preview_dock.toggleViewAction())
-
-        # ドックの初期サイズ設定
-        self.resizeDocks([self.dock, self.preview_dock], [300, 300], Qt.Vertical)
-
-        # 最初のタブを追加
-        self.add_new_tab()
-
         # テンプレート用ツールバー
         self.template_toolbar = self.addToolBar("テンプレート")
 
@@ -197,6 +157,53 @@ class MainWindow(QMainWindow):
         btn_auto.setStyleSheet("font-weight: bold; color: #005a9e;")
         btn_auto.clicked.connect(self._handle_auto_detect)
         self.template_toolbar.addWidget(btn_auto)
+
+    def _init_central_widget(self) -> None:
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabCloseRequested.connect(self.remove_tab)
+        # タブ切り替え時にタイトルとプロパティの接続を更新
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        self.setCentralWidget(self.tab_widget)
+
+    def _init_docks(self) -> None:
+        # 素材棚サイドバーを構築
+        self.shelf_dock = QDockWidget("素材棚", self)
+        self.shelf_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
+        self.shelf_widget = AssetShelfWidget(self.asset_mgr)
+        self.shelf_dock.setWidget(self.shelf_widget)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.shelf_dock)
+
+        # 棚のアイテムがダブルクリックされたときの処理
+        self.shelf_widget.assetSelected.connect(self.on_asset_from_shelf)
+
+        # ドックウィジェットのタブ位置を上部に設定
+        self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
+        
+        # プロパティパネル
+        self.dock = QDockWidget("プロパティ", self)
+        self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.prop_panel = PropertyPanel()
+        self.prop_panel.orderChanged.connect(self._handle_reorder)
+        self.prop_panel.syncSizeChanged.connect(self._handle_sync_size_changed)
+        self.prop_panel.syncSymmetryChanged.connect(self._handle_sync_symmetry_changed)
+        self.dock.setWidget(self.prop_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+
+        # 表示メニューへの追加（menuBar()を再度取得）
+        view_menu = self.menuBar().addMenu("表示")
+        view_menu.addAction(self.dock.toggleViewAction())
+
+        # プレビュー用のドックを追加
+        self.preview_dock = QDockWidget("切り抜きプレビュー", self)
+        self.preview_panel = PreviewPanel()
+        self.preview_dock.setWidget(self.preview_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
+
+        view_menu.addAction(self.preview_dock.toggleViewAction())
+
+        # ドックの初期サイズ設定
+        self.resizeDocks([self.dock, self.preview_dock], [300, 300], Qt.Vertical)
 
     def _apply_template_2v(self) -> None:
         view = self.current_view()
