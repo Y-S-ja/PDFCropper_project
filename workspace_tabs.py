@@ -39,3 +39,13 @@ class WorkspaceTabWidget(QTabWidget):
         index = self.addTab(desk, title)
         self.setCurrentIndex(index)
         return index
+
+    def update_desk_title(self, desk, asset_name: str):
+        """アセットがロードされた際、デスクの種類に応じてタイトルを更新する（名前の連動・固定ポリシーの集約）"""
+        class_name = desk.__class__.__name__
+
+        # ポリシー：クロップデスクの場合は、連番タイトルの代わりにアセット名（ファイル名）を優先
+        if "Crop" in class_name:
+            index = self.indexOf(desk)
+            if index != -1:
+                self.setTabText(index, asset_name)

@@ -427,11 +427,8 @@ class MainWindow(QMainWindow):
         # 3. アセットのロード実行
         desk.set_asset(asset)
 
-        # 4. 事後処理：クロップデスクならタブ名とタイトルをアセット名に同期
-        if isinstance(desk, CropDeskWidget):
-            idx = self.tab_widget.indexOf(desk)
-            self.tab_widget.setTabText(idx, asset.name)
-
+        # 4. 事後処理：タブタイトルやウィンドウタイトルの更新を専門家へ通知
+        self.tab_widget.update_desk_title(desk, asset.name)
         self.update_window_title()
 
     def process_crop(self) -> None:
