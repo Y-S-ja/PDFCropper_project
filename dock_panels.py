@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
 from PySide6.QtGui import QPixmap
 from pdf_processor import PdfProcessor
-from myModule import myCropBox
+from graphics_items import myCropBox
 from workspace_models import (
     AssetManager,
     SourceAsset,

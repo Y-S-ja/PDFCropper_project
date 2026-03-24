@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QPoint
 from PySide6.QtGui import QPen, QColor, QBrush, QUndoStack
-from myModule import myCropBox, myBadge, myIntroductionText, CandidateBox
+from graphics_items import myCropBox, myBadge, myIntroductionText, CandidateBox
 from pdf_processor import PdfProcessor
 from commands import AddCommand, RemoveCommand, TransformCommand, ReorderCommand
 from interaction_modes import CropMode, CandidateSelectionMode
@@ -656,7 +656,9 @@ class PdfGraphicsView(QGraphicsView):
         coords = []
         for item in self.rects:
             s_rect = item.mapToScene(item.rect()).boundingRect()
-            coords.append((s_rect.left(), s_rect.top(), s_rect.right(), s_rect.bottom()))
+            coords.append(
+                (s_rect.left(), s_rect.top(), s_rect.right(), s_rect.bottom())
+            )
         return coords
 
     def get_snapshot(self):

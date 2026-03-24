@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt, QPointF
-from myModule import CandidateBox
+from graphics_items import CandidateBox
 
 
 class InteractionMode:
