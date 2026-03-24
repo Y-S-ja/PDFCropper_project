@@ -773,7 +773,7 @@ class PdfGraphicsView(QGraphicsView):
         self._scene.clearSelection()
         for r in rects:
             # QRectF のジオメトリから myCropBox インスタンスを生成
-            box = myCropBox(r.x(), r.y(), r.width(), r.height())
+            box = myCropBox(r)
             box.confirmed = True
             box.tag = "selection_rect"
             box.rect_id = len(self.rects) + 1
