@@ -302,18 +302,23 @@ class MainWindow(QMainWindow):
         self, desk_class: Type[BaseDeskWidget] = CropDeskWidget
     ) -> BaseDeskWidget:
         """新しいタブを追加し、信号を接続してアクティブにする"""
-        # 1. デスクの作成
-        new_desk = desk_class(self.asset_mgr)
+        # 1. デスク工場で「すぐに使える状態」のインスタンスを取得
+        new_desk = self._create_desk(desk_class)
 
-        # 2. シグナル接続（一箇所に集約）
-        self._setup_desk_signals(new_desk)
-
-        # 3. タブの追加作業を専門家へ委譲
-        # ※ 内部でタイトル生成、addTab、setCurrentIndex が行われ、
-        #    それにより _on_tab_changed -> update_window_title が自動連鎖する
+        # 2. タブへの追加作業を専門家へ委譲（内部でタイトル計算、選択、UI同期が行われる）
         self.tab_widget.add_desk(new_desk)
 
         return new_desk
+
+    def _create_desk(self, desk_class: Type[BaseDeskWidget]) -> BaseDeskWidget:
+        """デスクウィジェットを生成し、シグナルを接続して返す（デスク工場）"""
+        # 1. インスタンス化
+        desk = desk_class(self.asset_mgr)
+
+        # 2. シグナル接続（ハンドラへの紐付けを一箇所で管理）
+        self._setup_desk_signals(desk)
+
+        return desk
 
     def _setup_desk_signals(self, desk: BaseDeskWidget) -> None:
         """デスクウィジェットの各シグナルをMainWindowのハンドラに接続する"""
