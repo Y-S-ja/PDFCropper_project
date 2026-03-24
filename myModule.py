@@ -34,6 +34,12 @@ class CropBoxStyle:
     # 透過度を低くした塗りつぶし (Alpha: 15/255)
     BRUSH_NORMAL = QBrush(QColor(0, 120, 215, 30))
 
+    # --- hover時のスタイル ---
+    # 青色の実線（選択中であることを強調）
+    PEN_HOVER = QPen(COLOR_MAIN, 3)
+    # 透過度を少し上げた青の塗りつぶし (Alpha: 30/255)
+    BRUSH_HOVER = QBrush(QColor(0, 120, 215, 45))
+
     # --- 選択時のスタイル ---
     # 青色の実線（選択中であることを強調）
     PEN_SELECTED = QPen(COLOR_MAIN, 3)
@@ -56,6 +62,7 @@ class CropBoxStyle:
         ズームしても線が太くならない設定（Cosmetic Pen）を一括適用する。
         """
         cls.PEN_NORMAL.setCosmetic(True)
+        cls.PEN_HOVER.setCosmetic(True)
         cls.PEN_SELECTED.setCosmetic(True)
         cls.PEN_CREATING.setCosmetic(True)
         cls.HANDLE_PEN.setCosmetic(True)
@@ -88,6 +95,7 @@ class myCropBox(QGraphicsObject):
         super().__init__()
         self._rect = rect
         self._is_confirmed = True  # デフォルトは確定状態（テンプレートなどはこれ）
+        self.is_hovering = False
 
         # フラグ設定: 移動可能、選択可能、フォーカス可能にする
         self.setFlags(
@@ -280,6 +288,9 @@ class myCropBox(QGraphicsObject):
         elif self.isSelected():
             pen = CropBoxStyle.PEN_SELECTED
             brush = CropBoxStyle.BRUSH_SELECTED
+        elif self.is_hovering:
+            pen = CropBoxStyle.PEN_HOVER
+            brush = CropBoxStyle.BRUSH_HOVER
         else:
             pen = CropBoxStyle.PEN_NORMAL
             brush = CropBoxStyle.BRUSH_NORMAL
@@ -402,6 +413,16 @@ class myCropBox(QGraphicsObject):
     def is_sync_enabled(self) -> bool:
         """同期対象のアイテム（グループIDを持っているか）を判定"""
         return self.group_id is not None
+
+    def hoverEnterEvent(self, event):
+        self.is_hovering = True
+        self.update()
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.is_hovering = False
+        self.update()
+        super().hoverLeaveEvent(event)
 
     def hoverMoveEvent(self, event):
         # 選択されていない時はハンドル判定を行わない（カーソルを変えない）
@@ -603,7 +624,7 @@ class CandidateBox(QGraphicsRectItem):
     def update_style(self):
         # ホバー中は枠線を太く、色を変更
         width = 4 if self.is_hovering else 2
-        
+
         if self.is_active:
             # 採用：明るい黄色 (ホバー時はオレンジ)
             color = QColor("#FF8C00") if self.is_hovering else QColor("#FFD700")
