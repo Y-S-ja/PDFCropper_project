@@ -763,16 +763,28 @@ class PdfGraphicsView(QGraphicsView):
             return ret == QMessageBox.Yes
         return True
 
-    def set_asset(self, asset: WorkspaceAsset):
-        """アセットを読み込み、デスクを初期化する"""
-        if not asset or not isinstance(asset, SourceAsset):
-            # 現時点ではSourceのみ対応
-            print(f"Asset {asset} is not a SourceAsset")
-            return
+    def load_from_path(self, path: str):
+        """パスからページを読み出し、デスクを初期化する"""
+        self.pdf_path = path
+        self.load_pdf_page(path)
 
-        self.pdf_path = asset.path
-        self.load_pdf_page(asset.path)
-        # TODO: asset に既に切り抜き指示があれば読み込む機能をフェーズ3で実装
+    def restore_boxes(self, rects: list):
+        """既存の切り抜き枠（QRectF）のリストを受け取り、myCropBoxとして画面に復元する"""
+        self._scene.clearSelection()
+        for r in rects:
+            # QRectF のジオメトリから myCropBox インスタンスを生成
+            box = myCropBox(r.x(), r.y(), r.width(), r.height())
+            box.confirmed = True
+            box.tag = "selection_rect"
+            box.rect_id = len(self.rects) + 1
+            
+            # イベントシグナルの接続
+            box.geometryChanged.connect(self._handle_item_geometry_changed)
+            box.deltaResized.connect(self._handle_item_delta_resized)
+            box.transformationFinished.connect(self._handle_transformation_finished)
+
+            # シーンとリストへ直接追加 (初期ロードのため Undo には積まない)
+            self._raw_add_item(box, len(self.rects))
 
     def mouseMoveEvent(self, event):
         # モードへの委譲
