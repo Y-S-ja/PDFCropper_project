@@ -360,6 +360,7 @@ class MainWindow(QMainWindow):
             self.add_new_tab()
 
     def open_file(self) -> None:
+        """ファイル選択ダイアログを開き、選択されたPDFを素材棚に追加する"""
         filter_str = f"Supported Files ({' '.join(['*' + ext for ext in self.SUPPORTED_EXTENSIONS])})"
         file_path, _ = QFileDialog.getOpenFileName(self, "素材を追加", "", filter_str)
         if file_path:
