@@ -387,32 +387,10 @@ class MainWindow(QMainWindow):
 
     def on_asset_from_shelf(self, asset_id: str) -> None:
         asset = self.asset_mgr.get_asset(asset_id)
-        if not asset:
+        if asset:
+            self._route_and_load_asset(asset)
+        else:
             print(f"Asset {asset_id} not found")
-            return
-
-        # 現在のデスク（タブ）を取得
-        desk = self.current_desk()
-        if not desk:
-            # タブが全くない場合は、アセットに適したタブを新規作成する
-            if isinstance(asset, JoinedAsset):
-                desk = self.add_new_tab(JoinDeskWidget)
-            else:
-                desk = self.add_new_tab(CropDeskWidget)
-
-        # 許可を求めてからロード（切り抜きデスクの場合のみ）
-        if isinstance(desk, CropDeskWidget):
-            if not desk.editor.ask_discard_changes():
-                return
-
-        # ロード実行
-        desk.set_asset(asset)
-
-        # 切り抜きデスクの場合はタブ名をファイル名に同期
-        if isinstance(desk, CropDeskWidget):
-            current_index = self.tab_widget.currentIndex()
-            self.tab_widget.setTabText(current_index, asset.name)
-            self.update_window_title()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -442,27 +420,33 @@ class MainWindow(QMainWindow):
 
     def load_new_pdf(self, file_path: str) -> None:
         """指定されたまたは現在のビューに、素材棚を経由してPDFをロードする"""
-        # 1. 何はともあれ素材棚（AssetManager）に登録し、アイコンが並ぶようにする
         asset = self.asset_mgr.create_source(file_path)
+        self._route_and_load_asset(asset)
 
-        # 2. ロード対象のデスクを特定
+    def _route_and_load_asset(self, asset: WorkspaceAsset) -> None:
+        """アセットを適切なデスク（タブ）に選別してロードし、UIの状態を更新する"""
         desk = self.current_desk()
-        if not desk:
-            # タブがない場合は自動的にクロップタブを作成
-            desk = self.add_new_tab(CropDeskWidget)
 
-        # 3. デスクの種類に関わらずアセットを流し込む（set_asset 側で処理を分岐）
+        # 1. そもそもタブがない場合は新規作成（アセットの種類に最適化）
+        if not desk:
+            if isinstance(asset, JoinedAsset):
+                desk = self.add_new_tab(JoinDeskWidget)
+            else:
+                desk = self.add_new_tab(CropDeskWidget)
+
+        # 2. クロップデスクへの読み込み時の固有処理
         if isinstance(desk, CropDeskWidget):
-            # キャンバスへの読み込み時は、破棄確認を行う
             if not desk.editor.ask_discard_changes():
                 return
+
             desk.set_asset(asset)
-            # クロップタブのみ、タブ名とタイトルをファイル名に同期
+
+            # タブ名とウィンドウタイトルを同期
             idx = self.tab_widget.indexOf(desk)
             self.tab_widget.setTabText(idx, asset.name)
             self.update_window_title()
         else:
-            # 他のデスク（Join等）なら単純に追加
+            # 結合デスクなどの他デスクなら単純にアセットを渡す（内部リストへの追加などの期待動作）
             desk.set_asset(asset)
 
     def process_crop(self) -> None:
