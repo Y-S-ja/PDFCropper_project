@@ -1,4 +1,5 @@
 import os
+from typing import Optional, List, Type
 from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
@@ -8,7 +9,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from workspace_models import (
     AssetManager,
     JoinedAsset,
@@ -17,6 +18,7 @@ from workspace_models import (
 from myDockContent import PreviewPanel, PropertyPanel, AssetShelfWidget
 from pdf_processor import PdfProcessor
 from desk_widgets import BaseDeskWidget, CropDeskWidget, JoinDeskWidget
+from graphics_view import PdfGraphicsView
 
 
 class MainWindow(QMainWindow):
@@ -196,27 +198,27 @@ class MainWindow(QMainWindow):
         btn_auto.clicked.connect(self._handle_auto_detect)
         self.template_toolbar.addWidget(btn_auto)
 
-    def _apply_template_2v(self):
+    def _apply_template_2v(self) -> None:
         view = self.current_view()
         if view:
             view.add_template_2v()
 
-    def _apply_template_2h(self):
+    def _apply_template_2h(self) -> None:
         view = self.current_view()
         if view:
             view.add_template_2h()
 
-    def _apply_template_4(self):
+    def _apply_template_4(self) -> None:
         view = self.current_view()
         if view:
             view.add_template_4()
 
-    def _handle_auto_detect(self):
+    def _handle_auto_detect(self) -> None:
         view = self.current_view()
         if view:
             view.auto_detect_frames()
 
-    def _on_tab_changed(self, index):
+    def _on_tab_changed(self, index: int) -> None:
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""
         self.update_window_title()
         container = self.current_desk()
@@ -240,7 +242,7 @@ class MainWindow(QMainWindow):
             self.prop_panel.update_list([])
             self.preview_panel.update_previews(None)
 
-    def _handle_mode_change(self, preview_mode):
+    def _handle_mode_change(self, preview_mode: bool) -> None:
         """ツールバーでのモード切替を処理"""
         desk = self.current_desk()
         if desk and isinstance(desk, BaseDeskWidget):
@@ -248,46 +250,48 @@ class MainWindow(QMainWindow):
             self.action_editor.setChecked(not preview_mode)
             self.action_preview.setChecked(preview_mode)
 
-    def _handle_selection_changed(self, item):
+    def _handle_selection_changed(self, item: object) -> None:
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
         if self.sender() == self.current_view():
             self.prop_panel.set_target(item)
 
-    def _handle_rects_changed(self, rects):
+    def _handle_rects_changed(self, rects: List[object]) -> None:
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
         view = self.current_view()
         if self.sender() == view:
             self.prop_panel.update_list(rects)
             self.preview_panel.update_previews(view)
 
-    def _handle_reorder(self, new_order):
+    def _handle_reorder(self, new_order: List[object]) -> None:
         """ドックでの並び替えを現在のビューに反映する"""
         view = self.current_view()
         if view:
             view.reorder_rects(new_order)
             self.preview_panel.update_previews(view)
 
-    def _handle_sync_size_changed(self, enabled):
+    def _handle_sync_size_changed(self, enabled: bool) -> None:
         view = self.current_view()
         if view:
             view.sync_size = enabled
 
-    def _handle_sync_symmetry_changed(self, enabled):
+    def _handle_sync_symmetry_changed(self, enabled: bool) -> None:
         view = self.current_view()
         if view:
             view.sync_symmetry = enabled
 
-    def current_desk(self):
+    def current_desk(self) -> Optional[BaseDeskWidget]:
         """現在のアクティブなタブに含まれるデスクウィジェットを返す"""
         return self.tab_widget.currentWidget()
 
-    def current_view(self):
+    def current_view(self) -> Optional[PdfGraphicsView]:
         desk = self.current_desk()
         if isinstance(desk, CropDeskWidget):
             return desk.editor
         return None
 
-    def add_new_tab(self, desk_class=CropDeskWidget):
+    def add_new_tab(
+        self, desk_class: Type[BaseDeskWidget] = CropDeskWidget
+    ) -> BaseDeskWidget:
         """新しいタブを追加する。空いている最小の番号を割り振る"""
         prefix = "Crop" if desk_class == CropDeskWidget else "Join"
 
@@ -335,7 +339,7 @@ class MainWindow(QMainWindow):
 
         return new_desk
 
-    def update_window_title(self):
+    def update_window_title(self) -> None:
         """現在のタブの名前に基づいてウィンドウタイトルを更新する"""
         index = self.tab_widget.currentIndex()
         if index != -1:
@@ -344,20 +348,20 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle("PDFCropper2")
 
-    def close_current_tab(self):
+    def close_current_tab(self) -> None:
         """現在のタブを閉じる"""
         current_index = self.tab_widget.currentIndex()
         if current_index != -1:
             self.remove_tab(current_index)
 
-    def _handle_routing_request(self, asset: WorkspaceAsset):
+    def _handle_routing_request(self, asset: WorkspaceAsset) -> None:
         """CropDeskWidgetから送信された、別タブでのロード要求を処理する"""
         if isinstance(asset, JoinedAsset):
             # 新しいジョインタブを開いて、そこにアセットをロードする
             new_desk = self.add_new_tab(JoinDeskWidget)
             new_desk.set_asset(asset)
 
-    def remove_tab(self, index):
+    def remove_tab(self, index: int) -> None:
         """指定したインデックスのタブを閉じる"""
         self.tab_widget.removeTab(index)
 
@@ -365,7 +369,7 @@ class MainWindow(QMainWindow):
         if self.tab_widget.count() == 0:
             self.add_new_tab()
 
-    def open_file(self):
+    def open_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self, "素材を追加", "", "PDF/Image Files (*.pdf *.png *.jpg *.jpeg *.bmp)"
         )
@@ -373,7 +377,7 @@ class MainWindow(QMainWindow):
             # マネージャーを通じて棚へ追加
             self.asset_mgr.create_source(file_path)
 
-    def on_asset_from_shelf(self, asset_id: str):
+    def on_asset_from_shelf(self, asset_id: str) -> None:
         asset = self.asset_mgr.get_asset(asset_id)
         if not asset:
             print(f"Asset {asset_id} not found")
@@ -402,7 +406,7 @@ class MainWindow(QMainWindow):
             self.tab_widget.setTabText(current_index, asset.name)
             self.update_window_title()
 
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
             # 渡されたURL（ファイルパス）が対象ファイルかチェック
             for url in event.mimeData().urls():
@@ -414,7 +418,7 @@ class MainWindow(QMainWindow):
                     event.acceptProposedAction()
                     return
 
-    def dragMoveEvent(self, event):
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
                 if (
@@ -425,14 +429,14 @@ class MainWindow(QMainWindow):
                     event.acceptProposedAction()
                     return
 
-    def dropEvent(self, event):
+    def dropEvent(self, event: QDropEvent) -> None:
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
             if file_path.lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".bmp")):
                 self.load_new_pdf(file_path)
                 break
 
-    def load_new_pdf(self, file_path):
+    def load_new_pdf(self, file_path: str) -> None:
         """指定されたまたは現在のビューに、素材棚を経由してPDFをロードする"""
         # 1. 何はともあれ素材棚（AssetManager）に登録し、アイコンが並ぶようにする
         asset = self.asset_mgr.create_source(file_path)
@@ -457,7 +461,7 @@ class MainWindow(QMainWindow):
             # 他のデスク（Join等）なら単純に追加
             desk.set_asset(asset)
 
-    def process_crop(self):
+    def process_crop(self) -> None:
         view = self.current_view()
         if not view:
             return
