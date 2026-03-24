@@ -16,6 +16,7 @@ from workspace_models import (
     WorkspaceAsset,
 )
 from dock_panels import PreviewPanel, PropertyPanel, AssetShelfWidget
+from workspace_tabs import WorkspaceTabWidget
 from pdf_processor import PdfProcessor
 from desk_widgets import BaseDeskWidget, CropDeskWidget, JoinDeskWidget
 from graphics_view import PdfGraphicsView
@@ -161,8 +162,7 @@ class MainWindow(QMainWindow):
         self.template_toolbar.addWidget(btn_auto)
 
     def _init_central_widget(self) -> None:
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)
+        self.tab_widget = WorkspaceTabWidget()
         self.tab_widget.tabCloseRequested.connect(self.remove_tab)
         # タブ切り替え時にタイトルとプロパティの接続を更新
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
@@ -301,50 +301,31 @@ class MainWindow(QMainWindow):
     def add_new_tab(
         self, desk_class: Type[BaseDeskWidget] = CropDeskWidget
     ) -> BaseDeskWidget:
-        """新しいタブを追加する。空いている最小の番号を割り振る"""
-        # クラスによってプレフィックスと引数を変える
-        if desk_class == JoinDeskWidget:
-            prefix_label = "🔗_Join"
-            new_desk = JoinDeskWidget(self.asset_mgr)
-        else:
-            prefix_label = "✂️_Crop"
-            new_desk = CropDeskWidget(self.asset_mgr)
+        """新しいタブを追加し、信号を接続してアクティブにする"""
+        # 1. デスクの作成
+        new_desk = desk_class(self.asset_mgr)
 
-        # 現在使用されている番号をすべて取得
-        used_numbers = set()
-        for i in range(self.tab_widget.count()):
-            text = self.tab_widget.tabText(i)
-            if text.startswith(f"{prefix_label} "):
-                try:
-                    num = int(text.split(" ")[1])
-                    used_numbers.add(num)
-                except (IndexError, ValueError):
-                    pass
+        # 2. シグナル接続（一箇所に集約）
+        self._setup_desk_signals(new_desk)
 
-        # 1から順に確認して空いている最小の番号を探す
-        new_num = 1
-        while new_num in used_numbers:
-            new_num += 1
-
-        # クロップデスク固有の初期接続
-        if isinstance(new_desk, CropDeskWidget):
-            new_view = new_desk.editor
-            new_view.fileDropped.connect(self.load_new_pdf)
-            new_view.selectionChanged.connect(self._handle_selection_changed)
-            new_view.rectsChanged.connect(self._handle_rects_changed)
-            new_desk.requestRouting.connect(self._handle_routing_request)
-        elif isinstance(new_desk, JoinDeskWidget):
-            # ジョインタブ固有のドロップ信号を接続
-            new_desk.editor.fileDropped.connect(self.load_new_pdf)
-
-        index = self.tab_widget.addTab(new_desk, f"{prefix_label} {new_num}")
-        self.tab_widget.setCurrentIndex(index)
-        self.update_window_title()
-
-        # ツールバーの状態を更新
-        self._on_tab_changed(index)
+        # 3. タブの追加作業を専門家へ委譲
+        # ※ 内部でタイトル生成、addTab、setCurrentIndex が行われ、
+        #    それにより _on_tab_changed -> update_window_title が自動連鎖する
+        self.tab_widget.add_desk(new_desk)
 
         return new_desk
+
+    def _setup_desk_signals(self, desk: BaseDeskWidget) -> None:
+        """デスクウィジェットの各シグナルをMainWindowのハンドラに接続する"""
+        if isinstance(desk, CropDeskWidget):
+            view = desk.editor
+            view.fileDropped.connect(self.load_new_pdf)
+            view.selectionChanged.connect(self._handle_selection_changed)
+            view.rectsChanged.connect(self._handle_rects_changed)
+            desk.requestRouting.connect(self._handle_routing_request)
+        elif isinstance(desk, JoinDeskWidget):
+            # ジョインタブ固有のドロップ信号を接続
+            desk.editor.fileDropped.connect(self.load_new_pdf)
 
     def update_window_title(self) -> None:
         """現在のタブの名前に基づいてウィンドウタイトルを更新する"""
