@@ -29,6 +29,12 @@ class BaseDeskWidget(QStackedWidget):
     「編集画面」と「プレビュー画面」をパタッと裏返して切り替える機能を共通化。
     """
 
+    fileDropped = Signal(str)
+    selectionChanged = Signal(object)
+    contentChanged = Signal(list)
+    requestRouting = Signal(WorkspaceAsset)
+    """他のタブで開くことを要求するシグナル"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editor = None  # 子クラスで初期化
@@ -66,8 +72,6 @@ class CropDeskWidget(BaseDeskWidget):
     1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
 
-    requestRouting = Signal(WorkspaceAsset)  # 他のタブで開くことを要求するシグナル
-
     def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
         self.asset_mgr = asset_mgr
@@ -89,6 +93,9 @@ class CropDeskWidget(BaseDeskWidget):
         layout.addLayout(ctrl_bar)
 
         self.editor = PdfGraphicsView()
+        self.editor.fileDropped.connect(self.fileDropped.emit)
+        self.editor.selectionChanged.connect(self.selectionChanged.emit)
+        self.editor.rectsChanged.connect(self.contentChanged.emit)
         layout.addWidget(self.editor)
 
         self.finalize_init(self.editor_widget)

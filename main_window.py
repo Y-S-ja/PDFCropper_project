@@ -261,15 +261,12 @@ class MainWindow(QMainWindow):
 
     def _handle_selection_changed(self, item: object) -> None:
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
-        if self.sender() == self.current_view():
-            self.prop_panel.set_target(item)
+        self.prop_panel.set_target(item)
 
     def _handle_rects_changed(self, rects: List[object]) -> None:
         """信号の送信元が現在のタブの場合のみパネルを更新する"""
-        view = self.current_view()
-        if self.sender() == view:
-            self.prop_panel.update_list(rects)
-            self.preview_panel.update_previews(view)
+        self.prop_panel.update_list(rects)
+        self.preview_panel.update_previews(self.current_view())
 
     def _handle_reorder(self, new_order: List[object]) -> None:
         """ドックでの並び替えを現在のビューに反映する"""
@@ -322,15 +319,10 @@ class MainWindow(QMainWindow):
 
     def _setup_desk_signals(self, desk: BaseDeskWidget) -> None:
         """デスクウィジェットの各シグナルをMainWindowのハンドラに接続する"""
-        if isinstance(desk, CropDeskWidget):
-            view = desk.editor
-            view.fileDropped.connect(self.load_new_pdf)
-            view.selectionChanged.connect(self._handle_selection_changed)
-            view.rectsChanged.connect(self._handle_rects_changed)
-            desk.requestRouting.connect(self._handle_routing_request)
-        elif isinstance(desk, JoinDeskWidget):
-            # ジョインタブ固有のドロップ信号を接続
-            desk.editor.fileDropped.connect(self.load_new_pdf)
+        desk.fileDropped.connect(self.load_new_pdf)
+        desk.selectionChanged.connect(self._handle_selection_changed)
+        desk.contentChanged.connect(self._handle_rects_changed)
+        desk.requestRouting.connect(self._handle_routing_request)
 
     def update_window_title(self) -> None:
         """現在のタブの名前に基づいてウィンドウタイトルを更新する"""
