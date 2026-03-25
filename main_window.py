@@ -235,6 +235,9 @@ class MainWindow(QMainWindow):
             return
 
         # ツールバーのボタン状態をタブに合わせる
+        is_crop = isinstance(container, CropDeskWidget)
+        self.template_toolbar.setEnabled(is_crop)
+
         is_preview = container.is_preview_mode()
         self.action_editor.setChecked(not is_preview)
         self.action_preview.setChecked(is_preview)
