@@ -36,6 +36,9 @@ class BaseDeskWidget(QStackedWidget):
     requestRouting = Signal(WorkspaceAsset)
     """他のタブで開くことを要求するシグナル"""
 
+    supports_template = False
+    """このデスクがテンプレート機能（切り抜き枠の自動配置など）をサポートしているか"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editor = None  # 子クラスで初期化
@@ -76,6 +79,8 @@ class CropDeskWidget(BaseDeskWidget):
     """
     1つのタブ内で「切り抜き編集画面」と「プレビュー画面」を管理するデスクウィジェット。
     """
+
+    supports_template = True
 
     def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
