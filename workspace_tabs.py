@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import QTabWidget
 
+
 class WorkspaceTabWidget(QTabWidget):
     """
     ワークスペースのタブ一式を管理するカスタムタブウィジェット。
     タブの命名規則（プレフィックス）や連番の管理など、タブ固有の振る舞いを担当する。
     """
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setTabsClosable(True)
