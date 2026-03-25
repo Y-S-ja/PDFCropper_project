@@ -67,6 +67,10 @@ class BaseDeskWidget(QStackedWidget):
     def is_preview_mode(self):
         return self.currentWidget() == self.preview
 
+    def is_ready_to_load(self) -> bool:
+        """このデスクに新しいアセットをロードしてもよいか判定する（必要に応じてオーバーライドする）"""
+        return True
+
 
 class CropDeskWidget(BaseDeskWidget):
     """

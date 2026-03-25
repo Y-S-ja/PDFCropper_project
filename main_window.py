@@ -413,10 +413,9 @@ class MainWindow(QMainWindow):
             )
             desk = self.add_new_tab(desk_class)
 
-        # 2. クロップデスクへの読み込み時の固有処理
-        if isinstance(desk, CropDeskWidget):
-            if not desk.is_ready_to_load():
-                return
+        # 2. ロード準備（デスク側の判断による破棄確認など）
+        if not desk.is_ready_to_load():
+            return
 
         # 3. アセットのロード実行
         desk.set_asset(asset)
