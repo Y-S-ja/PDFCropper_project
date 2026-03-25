@@ -1,4 +1,3 @@
-import os
 from typing import Optional, List, Type
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -17,7 +16,6 @@ from workspace_models import (
 )
 from dock_panels import PreviewPanel, PropertyPanel, AssetShelfWidget
 from workspace_tabs import WorkspaceTabWidget
-from pdf_processor import PdfProcessor
 from desk_widgets import BaseDeskWidget, CropDeskWidget, JoinDeskWidget
 from graphics_view import PdfGraphicsView
 
@@ -428,63 +426,10 @@ class MainWindow(QMainWindow):
         self.update_window_title()
 
     def process_crop(self) -> None:
-        """切り抜き処理のメインフローを制御する"""
-        view = self.current_view()
+        """現在のタブの種類に応じて、書き出し処理（クロップ保存またはPDF結合）を呼び出す"""
+        desk = self.current_desk()
+        if desk and hasattr(desk, "export_as_pdf"):
+            desk.export_as_pdf()
+        else:
+            QMessageBox.warning(self, "警告", "書き出し可能なタブが開かれていません")
 
-        # 1. バリデーション
-        if not self._validate_crop_request(view):
-            return
-
-        # 2. 保存パスの取得
-        output_path = self._get_save_path_from_dialog(view.pdf_path)
-        if not output_path:
-            return
-
-        try:
-            # 3. 座標の抽出
-            crop_rects = view.get_crop_coordinates()
-
-            # 4. PDF処理の実行
-            PdfProcessor.crop_and_save(
-                input_path=view.pdf_path,
-                output_path=output_path,
-                crop_rects=crop_rects,
-                scale_factor=view.scale_factor,
-            )
-
-            QMessageBox.information(self, "完了", "保存しました")
-        except Exception as e:
-            QMessageBox.critical(self, "エラー", str(e))
-
-    def _validate_crop_request(self, view: Optional[PdfGraphicsView]) -> bool:
-        """切り抜き処理が実行可能かチェックする"""
-        if not view:
-            return False
-
-        if not view.pdf_path:
-            QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
-            return False
-
-        if not view.rects:
-            msg = QMessageBox(self)
-            msg.setIcon(QMessageBox.Warning)
-            msg.setWindowTitle("警告")
-            msg.setText("範囲を選択してください" + " " * 15)
-            msg.exec()
-            return False
-
-        return True
-
-    def _get_save_path_from_dialog(self, input_path: str) -> Optional[str]:
-        """保存先を選択するダイアログを表示し、パスを返す"""
-        base, ext = os.path.splitext(os.path.basename(input_path))
-        default_name = f"{base}_cropped{ext}"
-        output_path, _ = QFileDialog.getSaveFileName(
-            self, "保存", default_name, "PDF Files (*.pdf)"
-        )
-
-        if not output_path:
-            print("QFileDialog.getSaveFileName() returned empty path")
-            return None
-
-        return output_path

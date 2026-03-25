@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
 )
 from PySide6.QtCore import Qt, Signal
+import os
 from workspace_models import (
     SourceAsset,
     CroppedAsset,
@@ -90,6 +91,14 @@ class CropDeskWidget(BaseDeskWidget):
         )
         self.save_btn.clicked.connect(self.save_as_asset)
         ctrl_bar.addWidget(self.save_btn)
+
+        self.export_btn = QPushButton("PDFとして保存")
+        self.export_btn.setStyleSheet(
+            "font-weight: bold; background-color: #e8f5e9; height: 35px;"
+        )
+        self.export_btn.clicked.connect(self.export_as_pdf)
+        ctrl_bar.addWidget(self.export_btn)
+
         layout.addLayout(ctrl_bar)
 
         self.editor = PdfGraphicsView()
@@ -129,6 +138,42 @@ class CropDeskWidget(BaseDeskWidget):
         QMessageBox.information(
             self, "完了", f"パーツ '{name}' を素材棚に登録しました。"
         )
+
+    def export_as_pdf(self):
+        """現在の切り抜き枠を物理PDFファイルとして出力保存する"""
+        if not self.editor.pdf_path:
+            QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
+            return
+
+        if not self.editor.rects:
+            QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
+            return
+
+        # 1. 保存先の決定
+        base, ext = os.path.splitext(os.path.basename(self.editor.pdf_path))
+        default_name = f"{base}_cropped{ext}"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self, "PDFとして書き出し", default_name, "PDF Files (*.pdf)"
+        )
+        if not output_path:
+            return
+
+        # 2. 実行
+        try:
+            # UIオブジェクトから座標リストを取得 (graphics_view に集約されている)
+            crop_rects = self.editor.get_crop_coordinates()
+
+            PdfProcessor.crop_and_save(
+                input_path=self.editor.pdf_path,
+                output_path=output_path,
+                crop_rects=crop_rects,
+                scale_factor=self.editor.scale_factor,
+            )
+            QMessageBox.information(
+                self, "完了", f"PDFを書き出しました：\n{output_path}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", f"書き出しに失敗しました：\n{str(e)}")
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
