@@ -153,7 +153,7 @@ class CropDeskWidget(BaseDeskWidget):
         base, ext = os.path.splitext(os.path.basename(self.editor.pdf_path))
         default_name = f"{base}_cropped{ext}"
         output_path, _ = QFileDialog.getSaveFileName(
-            self, "PDFとして書き出し", default_name, "PDF Files (*.pdf)"
+            self, "PDFとして保存", default_name, "PDF Files (*.pdf)"
         )
         if not output_path:
             return
@@ -169,11 +169,9 @@ class CropDeskWidget(BaseDeskWidget):
                 crop_rects=crop_rects,
                 scale_factor=self.editor.scale_factor,
             )
-            QMessageBox.information(
-                self, "完了", f"PDFを書き出しました：\n{output_path}"
-            )
+            QMessageBox.information(self, "完了", f"PDFを保存しました：\n{output_path}")
         except Exception as e:
-            QMessageBox.critical(self, "エラー", f"書き出しに失敗しました：\n{str(e)}")
+            QMessageBox.critical(self, "エラー", f"保存に失敗しました：\n{str(e)}")
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
@@ -348,7 +346,7 @@ class JoinDeskWidget(BaseDeskWidget):
             return
 
         name, ok = QInputDialog.getText(
-            self, "素材として保存", "プロジェクト名:", text="New_Project"
+            self, "素材として登録", "プロジェクト名:", text="New_Project"
         )
         if not ok or not name:
             return
@@ -405,11 +403,9 @@ class JoinDeskWidget(BaseDeskWidget):
         # 3. 物理書き出し実行
         try:
             PdfProcessor.join_and_save(file_path, assets_metadata)
-            QMessageBox.information(self, "完了", f"PDFを書き出しました：\n{file_path}")
+            QMessageBox.information(self, "完了", f"PDFを保存しました：\n{file_path}")
         except Exception as e:
-            QMessageBox.critical(
-                self, "書き出しエラー", f"PDFの作成に失敗しました：\n{str(e)}"
-            )
+            QMessageBox.critical(self, "エラー", f"保存に失敗しました：\n{str(e)}")
 
     def on_preview_enter(self):
         """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
