@@ -39,6 +39,9 @@ class BaseDeskWidget(QStackedWidget):
     supports_template = False
     """このデスクがテンプレート機能（切り抜き枠の自動配置など）をサポートしているか"""
 
+    sync_title_with_asset = False
+    """アセットを読み込んだ際にタブの名前をアセット名（ファイル名）に同期させるか"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editor = None  # 子クラスで初期化
@@ -81,6 +84,7 @@ class CropDeskWidget(BaseDeskWidget):
     """
 
     supports_template = True
+    sync_title_with_asset = True
 
     def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
