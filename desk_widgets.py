@@ -85,7 +85,7 @@ class CropDeskWidget(BaseDeskWidget):
 
         # 操作バー
         ctrl_bar = QHBoxLayout()
-        self.save_btn = QPushButton("切り抜きを素材棚に登録")
+        self.save_btn = QPushButton("素材棚に登録")
         self.save_btn.setStyleSheet(
             "font-weight: bold; background-color: #fce4ec; height: 35px;"
         )
@@ -324,7 +324,7 @@ class JoinDeskWidget(BaseDeskWidget):
         self.save_btn.clicked.connect(self.save_as_asset)
         ctrl_bar.addWidget(self.save_btn)
 
-        self.export_btn = QPushButton("PDFとして書き出し")
+        self.export_btn = QPushButton("PDFとして保存")
         self.export_btn.setStyleSheet(
             "font-weight: bold; background-color: #e8f5e9; height: 35px;"
         )
@@ -365,12 +365,12 @@ class JoinDeskWidget(BaseDeskWidget):
         """現在のリストを物理PDFファイルとして出力保存する"""
         item_ids = self.editor.get_item_ids()
         if not item_ids:
-            QMessageBox.warning(self, "エラー", "書き出すアイテムがありません")
+            QMessageBox.warning(self, "エラー", "保存するアイテムがありません")
             return
 
         # 1. 保存先の決定
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "PDFとして書き出し", "joined_output.pdf", "PDF Files (*.pdf)"
+            self, "PDFとして保存", "joined_output.pdf", "PDF Files (*.pdf)"
         )
         if not file_path:
             return
