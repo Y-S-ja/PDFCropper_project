@@ -430,4 +430,3 @@ class MainWindow(QMainWindow):
             desk.export_as_pdf()
         else:
             QMessageBox.warning(self, "警告", "書き出し可能なタブが開かれていません")
-
