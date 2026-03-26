@@ -42,6 +42,10 @@ class BaseDeskWidget(QStackedWidget):
     sync_title_with_asset = False
     """アセットを読み込んだ際にタブの名前をアセット名（ファイル名）に同期させるか"""
 
+    def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
+        """このデスクが指定されたアセットを読み込めるか判定（デフォルトはすべて受け入れる）"""
+        return True
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.editor = None  # 子クラスで初期化
@@ -85,6 +89,10 @@ class CropDeskWidget(BaseDeskWidget):
 
     supports_template = True
     sync_title_with_asset = True
+
+    def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
+        """CropDesk は 連結プロジェクト（JoinedAsset）を直接開くことはできない"""
+        return not isinstance(asset, JoinedAsset)
 
     def __init__(self, asset_mgr, parent=None):
         super().__init__(parent)
@@ -473,3 +481,11 @@ class JoinDeskWidget(BaseDeskWidget):
         item = QListWidgetItem(f"{icon} {asset.name}")
         item.setData(Qt.UserRole, asset.id)
         self.editor.addItem(item)
+
+
+# アセット型とデフォルトで開くべきデスク型のリレーション定義
+DEFAULT_DESK_MAP: dict[type[WorkspaceAsset], type[BaseDeskWidget]] = {
+    JoinedAsset: JoinDeskWidget,
+    SourceAsset: CropDeskWidget,
+    CroppedAsset: CropDeskWidget,
+}

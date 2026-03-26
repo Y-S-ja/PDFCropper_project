@@ -16,7 +16,12 @@ from workspace_models import (
 )
 from dock_panels import PreviewPanel, PropertyPanel, AssetShelfWidget
 from workspace_tabs import WorkspaceTabWidget
-from desk_widgets import BaseDeskWidget, CropDeskWidget, JoinDeskWidget
+from desk_widgets import (
+    BaseDeskWidget,
+    CropDeskWidget,
+    JoinDeskWidget,
+    DEFAULT_DESK_MAP,
+)
 from graphics_view import PdfGraphicsView
 
 
@@ -404,12 +409,12 @@ class MainWindow(QMainWindow):
         """
         desk = self.current_desk()
 
-        # 1. デスクの選定：強制新規、またはデスク不在の場合は自動生成
-        if force_new_tab or not desk:
+        # 現在のデスクがそのアセットを受け入れられない場合は、強制的に新規タブ扱いにする
+        is_compatible = desk and desk.can_accept_asset(asset)
+
+        if force_new_tab or not is_compatible:
             # アセットの種類に応じてデフォルトのデスククラスを選択
-            desk_class = (
-                JoinDeskWidget if isinstance(asset, JoinedAsset) else CropDeskWidget
-            )
+            desk_class = DEFAULT_DESK_MAP.get(type(asset), CropDeskWidget)
             desk = self.add_new_tab(desk_class)
 
         # 2. ロード準備（デスク側の判断による破棄確認など）
