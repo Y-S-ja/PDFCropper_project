@@ -11,7 +11,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from workspace_models import (
     AssetManager,
-    JoinedAsset,
     WorkspaceAsset,
 )
 from dock_panels import PreviewPanel, PropertyPanel, AssetShelfWidget
@@ -327,7 +326,6 @@ class MainWindow(QMainWindow):
         desk.fileDropped.connect(self.load_new_pdf)
         desk.selectionChanged.connect(self._handle_selection_changed)
         desk.contentChanged.connect(self._handle_rects_changed)
-        desk.requestRouting.connect(self._handle_routing_request)
 
     def update_window_title(self) -> None:
         """現在のタブの名前に基づいてウィンドウタイトルを更新する"""
@@ -343,10 +341,6 @@ class MainWindow(QMainWindow):
         current_index = self.tab_widget.currentIndex()
         if current_index != -1:
             self.remove_tab(current_index)
-
-    def _handle_routing_request(self, asset: WorkspaceAsset) -> None:
-        """他のタブでの展開要求（別種のアセットなど）が来た場合に、強制的に新規タブで開く"""
-        self.open_asset(asset, force_new_tab=True)
 
     def remove_tab(self, index: int) -> None:
         """指定したインデックスのタブを閉じる"""
@@ -402,7 +396,7 @@ class MainWindow(QMainWindow):
         asset = self.asset_mgr.create_source(file_path)
         self.open_asset(asset)
 
-    def open_asset(self, asset: WorkspaceAsset, force_new_tab: bool = False) -> None:
+    def open_asset(self, asset: WorkspaceAsset) -> None:
         """
         アセットを最適なデスク（タブ）に選別してロードし、UIの状態を更新する。
         （アセット・ロード・ルーティングの統合窓口）
@@ -412,7 +406,7 @@ class MainWindow(QMainWindow):
         # 現在のデスクがそのアセットを受け入れられない場合は、強制的に新規タブ扱いにする
         is_compatible = desk and desk.can_accept_asset(asset)
 
-        if force_new_tab or not is_compatible:
+        if not is_compatible:
             # アセットの種類に応じてデフォルトのデスククラスを選択
             desk_class = DEFAULT_DESK_MAP.get(type(asset), CropDeskWidget)
             desk = self.add_new_tab(desk_class)

@@ -33,8 +33,6 @@ class BaseDeskWidget(QStackedWidget):
     fileDropped = Signal(str)
     selectionChanged = Signal(object)
     contentChanged = Signal(list)
-    requestRouting = Signal(WorkspaceAsset)
-    """他のタブで開くことを要求するシグナル"""
 
     supports_template = False
     """このデスクがテンプレート機能（切り抜き枠の自動配置など）をサポートしているか"""
@@ -219,10 +217,6 @@ class CropDeskWidget(BaseDeskWidget):
                 self.editor.load_from_path(parent.path)
                 # 枠を復元
                 self.editor.restore_boxes(asset.crop_rects)
-
-            case JoinedAsset():
-                # メインウィンドウにルーティングを要求（ステップ3で処理）
-                self.requestRouting.emit(asset)
 
     def is_ready_to_load(self) -> bool:
         """このデスクに新しいアセットをロードしてもよいか判定する"""
