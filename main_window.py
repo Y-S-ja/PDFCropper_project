@@ -19,6 +19,7 @@ from desk_widgets import (
     BaseDeskWidget,
     CropDeskWidget,
     JoinDeskWidget,
+    OrganizeDeskWidget,
     DEFAULT_DESK_MAP,
 )
 from graphics_view import PdfGraphicsView
@@ -64,6 +65,12 @@ class MainWindow(QMainWindow):
         add_join_tab_action.setShortcut("Ctrl+J")
         add_join_tab_action.triggered.connect(
             lambda _=False: self.add_new_tab(JoinDeskWidget)
+        )
+
+        add_organize_tab_action = file_menu.addAction("並べ替えタブを追加")
+        add_organize_tab_action.setShortcut("Ctrl+Shift+O")
+        add_organize_tab_action.triggered.connect(
+            lambda _=False: self.add_new_tab(OrganizeDeskWidget)
         )
 
         save_action = file_menu.addAction("保存")
@@ -121,8 +128,15 @@ class MainWindow(QMainWindow):
             lambda _=False: self.add_new_tab(JoinDeskWidget)
         )
 
+        self.action_new_organize = QAction("🗂️ オーガナイズ", self)
+        self.action_new_organize.setToolTip("新しい並べ替えタブを作成")
+        self.action_new_organize.triggered.connect(
+            lambda _=False: self.add_new_tab(OrganizeDeskWidget)
+        )
+
         self.workspace_toolbar.addAction(self.action_new_crop)
         self.workspace_toolbar.addAction(self.action_new_join)
+        self.workspace_toolbar.addAction(self.action_new_organize)
         self.workspace_toolbar.addSeparator()
 
         # 表示モード切替ツールバー

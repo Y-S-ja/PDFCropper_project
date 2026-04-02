@@ -16,6 +16,8 @@ class WorkspaceTabWidget(QTabWidget):
         class_name = desk_class.__name__
         if "Join" in class_name:
             prefix = "🔗_Join"
+        elif "Organize" in class_name:
+            prefix = "🗂️_Organize"
         else:
             prefix = "✂️_Crop"
 

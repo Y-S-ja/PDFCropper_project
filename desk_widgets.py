@@ -5,13 +5,15 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QListWidget,
     QListWidgetItem,
+    QListView,
+    QAbstractItemView,
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
     QMenu,
     QInputDialog,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSize
 import os
 from workspace_models import (
     SourceAsset,
@@ -475,6 +477,74 @@ class JoinDeskWidget(BaseDeskWidget):
         item = QListWidgetItem(f"{icon} {asset.name}")
         item.setData(Qt.UserRole, asset.id)
         self.editor.addItem(item)
+
+
+class OrganizeListWidget(QListWidget):
+    """
+    OrganizeDeskのサムネイル一覧表示用リストウィジェット。
+    画像のドラッグ＆ドロップによる並べ替え（InternalMove）と、外部からの挿入ドロップを受け付ける。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setViewMode(QListView.IconMode)  # グリッド表示
+        self.setResizeMode(QListView.Adjust)  # ウィンドウ幅に合わせて折り返し
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)  # 複数選択可
+        self.setDragDropMode(QAbstractItemView.DragDrop)
+        self.setDefaultDropAction(Qt.MoveAction)
+        self.setAcceptDrops(True)
+        self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
+        self.setSpacing(10)
+
+    # TODO: Step 2 にて dragEnterEvent, dropEvent を実装する
+
+
+class OrganizeDeskWidget(BaseDeskWidget):
+    """
+    ベースPDFと画像をサムネイル展開して並べ替え・削除・挿入を行うデスク。
+    """
+
+    def __init__(self, asset_mgr, parent=None):
+        super().__init__(parent)
+        self.asset_mgr = asset_mgr
+
+        # UI構築
+        toolbar = QHBoxLayout()
+        test_btn = QPushButton("テストアイテム追加")
+        test_btn.clicked.connect(self._add_test_data)
+        toolbar.addWidget(test_btn)
+        toolbar.addStretch()
+
+        self.editor = OrganizeListWidget()
+
+        # BaseDeskWidgetの構造に合わせた下部プレビュー枠（不要かもしれないが形式上残す）
+        self.preview = PdfPreviewView()
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(toolbar)
+        layout.addWidget(self.editor)
+
+        self.addWidget(container)  # 編集画面
+        self.addWidget(self.preview)  # プレビュー画面
+
+    def _add_test_data(self):
+        """Step 1 確認用の仮データ追加機能"""
+        count = self.editor.count()
+        item = QListWidgetItem(f"仮アイテム {count + 1}")
+        self.editor.addItem(item)
+
+    def set_asset(self, asset: WorkspaceAsset):
+        """
+        [Step 2向け] アセットを読み込んだ時の処理。
+        ベースPDFのページ群を展開する。
+        """
+        pass
+
+    def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
+        # OrganizeDesk はどのAssetでも一旦受け入れ可能とする（現状）
+        return True
 
 
 # アセット型とデフォルトで開くべきデスク型のリレーション定義
