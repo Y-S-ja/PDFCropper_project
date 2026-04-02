@@ -98,8 +98,23 @@ class PdfProcessor:
                         PdfProcessor._append_cropped_page(
                             new_doc, src_doc, page_index, rect, scale_factor
                         )
+                new_doc.set_page_labels([])
+                try:
+                    root_xref = new_doc.pdf_catalog()
+                    # 表示レイアウトを「SinglePage（1枚ずつ）」に固定
+                    # これによりObsidianが偶数ページを隣とくっつけるのを防ぎます
+                    new_doc.xref_set_key(root_xref, "PageLayout", "/SinglePage")
+                    new_doc.xref_set_key(root_xref, "PageMode", "/UseNone")
 
-                new_doc.save(output_path)
+                    # さらに、ビューアへの詳細な指示を追加
+                    # /Direction /L2R (左から右へ読む) を明示
+                    new_doc.xref_set_key(
+                        root_xref, "ViewerPreferences", "<< /Direction /L2R >>"
+                    )
+                except Exception as e:
+                    print(f"Metadata cleanup warning: {e}")
+                new_doc.init_doc()
+                new_doc.save(output_path, garbage=4, deflate=True, clean=True)
 
     @staticmethod
     def generate_page_preview(
@@ -166,8 +181,6 @@ class PdfProcessor:
         """
         [内部専用] 元のドキュメントの指定ページを新しいドキュメントの末尾に追加し、切り抜き枠を適用する
         """
-        new_doc.insert_pdf(src_doc, from_page=page_index, to_page=page_index)
-
         # UIの数値(タプル)を受け取り、シーン座標をPDFのポイント座標に変換
         left, top, right, bottom = rect
         pdf_rect = fitz.Rect(
@@ -176,7 +189,18 @@ class PdfProcessor:
             right * scale_factor,
             bottom * scale_factor,
         )
-        new_doc[-1].set_cropbox(pdf_rect)
+
+        # 1. 完全にクリーンな(0, 0)始まりの新しいページを作成する
+        # （これによりPDF++等の「左上が基準」の座標抽出ツールが正しく動作し、左右の配置順序の逆転も防ぐ）
+        new_page = new_doc.new_page(width=pdf_rect.width, height=pdf_rect.height)
+
+        # 2. 元のPDFの該当ページから、切り抜き枠の部分だけを新しいページ(の全域)へ写し取る
+        new_page.show_pdf_page(
+            new_page.rect,  # 転写先（新ページの0,0から幅・高さまで）
+            src_doc,  # 転送元ドキュメント
+            page_index,  # 転送元ページ番号
+            clip=pdf_rect,  # 転送元から切り出す範囲
+        )
 
     @staticmethod
     def join_and_save(output_path: str, assets_metadata: list):
