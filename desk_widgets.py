@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QInputDialog,
 )
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer
 import os
 from workspace_models import (
     SourceAsset,
@@ -24,6 +24,7 @@ from workspace_models import (
 from pdf_processor import PdfProcessor
 from preview_view import PdfPreviewView
 from graphics_view import PdfGraphicsView
+from worker import JoinPreviewWorker, OrganizePreviewWorker
 
 
 class BaseDeskWidget(QStackedWidget):
@@ -485,6 +486,8 @@ class OrganizeListWidget(QListWidget):
     画像のドラッグ＆ドロップによる並べ替え（InternalMove）と、外部からの挿入ドロップを受け付ける。
     """
 
+    items_added = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setViewMode(QListView.ListMode)  # グリッド表示
@@ -555,6 +558,7 @@ class OrganizeListWidget(QListWidget):
                     target_row += 1  # 複数ドロップ時に順番を維持
 
             event.acceptProposedAction()
+            self.items_added.emit()
         else:
             # 内部の並べ替え（InternalMove）は標準処理に任せる
             super().dropEvent(event)
@@ -577,6 +581,10 @@ class OrganizeDeskWidget(BaseDeskWidget):
         toolbar.addStretch()
 
         self.editor = OrganizeListWidget()
+        self.editor.items_added.connect(self.request_previews)
+
+        self.worker_thread = None
+        self.worker = None
 
         # BaseDeskWidgetの構造に合わせた下部プレビュー枠（不要かもしれないが形式上残す）
         self.preview = PdfPreviewView()
@@ -595,6 +603,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
         count = self.editor.count()
         item = QListWidgetItem(f"仮アイテム {count + 1}")
         self.editor.addItem(item)
+        self.request_previews()
 
     def set_asset(self, asset: WorkspaceAsset):
         """
@@ -624,6 +633,66 @@ class OrganizeDeskWidget(BaseDeskWidget):
             metadata = {"type": "pdf_page", "source_path": asset.path, "page_index": i}
             item.setData(Qt.UserRole, metadata)
             self.editor.addItem(item)
+
+        # 全件追加後にワーカーを起動
+        QTimer.singleShot(100, self.request_previews)
+
+    def request_previews(self):
+        """
+        [Step 3-2 / 3-3実装] アイコンが未生成のアイテムを探し、ワーカーに依頼する。
+        """
+        requests = []
+        for i in range(self.editor.count()):
+            item = self.editor.item(i)
+            if item.icon().isNull():
+                meta = item.data(Qt.UserRole)
+                if meta:
+                    requests.append(meta)
+
+        if not requests:
+            return
+
+        # 前のワーカーがあればキャンセル
+        if self.worker and self.worker_thread:
+            self.worker.cancel()
+            self.worker_thread.quit()
+            self.worker_thread.wait()
+
+        self.worker_thread = QThread()
+        self.worker = OrganizePreviewWorker(requests)
+        self.worker.moveToThread(self.worker_thread)
+
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.worker_thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+
+        # Step 3-3 用：ワーカーから画像が届いたらアイコンをセット
+        self.worker.page_ready.connect(self.apply_previews)
+
+        self.worker_thread.start()
+
+    def apply_previews(self, batch: list):
+        """
+        [Step 3-3実装] ワーカーから届いたバッチ（メタデータと画像のペア）を、
+        現在のリストアイテム内のメタ情報と照合してアイコンをセットする。
+        """
+        from PySide6.QtGui import QIcon, QPixmap
+
+        for meta, img in batch:
+            pixmap = QPixmap.fromImage(img)
+            icon = QIcon(pixmap)
+
+            # 現在のリストの中から、メタデータが一致するアイテムを探して適用する
+            for i in range(self.editor.count()):
+                item = self.editor.item(i)
+                item_meta = item.data(Qt.UserRole)
+                if item_meta == meta:
+                    item.setIcon(icon)
+                    # 最初の1回だけ、見栄えのためにテキストを消す（任意）
+                    if "Page" in item.text() or "🖼️" in item.text():
+                        item.setText("")
+                    break  # 同じアイテムは1つだけのはずなので抜ける
 
     def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
         # OrganizeDesk はどのAssetでも一旦受け入れ可能とする（現状）
