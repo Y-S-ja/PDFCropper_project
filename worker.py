@@ -183,3 +183,89 @@ class JoinPreviewWorker(QObject):
             self.error.emit(str(e))
         finally:
             self.finished.emit()
+
+
+class OrganizePreviewWorker(QObject):
+    """
+    OrganizeDesk用の、ハイブリッド（PDFページ + 画像ファイル）プレビュー生成ワーカー
+    """
+
+    page_ready = Signal(dict, QImage)  # (metadata, generated_image)
+    finished = Signal()
+    error = Signal(str)
+
+    def __init__(self, request_list):
+        """
+        request_list: [{"type": "...", "source_path": "...", "page_index": N}, ...]
+        """
+        super().__init__()
+        self.request_list = request_list
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def run(self):
+        try:
+            # 同じPDFを何度も開きなおさないためのキャッシュ
+            pdf_docs = {}
+            import os
+
+            for metadata in self.request_list:
+                if self._is_cancelled:
+                    break
+
+                img = None
+                m_type = metadata.get("type")
+                m_path = metadata.get("source_path")
+                m_page = metadata.get("page_index")
+
+                if not m_path or not os.path.exists(m_path):
+                    continue
+
+                try:
+                    if m_type == "pdf_page":
+                        # PDFから1ページ分をレンダリング
+                        if m_path not in pdf_docs:
+                            pdf_docs[m_path] = fitz.open(m_path)
+
+                        doc = pdf_docs[m_path]
+                        if 0 <= m_page < len(doc):
+                            page = doc[m_page]
+                            # 144dpi相当 (72 * 2.0)
+                            mat = fitz.Matrix(2.0, 2.0)
+                            pix = page.get_pixmap(matrix=mat)
+                            img = QImage(
+                                pix.samples,
+                                pix.width,
+                                pix.height,
+                                pix.stride,
+                                QImage.Format_RGB888,
+                            )
+
+                    elif m_type == "image_file":
+                        # 画像ファイルを直接読み込み
+                        img = QImage(m_path)
+                        if not img.isNull():
+                            # 適度なサイズに縮小（アスペクト比維持）
+                            img = img.scaled(
+                                200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                            )
+
+                    if img and not img.isNull():
+                        # 元画像のコピーを送る（スレッドセーフのため）
+                        self.page_ready.emit(metadata, img.copy())
+
+                    QThread.msleep(10)  # UIフリーズ防止の微小休止
+
+                except Exception as e:
+                    print(f"Error rendering item in OrganizeWorker: {e}")
+
+            # 開いたPDFを全て閉じる
+            for doc in pdf_docs.values():
+                doc.close()
+
+        except Exception as e:
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit()
