@@ -537,10 +537,35 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
     def set_asset(self, asset: WorkspaceAsset):
         """
-        [Step 2向け] アセットを読み込んだ時の処理。
-        ベースPDFのページ群を展開する。
+        [Step 2-1実装] アセットを読み込んだ時の処理。
+        ベースPDFの全ページを仮アイテムとして展開する。
         """
-        pass
+        if not hasattr(asset, "path") or not os.path.exists(asset.path):
+            return
+
+        # 既存アイテムをクリア
+        self.editor.clear()
+
+        # PDFを開いてページ数を取得
+        import fitz
+        try:
+            with fitz.open(asset.path) as doc:
+                page_count = len(doc)
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", f"PDFの読み込みに失敗しました: {e}")
+            return
+
+        # 各ページをリストアイテムとして展開
+        for i in range(page_count):
+            item = QListWidgetItem(f"📄 Page {i + 1}")
+            # メタ情報を保持（Step 5の書き出しで使用）
+            metadata = {
+                "type": "pdf_page",
+                "source_path": asset.path,
+                "page_index": i
+            }
+            item.setData(Qt.UserRole, metadata)
+            self.editor.addItem(item)
 
     def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
         # OrganizeDesk はどのAssetでも一旦受け入れ可能とする（現状）
