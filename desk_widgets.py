@@ -637,6 +637,22 @@ class OrganizeDeskWidget(BaseDeskWidget):
         # 全件追加後にワーカーを起動
         QTimer.singleShot(100, self.request_previews)
 
+    def _stop_worker(self):
+        """ワーカーを安全に停止・破棄する"""
+        if self.worker:
+            self.worker.cancel()
+
+        try:
+            # すでに処理が終了し、C++のインスタンスが破棄されている場合のアクセスエラーを防ぐ
+            if self.worker_thread and self.worker_thread.isRunning():
+                self.worker_thread.quit()
+                self.worker_thread.wait()
+        except RuntimeError:
+            pass
+
+        self.worker = None
+        self.worker_thread = None
+
     def request_previews(self):
         """
         [Step 3-2 / 3-3実装] アイコンが未生成のアイテムを探し、ワーカーに依頼する。
@@ -652,11 +668,8 @@ class OrganizeDeskWidget(BaseDeskWidget):
         if not requests:
             return
 
-        # 前のワーカーがあればキャンセル
-        if self.worker and self.worker_thread:
-            self.worker.cancel()
-            self.worker_thread.quit()
-            self.worker_thread.wait()
+        # 前のワーカーを安全に停止
+        self._stop_worker()
 
         self.worker_thread = QThread()
         self.worker = OrganizePreviewWorker(requests)
