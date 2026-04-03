@@ -487,10 +487,16 @@ class OrganizeListWidget(QListWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setViewMode(QListView.IconMode)  # グリッド表示
+        self.setViewMode(QListView.ListMode)  # グリッド表示
+        self.setDropIndicatorShown(True)
+        self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
+        self.setGridSize(QSize(150, 200))
+        self.setFlow(QListView.LeftToRight)
+        self.setWrapping(True)
         self.setResizeMode(QListView.Adjust)  # ウィンドウ幅に合わせて折り返し
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)  # 複数選択可
-        self.setDragDropMode(QAbstractItemView.DragDrop)
+        self.setDragEnabled(True)  # ドラッグ開始を明示的に有効化
+        self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
         self.setAcceptDrops(True)
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
@@ -548,6 +554,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # PDFを開いてページ数を取得
         import fitz
+
         try:
             with fitz.open(asset.path) as doc:
                 page_count = len(doc)
@@ -559,11 +566,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
         for i in range(page_count):
             item = QListWidgetItem(f"📄 Page {i + 1}")
             # メタ情報を保持（Step 5の書き出しで使用）
-            metadata = {
-                "type": "pdf_page",
-                "source_path": asset.path,
-                "page_index": i
-            }
+            metadata = {"type": "pdf_page", "source_path": asset.path, "page_index": i}
             item.setData(Qt.UserRole, metadata)
             self.editor.addItem(item)
 
