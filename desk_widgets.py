@@ -502,7 +502,29 @@ class OrganizeListWidget(QListWidget):
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
         self.setSpacing(10)
 
-    # TODO: Step 2 にて dragEnterEvent, dropEvent を実装する
+    def dragEnterEvent(self, event):
+        """外部からのファイル（画像）ドラッグ、または内部移動を判別して許可する"""
+        if event.mimeData().hasUrls():
+            # 外部ファイルパスが含まれている場合、画像ファイルが1つでもあれば許可
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
+                    event.acceptProposedAction()
+                    return
+        # それ以外（内部移動など）は親クラスの標準処理に任せる
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        """ドラッグ中、常にドロップ可能か判定し続ける"""
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
+                    event.acceptProposedAction()
+                    return
+        super().dragMoveEvent(event)
 
 
 class OrganizeDeskWidget(BaseDeskWidget):
