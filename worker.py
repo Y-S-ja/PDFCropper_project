@@ -190,7 +190,8 @@ class OrganizePreviewWorker(QObject):
     OrganizeDesk用の、ハイブリッド（PDFページ + 画像ファイル）プレビュー生成ワーカー
     """
 
-    page_ready = Signal(dict, QImage)  # (metadata, generated_image)
+    page_ready = Signal(list)  # [(metadata, generated_image), ...] のリスト
+    progress_updated = Signal(int, int)  # (current, total)
     finished = Signal()
     error = Signal(str)
 
@@ -211,7 +212,11 @@ class OrganizePreviewWorker(QObject):
             pdf_docs = {}
             import os
 
-            for metadata in self.request_list:
+            total_items = len(self.request_list)
+            batch = []
+            batch_size = 5
+
+            for i, metadata in enumerate(self.request_list):
                 if self._is_cancelled:
                     break
 
@@ -253,13 +258,28 @@ class OrganizePreviewWorker(QObject):
                             )
 
                     if img and not img.isNull():
-                        # 元画像のコピーを送る（スレッドセーフのため）
-                        self.page_ready.emit(metadata, img.copy())
+                        # 元画像のコピーをバッチに保存
+                        batch.append((metadata, img.copy()))
 
-                    QThread.msleep(10)  # UIフリーズ防止の微小休止
+                    # 進捗通知
+                    self.progress_updated.emit(i + 1, total_items)
+
+                    # バッチ送信判定
+                    if len(batch) >= batch_size:
+                        self.page_ready.emit(batch)
+                        batch = []
+                        # 溜まったデータを一気にUIへ送った直後は、UIスレッドが描画する時間を稼ぐために少し長めに休む
+                        QThread.msleep(30)
+                    else:
+                        # 毎回の微小な休止
+                        QThread.msleep(5)
 
                 except Exception as e:
                     print(f"Error rendering item in OrganizeWorker: {e}")
+
+            # 残りのバッチがあれば送信
+            if batch and not self._is_cancelled:
+                self.page_ready.emit(batch)
 
             # 開いたPDFを全て閉じる
             for doc in pdf_docs.values():
