@@ -526,6 +526,39 @@ class OrganizeListWidget(QListWidget):
                     return
         super().dragMoveEvent(event)
 
+    def dropEvent(self, event):
+        """内部移動、または外部画像の挿入を処理する"""
+        if event.mimeData().hasUrls():
+            # 外部からのファイルドロップの場合
+            drop_pos = event.position().toPoint()
+            target_item = self.itemAt(drop_pos)
+            if target_item:
+                target_row = self.row(target_item)
+            else:
+                target_row = self.count()
+
+            # 画像ファイルを抽出してアイテムを追加
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
+                    item = QListWidgetItem(f"🖼️ {os.path.basename(file_path)}")
+                    # 画像用のメタ情報を保持
+                    metadata = {
+                        "type": "image_file",
+                        "source_path": file_path,
+                        "page_index": None,
+                    }
+                    item.setData(Qt.UserRole, metadata)
+                    # マウスが離された位置（または末尾）に挿入
+                    self.insertItem(target_row, item)
+                    target_row += 1  # 複数ドロップ時に順番を維持
+
+            event.acceptProposedAction()
+        else:
+            # 内部の並べ替え（InternalMove）は標準処理に任せる
+            super().dropEvent(event)
+
 
 class OrganizeDeskWidget(BaseDeskWidget):
     """
