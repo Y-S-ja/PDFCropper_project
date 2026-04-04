@@ -556,16 +556,16 @@ class OrganizeItemDelegate(QStyledItemDelegate):
         if (option.state & QStyle.State_MouseOver) or show_always:
             painter.save()
 
-            # アイコン領域の下半分くらいに詳細情報を表示
-            info_height = 30
+            # アイコン領域の最下部に詳細情報を表示
+            info_height = 20
             info_rect = QRect(
                 option.rect.left() + 2,
-                option.rect.bottom() - info_height - 20,  # テキストラベルの上あたり
+                option.rect.bottom() - info_height - 2,  # 最下部に配置
                 option.rect.width() - 4,
                 info_height,
             )
 
-            # 半透明の背景を描画
+            # 控えめな背景を描画（ライトグレー）
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(0, 0, 0, 160))
             painter.drawRoundedRect(info_rect, 4, 4)
@@ -577,7 +577,7 @@ class OrganizeItemDelegate(QStyledItemDelegate):
             else:
                 detail_text = "Image"
 
-            painter.setPen(Qt.white)
+            painter.setPen(Qt.black)
             f = painter.font()
             f.setPointSize(8)
             f.setBold(False)
@@ -635,7 +635,7 @@ class OrganizeListWidget(QListWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.show_overlay_always = False # 常時表示フラグ
+        self.show_overlay_always = False  # 常時表示フラグ
         self.setViewMode(QListView.ListMode)  # グリッド表示
         self.setDropIndicatorShown(True)
         self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
