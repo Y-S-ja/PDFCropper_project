@@ -644,6 +644,11 @@ class OrganizeDeskWidget(BaseDeskWidget):
         test_btn = QPushButton("テストアイテム追加")
         test_btn.clicked.connect(self._add_test_data)
         toolbar.addWidget(test_btn)
+
+        export_btn = QPushButton("PDFを書き出し")
+        export_btn.clicked.connect(self._on_export_clicked)
+        toolbar.addWidget(export_btn)
+
         toolbar.addStretch()
 
         self.editor = OrganizeListWidget()
@@ -670,6 +675,43 @@ class OrganizeDeskWidget(BaseDeskWidget):
         item = QListWidgetItem(f"仮アイテム {count + 1}")
         self.editor.addItem(item)
         self.request_previews()
+
+    def _on_export_clicked(self):
+        """現在のリストの内容を1つのPDFとして書き出す"""
+        if self.editor.count() == 0:
+            QMessageBox.warning(self, "警告", "書き出すページがありません。")
+            return
+
+        # 保存先ダイアログ
+        output_path, _ = QFileDialog.getSaveFileName(
+            self, "PDFを書き出し", "", "PDF Files (*.pdf)"
+        )
+        if not output_path:
+            return
+
+        # 指示書の作成（リストの全アイテムからメタデータを抽出）
+        instructions = []
+        for i in range(self.editor.count()):
+            item = self.editor.item(i)
+            meta = item.data(Qt.UserRole)
+            if meta:
+                instructions.append(meta)
+
+        # 書き出しの実行 (Step 5-1 / 5-3)
+        try:
+            # 処理中のフィードバック
+            self.setCursor(Qt.WaitCursor)
+
+            PdfProcessor.export_organized_pdf(instructions, output_path)
+
+            self.setCursor(Qt.ArrowCursor)
+            QMessageBox.information(
+                self, "完了", f"PDFを書き出しました:\n{output_path}"
+            )
+
+        except Exception as e:
+            self.setCursor(Qt.ArrowCursor)
+            QMessageBox.critical(self, "エラー", f"書き出しに失敗しました:\n{e}")
 
     def set_asset(self, asset: WorkspaceAsset):
         """
