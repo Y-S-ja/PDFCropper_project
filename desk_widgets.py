@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
     QWidget,
     QMenu,
     QInputDialog,
+    QStyledItemDelegate,
 )
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
 from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer
 import os
 from workspace_models import (
@@ -766,6 +768,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
                 item_meta = item.data(Qt.UserRole)
                 if item_meta == meta:
                     item.setIcon(icon)
+
                     # 最初の1回だけ、見栄えのためにテキストを消す（任意）
                     if "Page" in item.text() or "🖼️" in item.text():
                         item.setText("")
