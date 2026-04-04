@@ -559,16 +559,16 @@ class OrganizeItemDelegate(QStyledItemDelegate):
             # アイコン領域の最下部に詳細情報を表示
             info_height = 20
             info_rect = QRect(
-                option.rect.left() + 2,
-                option.rect.bottom() - info_height - 2,  # 最下部に配置
-                option.rect.width() - 4,
+                option.rect.left() + 9,
+                option.rect.bottom() - info_height - 7,  # 最下部に配置
+                option.rect.width() - 18,
                 info_height,
             )
 
             # 控えめな背景を描画（ライトグレー）
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(220, 220, 220, 200))
-            painter.drawRoundedRect(info_rect, 2, 2)
+            painter.setBrush(QColor(255, 255, 255, 200))
+            painter.drawRect(info_rect)
 
             # 詳細テキスト（ページ番号など）を構成
             if metadata.get("type") == "pdf_page":
