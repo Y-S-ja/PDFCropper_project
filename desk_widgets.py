@@ -523,7 +523,7 @@ class OrganizeListWidget(QListWidget):
         self.setViewMode(QListView.ListMode)  # グリッド表示
         self.setDropIndicatorShown(True)
         self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
-        self.setGridSize(QSize(150, 200))
+        # self.setGridSize(QSize(110, 160))
         self.setFlow(QListView.LeftToRight)
         self.setWrapping(True)
         self.setResizeMode(QListView.Adjust)  # ウィンドウ幅に合わせて折り返し
@@ -533,7 +533,7 @@ class OrganizeListWidget(QListWidget):
         self.setDefaultDropAction(Qt.MoveAction)
         self.setAcceptDrops(True)
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
-        self.setSpacing(10)
+        # self.setSpacing(10)
         self.setItemDelegate(OrganizeItemDelegate(self))
 
     def dragEnterEvent(self, event):
@@ -665,7 +665,6 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         self.addWidget(container)  # 編集画面
         self.addWidget(self.preview)  # プレビュー画面
-
 
     def _on_export_clicked(self):
         """現在のリストの内容を1つのPDFとして書き出す"""
