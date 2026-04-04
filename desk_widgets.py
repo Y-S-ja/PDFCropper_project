@@ -592,6 +592,41 @@ class OrganizeListWidget(QListWidget):
             # 内部の並べ替え（InternalMove）は標準処理に任せる
             super().dropEvent(event)
 
+    def keyPressEvent(self, event):
+        """キー操作の処理"""
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            # 選択中のアイテムを除外・復旧トグル
+            self.toggle_selected_items_exclusion()
+        else:
+            super().keyPressEvent(event)
+
+    def contextMenuEvent(self, event):
+        """右クリックメニュー"""
+        menu = QMenu(self)
+        toggle_action = QAction("除外状態を切り替え (Del)", self)
+        toggle_action.triggered.connect(self.toggle_selected_items_exclusion)
+        menu.addAction(toggle_action)
+        menu.exec(event.globalPos())
+
+    def toggle_selected_items_exclusion(self):
+        """選択中のアイテムの除外状態を反転させ、見た目を更新する"""
+        items = self.selectedItems()
+        if not items:
+            return
+
+        for item in items:
+            metadata = item.data(Qt.UserRole)
+            if not metadata:
+                continue
+
+            # フラグ反転
+            is_excluded = not metadata.get("excluded", False)
+            metadata["excluded"] = is_excluded
+            item.setData(Qt.UserRole, metadata)
+
+        # 描画の更新（Delegateがフラグを読み取り、自動で半透明や取り消し線を再描画する）
+        self.viewport().update()
+
 
 class OrganizeDeskWidget(BaseDeskWidget):
     """
