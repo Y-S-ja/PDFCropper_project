@@ -549,10 +549,10 @@ class OrganizeItemDelegate(QStyledItemDelegate):
 
         # 3. ホバー時または常時表示設定時の詳細情報オーバーレイ
         from PySide6.QtWidgets import QStyle
-        
+
         list_view = self.parent()
         show_always = getattr(list_view, "show_overlay_always", False)
-        
+
         if (option.state & QStyle.State_MouseOver) or show_always:
             painter.save()
 
@@ -567,8 +567,8 @@ class OrganizeItemDelegate(QStyledItemDelegate):
 
             # 控えめな背景を描画（ライトグレー）
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 160))
-            painter.drawRoundedRect(info_rect, 4, 4)
+            painter.setBrush(QColor(220, 220, 220, 200))
+            painter.drawRoundedRect(info_rect, 2, 2)
 
             # 詳細テキスト（ページ番号など）を構成
             if metadata.get("type") == "pdf_page":
@@ -632,7 +632,7 @@ class OrganizeListWidget(QListWidget):
     """
 
     items_added = Signal()
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.show_overlay_always = False  # 常時表示フラグ
@@ -800,17 +800,17 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # UI構築
         toolbar = QHBoxLayout()
-        
+
         export_btn = QPushButton("PDFを書き出し")
         export_btn.clicked.connect(self._on_export_clicked)
         toolbar.addWidget(export_btn)
-        
+
         # 表示切り替えトグル
         self.toggle_show_btn = QPushButton("元ページ番号を表示")
         self.toggle_show_btn.setCheckable(True)
         self.toggle_show_btn.toggled.connect(self._on_toggle_show_info)
         toolbar.addWidget(self.toggle_show_btn)
-        
+
         toolbar.addStretch()
 
         self.editor = OrganizeListWidget()
@@ -830,7 +830,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         self.addWidget(container)  # 編集画面
         self.addWidget(self.preview)  # プレビュー画面
-        
+
     def _on_toggle_show_info(self, checked):
         """オーバーレイの常時表示フラグを切り替える"""
         self.editor.show_overlay_always = checked
