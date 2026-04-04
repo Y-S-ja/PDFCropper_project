@@ -604,23 +604,46 @@ class OrganizeListWidget(QListWidget):
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
         # self.setSpacing(10)
         self.setItemDelegate(OrganizeItemDelegate(self))
-        self.itemChanged.connect(self._on_item_changed)
 
-    def _on_item_changed(self, item):
-        """チェックボックスの状態変更をメタデータに反映する"""
-        metadata = item.data(Qt.UserRole)
-        if not isinstance(metadata, dict):
+    def _schedule_reindex(self):
+        """シグナルなどのパタパタとした連続割り込みを1回にまとめるための遅延実行処理"""
+        if not hasattr(self, "_reindex_pending") or not self._reindex_pending:
+            self._reindex_pending = True
+            QTimer.singleShot(0, self.update_output_ranks)
+
+    def update_output_ranks(self):
+        """有効なアイテムに最新のページ出力順をカウントし直してメタデータを更新する"""
+        self._reindex_pending = False
+        current_rank = 1
+        for i in range(self.count()):
+            item = self.item(i)
+            meta = item.data(Qt.UserRole)
+            if not isinstance(meta, dict):
+                continue
+            
+            if not meta.get("excluded", False):
+                meta["output_rank"] = current_rank
+                current_rank += 1
+            else:
+                meta["output_rank"] = None
+            
+            item.setData(Qt.UserRole, meta)
+            
+        self.viewport().update()
+
+    def toggle_exclusion_at_index(self, row: int):
+        """指定した行の除外状態を反転させ、再インデックスする"""
+        item = self.item(row)
+        if not item:
             return
-
-        # チェック状態とメタデータの同期（無限ループを防ぐため値が違う時のみ処理）
-        is_checked = item.checkState() == Qt.Checked
-        is_excluded = not is_checked
-
-        if metadata.get("excluded", False) != is_excluded:
-            metadata["excluded"] = is_excluded
-            item.setData(Qt.UserRole, metadata)
-            # 描画更新（Delegateが透明度を反映するように）
-            self.viewport().update()
+        
+        meta = item.data(Qt.UserRole)
+        if not isinstance(meta, dict):
+            return
+        
+        meta["excluded"] = not meta.get("excluded", False)
+        item.setData(Qt.UserRole, meta)
+        self._schedule_reindex()
 
     def dragEnterEvent(self, event):
         """外部からのファイル（画像）ドラッグ、または内部移動を判別して許可する"""
@@ -663,10 +686,6 @@ class OrganizeListWidget(QListWidget):
                 ext = os.path.splitext(file_path)[1].lower()
                 if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
                     item = QListWidgetItem(f"🖼️ {os.path.basename(file_path)}")
-                    # チェックボックスを有効化し、初期値を「チェック（書き出し対象）」にする
-                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                    item.setCheckState(Qt.Checked)
-
                     # 画像用のメタ情報を保持
                     metadata = {
                         "type": "image_file",
@@ -679,10 +698,12 @@ class OrganizeListWidget(QListWidget):
                     target_row += 1  # 複数ドロップ時に順番を維持
 
             event.acceptProposedAction()
+            self._schedule_reindex()
             self.items_added.emit()
         else:
             # 内部の並べ替え（InternalMove）は標準処理に任せる
             super().dropEvent(event)
+            self._schedule_reindex()
 
     def keyPressEvent(self, event):
         """キー操作の処理"""
@@ -716,11 +737,8 @@ class OrganizeListWidget(QListWidget):
             metadata["excluded"] = is_excluded
             item.setData(Qt.UserRole, metadata)
 
-            # チェックボックスの状態も同期させる（これで _on_item_changed も呼ばれる）
-            item.setCheckState(Qt.Unchecked if is_excluded else Qt.Checked)
-
-        # 描画の更新（Delegateがフラグを読み取り、自動で半透明や取り消し線を再描画する）
-        self.viewport().update()
+        # 描画と番号の更新をまとめて予約
+        self._schedule_reindex()
 
 
 class OrganizeDeskWidget(BaseDeskWidget):
@@ -820,13 +838,12 @@ class OrganizeDeskWidget(BaseDeskWidget):
         # 各ページをリストアイテムとして展開
         for i in range(page_count):
             item = QListWidgetItem(f"Page {i + 1}")
-            # チェックボックスを有効化
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)
-
             metadata = {"type": "pdf_page", "source_path": asset.path, "page_index": i}
             item.setData(Qt.UserRole, metadata)
             self.editor.addItem(item)
+
+        # 全件追加後にインデックスを計算
+        self.editor._schedule_reindex()
 
         # 全件追加後にワーカーを起動
         QTimer.singleShot(100, self.request_previews)
