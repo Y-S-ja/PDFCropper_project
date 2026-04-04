@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QStyledItemDelegate,
 )
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
-from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QColor, QPen
+from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect
 import os
 from workspace_models import (
     SourceAsset,
@@ -491,23 +491,92 @@ class OrganizeItemDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         is_excluded = False
+        output_rank = None
         metadata = index.data(Qt.UserRole)
-        if isinstance(metadata, dict) and metadata.get("excluded", False):
-            is_excluded = True
+        if isinstance(metadata, dict):
+            is_excluded = metadata.get("excluded", False)
+            output_rank = metadata.get("output_rank")
 
-        # スタイルのオプション情報を取得（Python上の参照なので、一時的に変更・復旧する）
+        # 1. 基本となる中身（サムネイル画像など）の描画
+        painter.save()
         if is_excluded:
-            painter.save()
             painter.setOpacity(0.4)  # 描画そのものを半透明化
             option.font.setStrikeOut(True)
-
-            super().paint(painter, option, index)
-
-            option.font.setStrikeOut(False)
-            painter.restore()
         else:
             option.font.setStrikeOut(False)
-            super().paint(painter, option, index)
+
+        super().paint(painter, option, index)
+        painter.restore()
+
+        # 2. 左上の「出力ページバッジ」の描画
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        badge_size = 24
+        badge_margin = 6
+        # 左上に配置
+        badge_rect = QRect(
+            option.rect.left() + badge_margin,
+            option.rect.top() + badge_margin,
+            badge_size,
+            badge_size
+        )
+        
+        # 角丸の半径
+        radius = 6.0
+        
+        if is_excluded:
+            # 除外：点線またはグレーの空枠（角丸四角形）
+            pen = QPen(QColor(180, 180, 180))
+            pen.setStyle(Qt.DashLine)
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(badge_rect, radius, radius)
+        else:
+            # 有効：青い角丸の正方形
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(41, 128, 185))
+            painter.drawRoundedRect(badge_rect, radius, radius)
+            
+            if output_rank is not None:
+                painter.setPen(Qt.white)
+                f = painter.font()
+                f.setBold(True)
+                f.setPointSize(10)
+                painter.setFont(f)
+                painter.drawText(badge_rect, Qt.AlignCenter, str(output_rank))
+                
+        painter.restore()
+
+    def editorEvent(self, event, model, option, index):
+        """バッジ領域がクリックされたら除外フラグを反転させる"""
+        from PySide6.QtCore import QEvent
+        if event.type() == QEvent.MouseButtonRelease:
+            badge_size = 24
+            badge_margin = 6
+            badge_rect = QRect(
+                option.rect.left() + badge_margin,
+                option.rect.top() + badge_margin,
+                badge_size,
+                badge_size
+            )
+            
+            if badge_rect.contains(event.pos()):
+                # 親（OrganizeListWidget）に通知するか、直接モデルを変更する
+                # ここでは安全に、リストがメソッドを持っていれば再計算を含めたトグル処理を委譲する
+                list_view = self.parent()
+                if hasattr(list_view, "toggle_exclusion_at_index"):
+                    list_view.toggle_exclusion_at_index(index.row())
+                else:
+                    # まだ 4.5-2 が未実装の場合は暫定対応でフラグ反転のみ行う
+                    metadata = index.data(Qt.UserRole)
+                    if isinstance(metadata, dict):
+                        metadata["excluded"] = not metadata.get("excluded", False)
+                        model.setData(index, metadata, Qt.UserRole)
+                return True # イベント消費
+                
+        return super().editorEvent(event, model, option, index)
 
 
 class OrganizeListWidget(QListWidget):
