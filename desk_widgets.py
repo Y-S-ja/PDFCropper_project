@@ -546,7 +546,49 @@ class OrganizeItemDelegate(QStyledItemDelegate):
                 f.setPointSize(10)
                 painter.setFont(f)
                 painter.drawText(badge_rect, Qt.AlignCenter, str(output_rank))
-                
+
+        # 3. ホバー時の詳細情報オーバーレイ（即時表示）
+        from PySide6.QtWidgets import QStyle
+
+        if option.state & QStyle.State_MouseOver:
+            painter.save()
+
+            # アイコン領域の下半分くらいに詳細情報を表示
+            info_height = 30
+            info_rect = QRect(
+                option.rect.left() + 2,
+                option.rect.bottom() - info_height - 20,  # テキストラベルの上あたり
+                option.rect.width() - 4,
+                info_height,
+            )
+
+            # 半透明の背景を描画
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 160))
+            painter.drawRoundedRect(info_rect, 4, 4)
+
+            # 詳細テキスト（ページ番号など）を構成
+            if metadata.get("type") == "pdf_page":
+                page_idx = metadata.get("page_index", 0)
+                detail_text = f"p.{page_idx + 1}"
+            else:
+                detail_text = "Image"
+
+            painter.setPen(Qt.white)
+            f = painter.font()
+            f.setPointSize(8)
+            f.setBold(False)
+            painter.setFont(f)
+
+            # 文字がはみ出さないように省略
+            metrics = painter.fontMetrics()
+            elided_text = metrics.elidedText(
+                detail_text, Qt.ElideMiddle, info_rect.width() - 10
+            )
+            painter.drawText(info_rect, Qt.AlignCenter, elided_text)
+
+            painter.restore()
+
         painter.restore()
 
     def editorEvent(self, event, model, option, index):
@@ -598,6 +640,7 @@ class OrganizeListWidget(QListWidget):
         self.setResizeMode(QListView.Adjust)  # ウィンドウ幅に合わせて折り返し
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)  # 複数選択可
         self.setDragEnabled(True)  # ドラッグ開始を明示的に有効化
+        self.setMouseTracking(True)  # ホバー描画のためにマウスを追跡
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
         self.setAcceptDrops(True)
@@ -685,7 +728,7 @@ class OrganizeListWidget(QListWidget):
                 file_path = url.toLocalFile()
                 ext = os.path.splitext(file_path)[1].lower()
                 if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
-                    item = QListWidgetItem(f"p.img")
+                    item = QListWidgetItem("")
                     # 画像用のメタ情報を保持
                     metadata = {
                         "type": "image_file",
@@ -837,7 +880,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # 各ページをリストアイテムとして展開
         for i in range(page_count):
-            item = QListWidgetItem(f"p.{i + 1}")
+            item = QListWidgetItem("")
             metadata = {"type": "pdf_page", "source_path": asset.path, "page_index": i}
             item.setData(Qt.UserRole, metadata)
             self.editor.addItem(item)
