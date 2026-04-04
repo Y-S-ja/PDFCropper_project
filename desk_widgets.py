@@ -685,7 +685,7 @@ class OrganizeListWidget(QListWidget):
                 file_path = url.toLocalFile()
                 ext = os.path.splitext(file_path)[1].lower()
                 if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
-                    item = QListWidgetItem(f"🖼️ {os.path.basename(file_path)}")
+                    item = QListWidgetItem(f"p.img")
                     # 画像用のメタ情報を保持
                     metadata = {
                         "type": "image_file",
@@ -837,7 +837,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # 各ページをリストアイテムとして展開
         for i in range(page_count):
-            item = QListWidgetItem(f"Page {i + 1}")
+            item = QListWidgetItem(f"p.{i + 1}")
             metadata = {"type": "pdf_page", "source_path": asset.path, "page_index": i}
             item.setData(Qt.UserRole, metadata)
             self.editor.addItem(item)
