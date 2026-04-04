@@ -480,6 +480,34 @@ class JoinDeskWidget(BaseDeskWidget):
         self.editor.addItem(item)
 
 
+class OrganizeItemDelegate(QStyledItemDelegate):
+    """
+    OrganizeListWidget内の各アイテムの描画を担うデリゲート。
+    『除外』フラグが立っているアイテムに対して、描画時に半透明化と取り消し線を動的に適用する。
+    これにより、元画像を複数枚メモリに保持する事なくUI上の表現を切り替えられる。
+    """
+
+    def paint(self, painter, option, index):
+        is_excluded = False
+        metadata = index.data(Qt.UserRole)
+        if isinstance(metadata, dict) and metadata.get("excluded", False):
+            is_excluded = True
+
+        # スタイルのオプション情報を取得（Python上の参照なので、一時的に変更・復旧する）
+        if is_excluded:
+            painter.save()
+            painter.setOpacity(0.4)  # 描画そのものを半透明化
+            option.font.setStrikeOut(True)
+
+            super().paint(painter, option, index)
+
+            option.font.setStrikeOut(False)
+            painter.restore()
+        else:
+            option.font.setStrikeOut(False)
+            super().paint(painter, option, index)
+
+
 class OrganizeListWidget(QListWidget):
     """
     OrganizeDeskのサムネイル一覧表示用リストウィジェット。
@@ -504,6 +532,7 @@ class OrganizeListWidget(QListWidget):
         self.setAcceptDrops(True)
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
         self.setSpacing(10)
+        self.setItemDelegate(OrganizeItemDelegate(self))
 
     def dragEnterEvent(self, event):
         """外部からのファイル（画像）ドラッグ、または内部移動を判別して許可する"""
