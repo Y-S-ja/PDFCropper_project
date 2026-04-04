@@ -547,10 +547,13 @@ class OrganizeItemDelegate(QStyledItemDelegate):
                 painter.setFont(f)
                 painter.drawText(badge_rect, Qt.AlignCenter, str(output_rank))
 
-        # 3. ホバー時の詳細情報オーバーレイ（即時表示）
+        # 3. ホバー時または常時表示設定時の詳細情報オーバーレイ
         from PySide6.QtWidgets import QStyle
-
-        if option.state & QStyle.State_MouseOver:
+        
+        list_view = self.parent()
+        show_always = getattr(list_view, "show_overlay_always", False)
+        
+        if (option.state & QStyle.State_MouseOver) or show_always:
             painter.save()
 
             # アイコン領域の下半分くらいに詳細情報を表示
@@ -629,9 +632,10 @@ class OrganizeListWidget(QListWidget):
     """
 
     items_added = Signal()
-
+    
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.show_overlay_always = False # 常時表示フラグ
         self.setViewMode(QListView.ListMode)  # グリッド表示
         self.setDropIndicatorShown(True)
         self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
@@ -796,11 +800,17 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # UI構築
         toolbar = QHBoxLayout()
-
+        
         export_btn = QPushButton("PDFを書き出し")
         export_btn.clicked.connect(self._on_export_clicked)
         toolbar.addWidget(export_btn)
-
+        
+        # 表示切り替えトグル
+        self.toggle_show_btn = QPushButton("元ページ番号を表示")
+        self.toggle_show_btn.setCheckable(True)
+        self.toggle_show_btn.toggled.connect(self._on_toggle_show_info)
+        toolbar.addWidget(self.toggle_show_btn)
+        
         toolbar.addStretch()
 
         self.editor = OrganizeListWidget()
@@ -820,6 +830,11 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         self.addWidget(container)  # 編集画面
         self.addWidget(self.preview)  # プレビュー画面
+        
+    def _on_toggle_show_info(self, checked):
+        """オーバーレイの常時表示フラグを切り替える"""
+        self.editor.show_overlay_always = checked
+        self.editor.viewport().update()
 
     def _on_export_clicked(self):
         """現在のリストの内容を1つのPDFとして書き出す"""
