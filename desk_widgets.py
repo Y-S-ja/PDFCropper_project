@@ -641,9 +641,6 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # UI構築
         toolbar = QHBoxLayout()
-        test_btn = QPushButton("テストアイテム追加")
-        test_btn.clicked.connect(self._add_test_data)
-        toolbar.addWidget(test_btn)
 
         export_btn = QPushButton("PDFを書き出し")
         export_btn.clicked.connect(self._on_export_clicked)
@@ -669,12 +666,6 @@ class OrganizeDeskWidget(BaseDeskWidget):
         self.addWidget(container)  # 編集画面
         self.addWidget(self.preview)  # プレビュー画面
 
-    def _add_test_data(self):
-        """Step 1 確認用の仮データ追加機能"""
-        count = self.editor.count()
-        item = QListWidgetItem(f"仮アイテム {count + 1}")
-        self.editor.addItem(item)
-        self.request_previews()
 
     def _on_export_clicked(self):
         """現在のリストの内容を1つのPDFとして書き出す"""
