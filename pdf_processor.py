@@ -232,5 +232,40 @@ class PdfProcessor:
                 except Exception as e:
                     print(f"Error merging {path}: {e}")
 
+    @staticmethod
+    def export_organized_pdf(instructions: list[dict], output_path: str):
+        """
+        OrganizeDeskWidgetのリスト順序・除外フラグに基づき、PDFを構築・保存する。
+        instructions: [
+            {"type": "pdf_page", "source_path": str, "page_index": int, "excluded": bool},
+            {"type": "image_file", "source_path": str, "excluded": bool},
+            ...
+        ]
+        """
+        with fitz.open() as new_doc:
+            for item in instructions:
+                # 除外フラグが立っている場合はスキップ
+                if item.get("excluded", False):
+                    continue
+
+                src_path = item["source_path"]
+                item_type = item["type"]
+
+                try:
+                    if item_type == "pdf_page":
+                        page_idx = item["page_index"]
+                        # PDFから特定の1ページを抽出して挿入
+                        with fitz.open(src_path) as src_doc:
+                            new_doc.insert_pdf(
+                                src_doc, from_page=page_idx, to_page=page_idx
+                            )
+                    elif item_type == "image_file":
+                        # 画像ファイルをPDFページとして挿入
+                        with PdfProcessor._open_as_pdf(src_path) as img_pdf:
+                            new_doc.insert_pdf(img_pdf)
+                except Exception as e:
+                    print(f"Error exporting item {src_path}: {e}")
+                    raise e
+
             # 最終的なPDFを物理ファイルに書き出す
             new_doc.save(output_path)
