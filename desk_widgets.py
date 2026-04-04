@@ -511,7 +511,7 @@ class OrganizeItemDelegate(QStyledItemDelegate):
         # 2. 左上の「出力ページバッジ」の描画
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
-        
+
         badge_size = 24
         badge_margin = 6
         # 左上に配置
@@ -519,12 +519,12 @@ class OrganizeItemDelegate(QStyledItemDelegate):
             option.rect.left() + badge_margin,
             option.rect.top() + badge_margin,
             badge_size,
-            badge_size
+            badge_size,
         )
-        
+
         # 角丸の半径
         radius = 6.0
-        
+
         if is_excluded:
             # 除外：点線またはグレーの空枠（角丸四角形）
             pen = QPen(QColor(180, 180, 180))
@@ -538,7 +538,7 @@ class OrganizeItemDelegate(QStyledItemDelegate):
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(41, 128, 185))
             painter.drawRoundedRect(badge_rect, radius, radius)
-            
+
             if output_rank is not None:
                 painter.setPen(Qt.white)
                 f = painter.font()
@@ -594,6 +594,7 @@ class OrganizeItemDelegate(QStyledItemDelegate):
     def editorEvent(self, event, model, option, index):
         """バッジ領域がクリックされたら除外フラグを反転させる"""
         from PySide6.QtCore import QEvent
+
         if event.type() == QEvent.MouseButtonRelease:
             badge_size = 24
             badge_margin = 6
@@ -601,9 +602,9 @@ class OrganizeItemDelegate(QStyledItemDelegate):
                 option.rect.left() + badge_margin,
                 option.rect.top() + badge_margin,
                 badge_size,
-                badge_size
+                badge_size,
             )
-            
+
             if badge_rect.contains(event.pos()):
                 # 親（OrganizeListWidget）に通知するか、直接モデルを変更する
                 # ここでは安全に、リストがメソッドを持っていれば再計算を含めたトグル処理を委譲する
@@ -616,8 +617,8 @@ class OrganizeItemDelegate(QStyledItemDelegate):
                     if isinstance(metadata, dict):
                         metadata["excluded"] = not metadata.get("excluded", False)
                         model.setData(index, metadata, Qt.UserRole)
-                return True # イベント消費
-                
+                return True  # イベント消費
+
         return super().editorEvent(event, model, option, index)
 
 
@@ -663,15 +664,15 @@ class OrganizeListWidget(QListWidget):
             meta = item.data(Qt.UserRole)
             if not isinstance(meta, dict):
                 continue
-            
+
             if not meta.get("excluded", False):
                 meta["output_rank"] = current_rank
                 current_rank += 1
             else:
                 meta["output_rank"] = None
-            
+
             item.setData(Qt.UserRole, meta)
-            
+
         self.viewport().update()
 
     def toggle_exclusion_at_index(self, row: int):
@@ -679,11 +680,11 @@ class OrganizeListWidget(QListWidget):
         item = self.item(row)
         if not item:
             return
-        
+
         meta = item.data(Qt.UserRole)
         if not isinstance(meta, dict):
             return
-        
+
         meta["excluded"] = not meta.get("excluded", False)
         item.setData(Qt.UserRole, meta)
         self._schedule_reindex()
