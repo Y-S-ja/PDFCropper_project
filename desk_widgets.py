@@ -642,6 +642,7 @@ class OrganizeListWidget(QListWidget):
         self.setDropIndicatorShown(True)
         self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
         # self.setGridSize(QSize(110, 160))
+        self.setSpacing(5)
         self.setFlow(QListView.LeftToRight)
         self.setWrapping(True)
         self.setResizeMode(QListView.Adjust)  # ウィンドウ幅に合わせて折り返し
@@ -670,7 +671,6 @@ class OrganizeListWidget(QListWidget):
 
         self.item_map[item_id] = item
 
-        # self.setSpacing(10)
         self.setItemDelegate(OrganizeItemDelegate(self))
         return item
 
