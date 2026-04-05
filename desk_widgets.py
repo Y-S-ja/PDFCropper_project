@@ -636,6 +636,8 @@ class OrganizeListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.show_overlay_always = False  # 常時表示フラグ
+        self.item_map = {}  # {item_id: QListWidgetItem}
+        self.next_item_id = 0  # 一意のID用カウンタ
         self.setViewMode(QListView.ListMode)  # グリッド表示
         self.setDropIndicatorShown(True)
         self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
@@ -650,6 +652,24 @@ class OrganizeListWidget(QListWidget):
         self.setDefaultDropAction(Qt.MoveAction)
         self.setAcceptDrops(True)
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
+
+    def clear(self):
+        """リストとID辞書の両方をリセットする"""
+        super().clear()
+        self.item_map.clear()
+        self.next_item_id = 0
+
+    def create_item_with_id(self, text: str, metadata: dict) -> QListWidgetItem:
+        """一意なIDを発行し、アイテムを作成して辞書に登録する"""
+        item_id = self.next_item_id
+        self.next_item_id += 1
+        
+        metadata["item_id"] = item_id
+        item = QListWidgetItem(text)
+        item.setData(Qt.UserRole, metadata)
+        
+        self.item_map[item_id] = item
+        return item
         # self.setSpacing(10)
         self.setItemDelegate(OrganizeItemDelegate(self))
 
@@ -733,14 +753,13 @@ class OrganizeListWidget(QListWidget):
                 file_path = url.toLocalFile()
                 ext = os.path.splitext(file_path)[1].lower()
                 if ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif"):
-                    item = QListWidgetItem("")
                     # 画像用のメタ情報を保持
                     metadata = {
                         "type": "image_file",
                         "source_path": file_path,
                         "page_index": None,
                     }
-                    item.setData(Qt.UserRole, metadata)
+                    item = self.create_item_with_id("", metadata)
                     # マウスが離された位置（または末尾）に挿入
                     self.insertItem(target_row, item)
                     target_row += 1  # 複数ドロップ時に順番を維持
@@ -896,9 +915,8 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # 各ページをリストアイテムとして展開
         for i in range(page_count):
-            item = QListWidgetItem("")
             metadata = {"type": "pdf_page", "source_path": asset.path, "page_index": i}
-            item.setData(Qt.UserRole, metadata)
+            item = self.editor.create_item_with_id("", metadata)
             self.editor.addItem(item)
 
         # 全件追加後にインデックスを計算
