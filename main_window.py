@@ -406,9 +406,8 @@ class MainWindow(QMainWindow):
         return file_path.lower().endswith(self.SUPPORTED_EXTENSIONS)
 
     def load_new_pdf(self, file_path: str) -> None:
-        """外部から持ち込まれたファイルを素材棚に登録し、そのままワークスペースで開く"""
-        asset = self.asset_mgr.create_source(file_path)
-        self.open_asset(asset)
+        """外部から持ち込まれたファイルを素材棚に登録する（デスクでの自動展開は行わない）"""
+        self.asset_mgr.create_source(file_path)
 
     def open_asset(self, asset: WorkspaceAsset) -> None:
         """
