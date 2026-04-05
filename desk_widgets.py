@@ -967,16 +967,25 @@ class OrganizeDeskWidget(BaseDeskWidget):
             icon = QIcon(pixmap)
 
             # 現在のリストの中から、メタデータが一致するアイテムを探して適用する
+            # 安全な識別子（パスとページ番号）で照合する
+            target_path = os.path.normpath(meta.get("source_path", ""))
+            target_page = meta.get("page_index")
+            target_type = meta.get("type")
+
             for i in range(self.editor.count()):
                 item = self.editor.item(i)
                 item_meta = item.data(Qt.UserRole)
-                if item_meta == meta:
-                    item.setIcon(icon)
+                if not isinstance(item_meta, dict):
+                    continue
+                
+                # 主要キーで比較（表示用プロパティが混じっても照合できるように）
+                path_match = os.path.normpath(item_meta.get("source_path", "")) == target_path
+                page_match = item_meta.get("page_index") == target_page
+                type_match = item_meta.get("type") == target_type
 
-                    # 最初の1回だけ、見栄えのためにテキストを消す（任意）
-                    if "Page" in item.text() or "🖼️" in item.text():
-                        item.setText("")
-                    break  # 同じアイテムは1つだけのはずなので抜ける
+                if path_match and page_match and type_match:
+                    item.setIcon(icon)
+                    break  # 同一アイテムが見つかったら終了
 
     def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
         # OrganizeDesk はどのAssetでも一旦受け入れ可能とする（現状）
