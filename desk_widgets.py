@@ -1,3 +1,5 @@
+import os
+import fitz  # PyMuPDF
 from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
@@ -13,10 +15,11 @@ from PySide6.QtWidgets import (
     QMenu,
     QInputDialog,
     QStyledItemDelegate,
+    QStyle,
 )
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QColor, QPen
-from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect
-import os
+from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect, QEvent
+
 from workspace_models import (
     SourceAsset,
     CroppedAsset,
@@ -549,8 +552,6 @@ class OrganizeItemDelegate(QStyledItemDelegate):
                 painter.drawText(badge_rect, Qt.AlignCenter, str(output_rank))
 
         # 3. ホバー時または常時表示設定時の詳細情報オーバーレイ
-        from PySide6.QtWidgets import QStyle
-
         list_view = self.parent()
         show_always = getattr(list_view, "show_overlay_always", False)
 
@@ -597,8 +598,6 @@ class OrganizeItemDelegate(QStyledItemDelegate):
 
     def editorEvent(self, event, model, option, index):
         """バッジ領域がクリックされたら除外フラグを反転させる"""
-        from PySide6.QtCore import QEvent
-
         if event.type() == QEvent.MouseButtonRelease:
             badge_size = 24
             badge_margin = 6
@@ -642,8 +641,6 @@ class OrganizeListWidget(QListWidget):
         self.setViewMode(QListView.ListMode)  # グリッド表示
 
         # 共通のプレースホルダーアイコンを作成（100x140のライトグレー）
-        from PySide6.QtGui import QPixmap, QIcon, QColor
-
         placeholder_pix = QPixmap(100, 140)
         placeholder_pix.fill(QColor(245, 245, 245))
         self.placeholder_icon = QIcon(placeholder_pix)
@@ -674,8 +671,6 @@ class OrganizeListWidget(QListWidget):
         if base_h > 180:
             base_h = 180
             base_w = int(base_h / ratio)
-
-        from PySide6.QtGui import QPixmap, QIcon, QColor
 
         pix = QPixmap(base_w, base_h)
         pix.fill(QColor(245, 245, 245))
@@ -934,9 +929,6 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         # 既存アイテムをクリア
         self.editor.clear()
-
-        # PDFを開いてページ数を取得
-        import fitz
 
         try:
             with fitz.open(asset.path) as doc:
