@@ -669,9 +669,10 @@ class OrganizeListWidget(QListWidget):
         item.setData(Qt.UserRole, metadata)
 
         self.item_map[item_id] = item
-        return item
+
         # self.setSpacing(10)
         self.setItemDelegate(OrganizeItemDelegate(self))
+        return item
 
     def _schedule_reindex(self):
         """シグナルなどのパタパタとした連続割り込みを1回にまとめるための遅延実行処理"""
