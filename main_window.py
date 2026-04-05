@@ -365,12 +365,13 @@ class MainWindow(QMainWindow):
             self.add_new_tab()
 
     def open_file(self) -> None:
-        """ファイル選択ダイアログを開き、選択されたPDFを素材棚に追加する"""
+        """ファイル選択ダイアログを開き、選択された素材を素材棚に追加する"""
         filter_str = f"Supported Files ({' '.join(['*' + ext for ext in self.SUPPORTED_EXTENSIONS])})"
-        file_path, _ = QFileDialog.getOpenFileName(self, "素材を追加", "", filter_str)
-        if file_path:
-            # マネージャーを通じて棚へ追加
-            self.asset_mgr.create_source(file_path)
+        file_paths, _ = QFileDialog.getOpenFileNames(self, "素材を追加", "", filter_str)
+        if file_paths:
+            for path in file_paths:
+                # マネージャーを通じて棚へ追加
+                self.asset_mgr.create_source(path)
 
     def on_asset_from_shelf(self, asset_id: str) -> None:
         asset = self.asset_mgr.get_asset(asset_id)
