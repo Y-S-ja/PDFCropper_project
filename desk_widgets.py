@@ -665,6 +665,27 @@ class OrganizeListWidget(QListWidget):
 
         self.setItemDelegate(OrganizeItemDelegate(self))
 
+    def set_placeholder_by_ratio(self, ratio: float):
+        """指定されたアスペクト比（height/width）に基づき、プレースホルダーとアイコンサイズを再設定する"""
+        base_w = 100
+        base_h = int(base_w * ratio)
+
+        # アイコンの最大サイズを制限（大きすぎると困るため）
+        if base_h > 180:
+            base_h = 180
+            base_w = int(base_h / ratio)
+
+        from PySide6.QtGui import QPixmap, QIcon, QColor
+
+        pix = QPixmap(base_w, base_h)
+        pix.fill(QColor(245, 245, 245))
+        self.placeholder_icon = QIcon(pix)
+
+        # ビュー自体の設定も更新（これで余白計算が正確になる）
+        self.setIconSize(QSize(base_w, base_h))
+        # すでに生成されている（またはこれから生成される）アイテムの整合性を保つため再描画
+        self.viewport().update()
+
     def clear(self):
         """リストとID辞書の両方をリセットする"""
         super().clear()
@@ -920,6 +941,11 @@ class OrganizeDeskWidget(BaseDeskWidget):
         try:
             with fitz.open(asset.path) as doc:
                 page_count = len(doc)
+                if page_count > 0:
+                    # 1ページ目のアスペクト比を取得してプレースホルダーを最適化
+                    rect = doc[0].rect
+                    ratio = rect.height / rect.width if rect.width > 0 else 1.414
+                    self.editor.set_placeholder_by_ratio(ratio)
         except Exception as e:
             QMessageBox.critical(self, "エラー", f"PDFの読み込みに失敗しました: {e}")
             return
