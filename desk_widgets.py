@@ -26,7 +26,7 @@ from workspace_models import (
 from pdf_processor import PdfProcessor
 from preview_view import PdfPreviewView
 from graphics_view import PdfGraphicsView
-from worker import JoinPreviewWorker, OrganizePreviewWorker
+from worker import OrganizePreviewWorker
 
 
 class BaseDeskWidget(QStackedWidget):
@@ -960,8 +960,6 @@ class OrganizeDeskWidget(BaseDeskWidget):
         [Step 3-3実装] ワーカーから届いたバッチ（メタデータと画像のペア）を、
         現在のリストアイテム内のメタ情報と照合してアイコンをセットする。
         """
-        from PySide6.QtGui import QIcon, QPixmap
-
         for meta, img in batch:
             pixmap = QPixmap.fromImage(img)
             icon = QIcon(pixmap)
@@ -977,9 +975,11 @@ class OrganizeDeskWidget(BaseDeskWidget):
                 item_meta = item.data(Qt.UserRole)
                 if not isinstance(item_meta, dict):
                     continue
-                
+
                 # 主要キーで比較（表示用プロパティが混じっても照合できるように）
-                path_match = os.path.normpath(item_meta.get("source_path", "")) == target_path
+                path_match = (
+                    os.path.normpath(item_meta.get("source_path", "")) == target_path
+                )
                 page_match = item_meta.get("page_index") == target_page
                 type_match = item_meta.get("type") == target_type
 
