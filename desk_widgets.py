@@ -497,8 +497,9 @@ class OrganizeItemDelegate(QStyledItemDelegate):
             is_excluded = metadata.get("excluded", False)
             output_rank = metadata.get("output_rank")
 
-        # 1. 基本となる中身（サムネイル画像など）の描画
+        # 1. 基本となる中身（サムネイル画像。初期状態ではプレースホルダーが入っている）
         painter.save()
+
         if is_excluded:
             painter.setOpacity(0.4)  # 描画そのものを半透明化
             option.font.setStrikeOut(True)
@@ -639,6 +640,14 @@ class OrganizeListWidget(QListWidget):
         self.item_map = {}  # {item_id: QListWidgetItem}
         self.next_item_id = 0  # 一意のID用カウンタ
         self.setViewMode(QListView.ListMode)  # グリッド表示
+
+        # 共通のプレースホルダーアイコンを作成（100x140のライトグレー）
+        from PySide6.QtGui import QPixmap, QIcon, QColor
+
+        placeholder_pix = QPixmap(100, 140)
+        placeholder_pix.fill(QColor(245, 245, 245))
+        self.placeholder_icon = QIcon(placeholder_pix)
+
         self.setDropIndicatorShown(True)
         self.setMovement(QListView.Snap)  # 自由配置を禁止し、リストのフローに従わせる
         # self.setGridSize(QSize(110, 160))
@@ -654,6 +663,8 @@ class OrganizeListWidget(QListWidget):
         self.setAcceptDrops(True)
         self.setIconSize(QSize(100, 140))  # 仮のサイズ設定
 
+        self.setItemDelegate(OrganizeItemDelegate(self))
+
     def clear(self):
         """リストとID辞書の両方をリセットする"""
         super().clear()
@@ -667,11 +678,10 @@ class OrganizeListWidget(QListWidget):
 
         metadata["item_id"] = item_id
         item = QListWidgetItem(text)
+        item.setIcon(self.placeholder_icon)  # 初期のプレースホルダーをセット
         item.setData(Qt.UserRole, metadata)
 
         self.item_map[item_id] = item
-
-        self.setItemDelegate(OrganizeItemDelegate(self))
         return item
 
     def _schedule_reindex(self):
@@ -949,7 +959,11 @@ class OrganizeDeskWidget(BaseDeskWidget):
         requests = []
         for i in range(self.editor.count()):
             item = self.editor.item(i)
-            if item.icon().isNull():
+            # アイコンが空、またはプレースホルダーの場合にリクエストを作成
+            if (
+                item.icon().isNull()
+                or item.icon().cacheKey() == self.editor.placeholder_icon.cacheKey()
+            ):
                 meta = item.data(Qt.UserRole)
                 if meta:
                     requests.append(meta)
