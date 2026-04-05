@@ -663,11 +663,11 @@ class OrganizeListWidget(QListWidget):
         """一意なIDを発行し、アイテムを作成して辞書に登録する"""
         item_id = self.next_item_id
         self.next_item_id += 1
-        
+
         metadata["item_id"] = item_id
         item = QListWidgetItem(text)
         item.setData(Qt.UserRole, metadata)
-        
+
         self.item_map[item_id] = item
         return item
         # self.setSpacing(10)
@@ -978,32 +978,20 @@ class OrganizeDeskWidget(BaseDeskWidget):
         [Step 3-3実装] ワーカーから届いたバッチ（メタデータと画像のペア）を、
         現在のリストアイテム内のメタ情報と照合してアイコンをセットする。
         """
-        for meta, img in batch:
+        for item_id, img in batch:
             pixmap = QPixmap.fromImage(img)
             icon = QIcon(pixmap)
 
-            # 現在のリストの中から、メタデータが一致するアイテムを探して適用する
-            # 安全な識別子（パスとページ番号）で照合する
-            target_path = os.path.normpath(meta.get("source_path", ""))
-            target_page = meta.get("page_index")
-            target_type = meta.get("type")
-
-            for i in range(self.editor.count()):
-                item = self.editor.item(i)
-                item_meta = item.data(Qt.UserRole)
-                if not isinstance(item_meta, dict):
-                    continue
-
-                # 主要キーで比較（表示用プロパティが混じっても照合できるように）
-                path_match = (
-                    os.path.normpath(item_meta.get("source_path", "")) == target_path
-                )
-                page_match = item_meta.get("page_index") == target_page
-                type_match = item_meta.get("type") == target_type
-
-                if path_match and page_match and type_match:
+            # ID を使って辞書から直接アイテムを引き当てる (超高速)
+            item = self.editor.item_map.get(item_id)
+            if item:
+                # アイテムがまだ有効（削除・クリアされていない）ことを確認して適用
+                try:
                     item.setIcon(icon)
-                    break  # 同一アイテムが見つかったら終了
+                except RuntimeError:
+                    # すでにC++側で破棄されている場合
+                    print(f"Item {item_id} is already destroyed")
+                    pass
 
     def can_accept_asset(self, asset: WorkspaceAsset) -> bool:
         # OrganizeDesk はどのAssetでも一旦受け入れ可能とする（現状）
