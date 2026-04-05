@@ -903,7 +903,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
             if meta:
                 instructions.append(meta)
 
-        # 書き出しの実行 (Step 5-1 / 5-3)
+        # 書き出しの実行
         try:
             # 処理中のフィードバック
             self.setCursor(Qt.WaitCursor)
@@ -921,7 +921,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
     def set_asset(self, asset: WorkspaceAsset):
         """
-        [Step 2-1実装] アセットを読み込んだ時の処理。
+        アセットを読み込んだ時の処理。
         ベースPDFの全ページを仮アイテムとして展開する。
         """
         if not hasattr(asset, "path") or not os.path.exists(asset.path):
@@ -972,7 +972,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
     def request_previews(self):
         """
-        [Step 3-2 / 3-3実装] アイコンが未生成のアイテムを探し、ワーカーに依頼する。
+        アイコンが未生成のアイテムを探し、ワーカーに依頼する。
         """
         requests = []
         for i in range(self.editor.count()):
@@ -1001,14 +1001,14 @@ class OrganizeDeskWidget(BaseDeskWidget):
         self.worker.finished.connect(self.worker.deleteLater)
         self.worker_thread.finished.connect(self.worker_thread.deleteLater)
 
-        # Step 3-3 用：ワーカーから画像が届いたらアイコンをセット
+        # ワーカーから画像が届いたらアイコンをセット
         self.worker.page_ready.connect(self.apply_previews)
 
         self.worker_thread.start()
 
     def apply_previews(self, batch: list):
         """
-        [Step 3-3実装] ワーカーから届いたバッチ（メタデータと画像のペア）を、
+        ワーカーから届いたバッチ（メタデータと画像のペア）を、
         現在のリストアイテム内のメタ情報と照合してアイコンをセットする。
         """
         for item_id, img in batch:
