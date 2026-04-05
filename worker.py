@@ -258,8 +258,9 @@ class OrganizePreviewWorker(QObject):
                             )
 
                     if img and not img.isNull():
-                        # 元画像のコピーをバッチに保存
-                        batch.append((metadata, img.copy()))
+                        # item_id と画像のペアをバッチに保存
+                        item_id = metadata.get("item_id")
+                        batch.append((item_id, img.copy()))
 
                     # 進捗通知
                     self.progress_updated.emit(i + 1, total_items)
