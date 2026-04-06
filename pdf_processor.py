@@ -232,6 +232,9 @@ class PdfProcessor:
                 except Exception as e:
                     print(f"Error merging {path}: {e}")
 
+            # 最終的なPDFを物理ファイルに書き出す
+            new_doc.save(output_path)
+
     @staticmethod
     def export_organized_pdf(instructions: list[dict], output_path: str):
         """
