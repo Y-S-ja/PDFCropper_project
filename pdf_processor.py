@@ -155,7 +155,7 @@ class PdfProcessor:
         preview_dpi: int = 144,
     ):
         """特定のページのみのプレビュー画像リストを返す"""
-        with fitz.open(pdf_path) as doc:
+        with PdfProcessor._open_as_pdf(pdf_path) as doc:
             return PdfProcessor._get_previews_for_page(
                 doc, page_index, crop_coords, scale_factor, preview_dpi
             )
@@ -211,25 +211,32 @@ class PdfProcessor:
         """
         [内部専用] 元のドキュメントの指定ページを新しいドキュメントの末尾に追加し、切り抜き枠を適用する
         """
-        # UIの数値(タプル)を受け取り、シーン座標をPDFのポイント座標に変換
+        src_page = src_doc[page_index]
+        trans = PdfPageTransformer(src_page)
+
+        # UIの視覚座標（ポイント単位にスケール済み）
         left, top, right, bottom = rect
-        pdf_rect = fitz.Rect(
+        visual_rect = fitz.Rect(
             left * scale_factor,
             top * scale_factor,
             right * scale_factor,
             bottom * scale_factor,
         )
 
-        # 1. 完全にクリーンな(0, 0)始まりの新しいページを作成する
-        # （これによりPDF++等の「左上が基準」の座標抽出ツールが正しく動作し、左右の配置順序の逆転も防ぐ）
-        new_page = new_doc.new_page(width=pdf_rect.width, height=pdf_rect.height)
+        # 視覚座標をPDF内部の生座標（ソース座標）に変換
+        pdf_rect = trans.to_source(visual_rect)
 
-        # 2. 元のPDFの該当ページから、切り抜き枠の部分だけを新しいページ(の全域)へ写し取る
+        # 1. 完全にクリーンな(0, 0)始まりの新しいページを作成する
+        # サイズは視覚的な切り抜きサイズ（visual_rectの幅・高さ）に合わせる
+        new_page = new_doc.new_page(width=visual_rect.width, height=visual_rect.height)
+
+        # 2. 元のPDFの該当ページから、変換した座標(pdf_rect)を抽出して新しいページへ転写
+        # show_pdf_page は、ソースページの rotation 属性を見て自動的に回転を考慮して転写してくれる
         new_page.show_pdf_page(
             new_page.rect,  # 転写先（新ページの0,0から幅・高さまで）
             src_doc,  # 転送元ドキュメント
             page_index,  # 転送元ページ番号
-            clip=pdf_rect,  # 転送元から切り出す範囲
+            clip=pdf_rect,  # 転送元から切り出す範囲（ソース座標）
         )
 
     @staticmethod
@@ -288,7 +295,7 @@ class PdfProcessor:
                     if item_type == "pdf_page":
                         page_idx = item["page_index"]
                         # PDFから特定の1ページを抽出して挿入
-                        with fitz.open(src_path) as src_doc:
+                        with PdfProcessor._open_as_pdf(src_path) as src_doc:
                             new_doc.insert_pdf(
                                 src_doc, from_page=page_idx, to_page=page_idx
                             )
