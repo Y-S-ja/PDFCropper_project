@@ -5,19 +5,19 @@ from PySide6.QtGui import QImage, QPixmap
 class PdfPageTransformer:
     """
     PDFページの座標系（生データ ⇔ 視覚的表示）を変換する。
-    Rotation（回転）, CropBox（オフセット）, UserUnit（倍率）を一括で補正するマトリックスを保持する。
+    Rotation（回転）設定を反映し、視覚的な位置と内部座標を相互にマッピングする。
+    ※ transformation_matrix と異なり UserUnit を含まないため、外部のスケール管理と共存できる。
     """
 
     def __init__(self, page):
-        # transformation_matrix は、生座標(MediaBox等)を視覚的な配置へ変換する行列
-        self.matrix = page.transformation_matrix
+        # rotation_matrix は、MediaBox(生座標)を視覚的な配置(page.rect)へ変換する行列
+        self.matrix = page.rotation_matrix
         self.inv_matrix = ~self.matrix
 
     def to_visual(self, rect):
-        """PDF内部の生座標を、UI表示用の視覚座標（回転・オフセット反映済み）に変換"""
+        """PDF内部の生座標を、UI表示用の視覚座標（回転反映済み）に変換"""
         if rect is None:
             return None
-        # fitz.Rect * fitz.Matrix の演算
         return rect * self.matrix
 
     def to_source(self, rect):
