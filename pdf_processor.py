@@ -75,12 +75,28 @@ class PdfProcessor:
 
     @staticmethod
     def _open_as_pdf(path: str) -> fitz.Document:
-        """指定パスのファイルを開き、画像の場合はメモリ上でPDFに変換して返す（with構文対応）"""
+        """指定パスのファイルを開き、画像の場合は変換し、回転があれば正規化して返す（with構文対応）"""
         doc = fitz.open(path)
         if not doc.is_pdf:
             with doc:
-                return fitz.open("pdf", doc.convert_to_pdf())
-        return doc
+                doc = fitz.open("pdf", doc.convert_to_pdf())
+
+        return PdfProcessor._normalize_rotation(doc)
+
+    @staticmethod
+    def _normalize_rotation(doc: fitz.Document) -> fitz.Document:
+        """PDFの全ページの回転を内容に焼き付け、0度に固定した新しいドキュメントを生成する"""
+        if not any(page.rotation != 0 for page in doc):
+            return doc
+
+        with fitz.open() as new_doc:
+            for page in doc:
+                # page.rect は回転適用後のサイズ
+                new_page = new_doc.new_page(width=page.rect.width, height=page.rect.height)
+                new_page.show_pdf_page(new_page.rect, doc, page.number)
+
+            doc.close()
+            return fitz.open("pdf", new_doc.tobytes())
 
     @staticmethod
     def crop_and_save(
