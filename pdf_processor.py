@@ -2,13 +2,38 @@ import fitz
 from PySide6.QtGui import QImage, QPixmap
 
 
+class PdfPageTransformer:
+    """
+    PDFページの座標系（生データ ⇔ 視覚的表示）を変換する。
+    Rotation（回転）, CropBox（オフセット）, UserUnit（倍率）を一括で補正するマトリックスを保持する。
+    """
+
+    def __init__(self, page):
+        # transformation_matrix は、生座標(MediaBox等)を視覚的な配置へ変換する行列
+        self.matrix = page.transformation_matrix
+        self.inv_matrix = ~self.matrix
+
+    def to_visual(self, rect):
+        """PDF内部の生座標を、UI表示用の視覚座標（回転・オフセット反映済み）に変換"""
+        if rect is None:
+            return None
+        # fitz.Rect * fitz.Matrix の演算
+        return rect * self.matrix
+
+    def to_source(self, rect):
+        """UIの指定（視覚座標）を、PDF内部の生座標に戻す"""
+        if rect is None:
+            return None
+        return rect * self.inv_matrix
+
+
 class PdfProcessor:
     """PDFの操作に関するすべてのロジックをカプセル化するクラス"""
 
     @staticmethod
     def get_page_image(pdf_path: str, page_index: int = 0, dpi: int = 216) -> tuple:
         """指定したPDFページを高画質で画像化して返す (標準72dpiに対して216dpi = 3倍画質)"""
-        with fitz.open(pdf_path) as doc:
+        with PdfProcessor._open_as_pdf(pdf_path) as doc:
             page = doc[page_index]
 
             # DPI指定で画像化
@@ -19,6 +44,8 @@ class PdfProcessor:
             image = QImage.fromData(img_data)
             pixmap = QPixmap.fromImage(image)
 
+            # 視覚的な幅（回転適用後）を返す。
+            # page.rect は transformation_matrix 適用済みのサイズを返す。
             original_width = page.rect.width
 
             # 画像と、後で座標変換に使う「元の幅」を返す
@@ -32,16 +59,17 @@ class PdfProcessor:
         """
         detected_rects = []
         try:
-            with fitz.open(pdf_path) as doc:
+            with PdfProcessor._open_as_pdf(pdf_path) as doc:
                 page = doc[page_index]
                 page_rect = page.rect
-                matrix = page.rotation_matrix
+                trans = PdfPageTransformer(page)
+
                 # ページ上の全ての描画オブジェクトを取得
                 drawings = page.get_drawings()
 
                 for d in drawings:
                     # 視覚的な座標（表示上の向き）に変換
-                    r = d["rect"] * matrix
+                    r = trans.to_visual(d["rect"])
 
                     # 1. フィルタリング：ページの端に近すぎる全体枠（外枠）は除外
                     if (
@@ -78,28 +106,12 @@ class PdfProcessor:
 
     @staticmethod
     def _open_as_pdf(path: str) -> fitz.Document:
-        """指定パスのファイルを開き、画像の場合は変換し、回転があれば正規化して返す（with構文対応）"""
+        """指定パスのファイルを開き、画像の場合は変換して返す（with構文対応）"""
         doc = fitz.open(path)
         if not doc.is_pdf:
             with doc:
-                doc = fitz.open("pdf", doc.convert_to_pdf())
-
-        return PdfProcessor._normalize_rotation(doc)
-
-    @staticmethod
-    def _normalize_rotation(doc: fitz.Document) -> fitz.Document:
-        """PDFの全ページの回転を内容に焼き付け、0度に固定した新しいドキュメントを生成する"""
-        if not any(page.rotation != 0 for page in doc):
-            return doc
-
-        with fitz.open() as new_doc:
-            for page in doc:
-                # page.rect は回転適用後のサイズ
-                new_page = new_doc.new_page(width=page.rect.width, height=page.rect.height)
-                new_page.show_pdf_page(new_page.rect, doc, page.number)
-
-            doc.close()
-            return fitz.open("pdf", new_doc.tobytes())
+                return fitz.open("pdf", doc.convert_to_pdf())
+        return doc
 
     @staticmethod
     def crop_and_save(
