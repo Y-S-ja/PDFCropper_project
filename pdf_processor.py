@@ -27,18 +27,21 @@ class PdfProcessor:
     @staticmethod
     def detect_frames(pdf_path: str, page_index: int = 0) -> list:
         """
-        PDF内のベクターデータを解析して矩形枠を検知する (方針1)
+        PDF内のベクターデータを解析して矩形枠を検知する
+        ページに回転設定がある場合、座標変換を行って視覚的な位置に補正する
         """
         detected_rects = []
         try:
             with fitz.open(pdf_path) as doc:
                 page = doc[page_index]
                 page_rect = page.rect
+                matrix = page.rotation_matrix
                 # ページ上の全ての描画オブジェクトを取得
                 drawings = page.get_drawings()
 
                 for d in drawings:
-                    r = d["rect"]
+                    # 視覚的な座標（表示上の向き）に変換
+                    r = d["rect"] * matrix
 
                     # 1. フィルタリング：ページの端に近すぎる全体枠（外枠）は除外
                     if (
