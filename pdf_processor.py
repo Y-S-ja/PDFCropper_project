@@ -78,9 +78,8 @@ class PdfProcessor:
         """指定パスのファイルを開き、画像の場合はメモリ上でPDFに変換して返す（with構文対応）"""
         doc = fitz.open(path)
         if not doc.is_pdf:
-            pdf_bytes = doc.convert_to_pdf()
-            doc.close()
-            return fitz.open("pdf", pdf_bytes)
+            with doc:
+                return fitz.open("pdf", doc.convert_to_pdf())
         return doc
 
     @staticmethod
