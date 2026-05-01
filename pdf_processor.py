@@ -298,9 +298,12 @@ class PdfProcessor:
         画像を target_width に合わせた新規ページとして挿入する。
         高さはアスペクト比を維持して算出する。
         """
-        profile = fitz.image_profile(image_path)
-        img_w = float(profile.get("width", 0) or 0)
-        img_h = float(profile.get("height", 0) or 0)
+        image = QImage(image_path)
+        if image.isNull():
+            raise ValueError(f"Failed to load image: {image_path}")
+
+        img_w = float(image.width())
+        img_h = float(image.height())
         if img_w <= 0 or img_h <= 0:
             raise ValueError(f"Invalid image size: {image_path}")
 
