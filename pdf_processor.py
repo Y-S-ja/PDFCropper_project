@@ -1,5 +1,6 @@
 import fitz
 from PySide6.QtGui import QImage, QPixmap
+from pdf_metadata import normalize_pdf_rotation_to_bytes
 
 
 class PdfPageTransformer:
@@ -29,6 +30,8 @@ class PdfPageTransformer:
 
 class PdfProcessor:
     """PDFの操作に関するすべてのロジックをカプセル化するクラス"""
+
+    IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff")
 
     @staticmethod
     def get_page_image(pdf_path: str, page_index: int = 0, dpi: int = 216) -> tuple:
@@ -106,12 +109,19 @@ class PdfProcessor:
 
     @staticmethod
     def _open_as_pdf(path: str) -> fitz.Document:
-        """指定パスのファイルを開き、画像の場合は変換して返す（with構文対応）"""
+        """指定パスを開き、必要に応じて画像変換や回転正規化を行って返す（with構文対応）"""
         doc = fitz.open(path)
         if not doc.is_pdf:
             with doc:
                 return fitz.open("pdf", doc.convert_to_pdf())
-        return doc
+
+        # PDFは pypdf で回転正規化を試みる
+        doc.close()
+        normalized_bytes = normalize_pdf_rotation_to_bytes(path)
+        if normalized_bytes is not None:
+            return fitz.open("pdf", normalized_bytes)
+
+        return fitz.open(path)
 
     @staticmethod
     def crop_and_save(
@@ -328,36 +338,28 @@ class PdfProcessor:
                 scale_factor = meta["scale_factor"]
 
                 try:
-                    with fitz.open(path) as src_raw:
+                    is_image_file = path.lower().endswith(PdfProcessor.IMAGE_EXTENSIONS)
+                    with PdfProcessor._open_as_pdf(path) as src_doc:
                         if not crop_coords:
-                            if src_raw.is_pdf:
-                                # PDFはページをそのまま挿入
-                                new_doc.insert_pdf(src_raw)
+                            if not is_image_file:
+                                # PDFは（必要なら回転正規化後に）そのまま挿入
+                                new_doc.insert_pdf(src_doc)
                             else:
                                 # 画像は幅を基準PDFに合わせて1ページ化
                                 PdfProcessor._append_image_as_width_matched_page(
                                     new_doc, path, target_width
                                 )
                         else:
-                            # 切り抜き処理はPDF文書で行う（画像は一時PDFへ変換）
-                            src_doc = (
-                                src_raw
-                                if src_raw.is_pdf
-                                else fitz.open("pdf", src_raw.convert_to_pdf())
-                            )
-                            try:
-                                for page_index in range(len(src_doc)):
-                                    for rect in crop_coords:
-                                        PdfProcessor._append_cropped_page(
-                                            new_doc,
-                                            src_doc,
-                                            page_index,
-                                            rect,
-                                            scale_factor,
-                                        )
-                            finally:
-                                if src_doc is not src_raw:
-                                    src_doc.close()
+                            # 切り抜き処理は正規化済みPDFビューで実行
+                            for page_index in range(len(src_doc)):
+                                for rect in crop_coords:
+                                    PdfProcessor._append_cropped_page(
+                                        new_doc,
+                                        src_doc,
+                                        page_index,
+                                        rect,
+                                        scale_factor,
+                                    )
                 except Exception as e:
                     print(f"Error merging {path}: {e}")
 
@@ -390,19 +392,8 @@ class PdfProcessor:
                     if item_type == "pdf_page":
                         page_idx = item["page_index"]
                         # PDFから特定の1ページを抽出して挿入
-                        with fitz.open(src_path) as src_raw:
-                            src_doc = (
-                                src_raw
-                                if src_raw.is_pdf
-                                else fitz.open("pdf", src_raw.convert_to_pdf())
-                            )
-                            try:
-                                new_doc.insert_pdf(
-                                    src_doc, from_page=page_idx, to_page=page_idx
-                                )
-                            finally:
-                                if src_doc is not src_raw:
-                                    src_doc.close()
+                        with PdfProcessor._open_as_pdf(src_path) as src_doc:
+                            new_doc.insert_pdf(src_doc, from_page=page_idx, to_page=page_idx)
                     elif item_type == "image_file":
                         # 画像は幅を基準PDFに合わせて挿入
                         PdfProcessor._append_image_as_width_matched_page(
