@@ -865,17 +865,14 @@ class OrganizeDeskWidget(BaseDeskWidget):
         self.worker_thread = None
         self.worker = None
 
-        # BaseDeskWidgetの構造に合わせた下部プレビュー枠（不要かもしれないが形式上残す）
-        self.preview = PdfPreviewView()
-
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(toolbar)
         layout.addWidget(self.editor)
 
-        self.addWidget(container)  # 編集画面
-        self.addWidget(self.preview)  # プレビュー画面
+        self.editor_widget = container
+        self.finalize_init(self.editor_widget)
 
     def _on_toggle_show_info(self, checked):
         """オーバーレイの常時表示フラグを切り替える"""
