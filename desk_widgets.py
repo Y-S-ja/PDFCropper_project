@@ -874,6 +874,16 @@ class OrganizeDeskWidget(BaseDeskWidget):
         self.editor_widget = container
         self.finalize_init(self.editor_widget)
 
+    def on_preview_enter(self):
+        """プレビューモード: 現在のリスト順・除外状態でフルプレビューを生成"""
+        instructions = []
+        for i in range(self.editor.count()):
+            item = self.editor.item(i)
+            meta = item.data(Qt.UserRole)
+            if meta:
+                instructions.append(meta)
+        self.preview.update_organized_previews(instructions)
+
     def _on_toggle_show_info(self, checked):
         """オーバーレイの常時表示フラグを切り替える"""
         self.editor.show_overlay_always = checked

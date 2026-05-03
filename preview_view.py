@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QEvent, QThread
 from PySide6.QtGui import QPixmap, QColor, QBrush, QPen, QTransform, QPainter
 import fitz
-from worker import PreviewWorker, JoinPreviewWorker
+from worker import PreviewWorker, JoinPreviewWorker, OrganizePreviewWorker
 
 
 class PdfPreviewView(QWidget):
@@ -295,6 +295,86 @@ class PdfPreviewView(QWidget):
         self.worker.finished.connect(self.thread.quit)
 
         self.thread.start()
+
+    def update_organized_previews(self, instructions: list):
+        """
+        OrganizeDesk の並び順・除外フラグに基づき、PDFページと画像を縦に並べてプレビューする。
+        instructions: export 時と同じ dict のリスト（excluded をここで除外）
+        """
+        self.stop_rendering()
+        self.scene.clear()
+        self.page_slots.clear()
+        self.current_y = 20
+
+        self.view.setTransform(QTransform())
+        self.zoom_factor = 1.0
+
+        active = [
+            dict(m)
+            for m in instructions
+            if isinstance(m, dict) and not m.get("excluded", False)
+        ]
+
+        if not active:
+            msg = self.scene.addSimpleText("表示するプレビューがありません")
+            msg.setBrush(QBrush(QColor("gray")))
+            self.progress_bar.hide()
+            return
+
+        total = len(active)
+        self.progress_bar.setRange(0, total)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat(f"0 / {total} ページを生成中...")
+        self.progress_bar.show()
+
+        self.thread = QThread()
+        # フルプレビュー用: 画像は長辺 1600px 以下（None なら原寸だが重いため上限を付与）
+        self.worker = OrganizePreviewWorker(active, image_max_edge=1600)
+        self.worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.worker.run)
+        self.worker.page_ready.connect(self._append_organized_images)
+        self.worker.progress_updated.connect(self._update_progress_organized)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.finished.connect(self.thread.quit)
+
+        self.thread.start()
+
+    def _update_progress_organized(self, current: int, total: int):
+        self.progress_bar.setValue(current)
+        percent = int((current / total) * 100) if total else 0
+        self.progress_bar.setFormat(
+            f"{current} / {total} ページを生成中... ({percent}%)"
+        )
+
+    def _append_organized_images(self, batch):
+        """OrganizePreviewWorker から届いた (item_id, QImage) のバッチを縦積み"""
+        if not batch:
+            return
+
+        for _, q_img in batch:
+            if q_img is None or q_img.isNull():
+                continue
+
+            pixmap = QPixmap.fromImage(q_img)
+            pix_item = QGraphicsPixmapItem(pixmap)
+
+            bg_rect = QGraphicsRectItem(
+                0, self.current_y, pixmap.width(), pixmap.height()
+            )
+            bg_rect.setBrush(QBrush(Qt.white))
+            bg_rect.setPen(QPen(QColor("#cccccc"), 1))
+            self.scene.addItem(bg_rect)
+
+            pix_item.setPos(0, self.current_y)
+            pix_item.setTransformationMode(Qt.SmoothTransformation)
+            self.scene.addItem(pix_item)
+
+            self.current_y += pixmap.height() + self.spacing
+
+        self.scene.setSceneRect(
+            self.scene.itemsBoundingRect().adjusted(-50, -50, 50, 50)
+        )
 
     def _update_progress_for_join(self, current, total):
         self.progress_bar.setValue(current)

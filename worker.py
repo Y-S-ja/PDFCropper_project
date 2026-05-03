@@ -195,12 +195,15 @@ class OrganizePreviewWorker(QObject):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, request_list):
+    def __init__(self, request_list, image_max_edge: int | None = 200):
         """
         request_list: [{"type": "...", "source_path": "...", "page_index": N}, ...]
+        image_max_edge: 画像ファイルを長辺このピクセル以下に縮小（リストサムネイル向け）。
+            None のときは縮小しない（フルプレビュー向け）。
         """
         super().__init__()
         self.request_list = request_list
+        self.image_max_edge = image_max_edge
         self._is_cancelled = False
 
     def cancel(self):
@@ -251,10 +254,12 @@ class OrganizePreviewWorker(QObject):
                     elif m_type == "image_file":
                         # 画像ファイルを直接読み込み
                         img = QImage(m_path)
-                        if not img.isNull():
-                            # 適度なサイズに縮小（アスペクト比維持）
+                        if not img.isNull() and self.image_max_edge:
                             img = img.scaled(
-                                200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                                self.image_max_edge,
+                                self.image_max_edge,
+                                Qt.KeepAspectRatio,
+                                Qt.SmoothTransformation,
                             )
 
                     if img and not img.isNull():
