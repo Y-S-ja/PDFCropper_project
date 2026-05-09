@@ -114,9 +114,21 @@ class BaseDeskWidget(QStackedWidget):
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
         self._export_worker.progress_updated.connect(update_progress)
-        self._export_worker.finished.connect(self._on_export_finished_base)
+
+        # 1. まずプログレスダイアログを閉じる
         self._export_worker.finished.connect(lambda: progress.close())
+
+        # 2. スレッドを停止させる
         self._export_worker.finished.connect(self._export_thread.quit)
+
+        # 3. 完了通知を遅延実行（ダイアログが完全に閉じた後に実行するため）
+        self._export_worker.finished.connect(
+            lambda success, msg: QTimer.singleShot(
+                0, lambda: self._on_export_finished_base(success, msg)
+            )
+        )
+
+        # 4. 最後にリソースを破棄
         self._export_worker.finished.connect(self._export_worker.deleteLater)
         self._export_thread.finished.connect(self._export_thread.deleteLater)
 
