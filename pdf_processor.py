@@ -354,7 +354,9 @@ class PdfProcessor:
         current_item = 0
 
         with fitz.open() as new_doc:
-            target_width = PdfProcessor._resolve_target_width_from_assets(assets_metadata)
+            target_width = PdfProcessor._resolve_target_width_from_assets(
+                assets_metadata
+            )
             for meta in assets_metadata:
                 # 中断チェック
                 if is_cancelled_cb and is_cancelled_cb():
@@ -432,7 +434,9 @@ class PdfProcessor:
                     if item_type == "pdf_page":
                         page_idx = item["page_index"]
                         with PdfProcessor._open_as_pdf(src_path) as src_doc:
-                            new_doc.insert_pdf(src_doc, from_page=page_idx, to_page=page_idx)
+                            new_doc.insert_pdf(
+                                src_doc, from_page=page_idx, to_page=page_idx
+                            )
                     elif item_type == "image_file":
                         PdfProcessor._append_image_as_width_matched_page(
                             new_doc, src_path, target_width

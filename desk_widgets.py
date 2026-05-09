@@ -95,7 +95,9 @@ class BaseDeskWidget(QStackedWidget):
         """
         print(f"DEBUG: run_export_task started. Type={task_type}, Path={output_path}")
         # ダイアログの設定
-        progress = QProgressDialog("PDFを書き出し中...", "キャンセル", 0, 100, self.window())
+        progress = QProgressDialog(
+            "PDFを書き出し中...", "キャンセル", 0, 100, self.window()
+        )
         progress.setWindowTitle("進行状況")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
@@ -145,7 +147,9 @@ class BaseDeskWidget(QStackedWidget):
 
     def _on_export_finished_base(self, success, message):
         """書き出し完了時のデフォルト処理"""
-        print(f"DEBUG: _on_export_finished_base called. Success={success}, Msg={message}")
+        print(
+            f"DEBUG: _on_export_finished_base called. Success={success}, Msg={message}"
+        )
         if success:
             QMessageBox.information(self.window(), "完了", message)
         elif "キャンセル" not in message:
@@ -486,7 +490,9 @@ class JoinDeskWidget(BaseDeskWidget):
                         )
 
         # 3. 物理書き出し実行
-        self.run_export_task("join", output_path=file_path, assets_metadata=assets_metadata)
+        self.run_export_task(
+            "join", output_path=file_path, assets_metadata=assets_metadata
+        )
 
     def on_preview_enter(self):
         """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
