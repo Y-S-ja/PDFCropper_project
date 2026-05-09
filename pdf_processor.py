@@ -125,29 +125,43 @@ class PdfProcessor:
 
     @staticmethod
     def crop_and_save(
-        input_path: str, output_path: str, crop_rects: list, scale_factor: float
+        input_path: str,
+        output_path: str,
+        crop_rects: list,
+        scale_factor: float,
+        progress_callback=None,
+        is_cancelled_cb=None,
     ):
         """
         クロップ処理を行い、新しいPDFとして保存する
         crop_rects: [(left, top, right, bottom), ...] のような数値タプルのリスト
         """
         with PdfProcessor._open_as_pdf(input_path) as src_doc:
+            total_pages = len(src_doc)
+            total_crops = len(crop_rects)
+            total_steps = total_pages * total_crops
+            current_step = 0
+
             with fitz.open() as new_doc:
-                for page_index in range(len(src_doc)):
+                for page_index in range(total_pages):
                     for rect in crop_rects:
+                        # 中断チェック
+                        if is_cancelled_cb and is_cancelled_cb():
+                            return False
+
                         PdfProcessor._append_cropped_page(
                             new_doc, src_doc, page_index, rect, scale_factor
                         )
+                        current_step += 1
+                        if progress_callback:
+                            progress_callback(current_step, total_steps)
+
                 new_doc.set_page_labels([])
                 try:
                     root_xref = new_doc.pdf_catalog()
                     # 表示レイアウトを「SinglePage（1枚ずつ）」に固定
-                    # これによりObsidianが偶数ページを隣とくっつけるのを防ぎます
                     new_doc.xref_set_key(root_xref, "PageLayout", "/SinglePage")
                     new_doc.xref_set_key(root_xref, "PageMode", "/UseNone")
-
-                    # さらに、ビューアへの詳細な指示を追加
-                    # /Direction /L2R (左から右へ読む) を明示
                     new_doc.xref_set_key(
                         root_xref, "ViewerPreferences", "<< /Direction /L2R >>"
                     )
@@ -155,6 +169,7 @@ class PdfProcessor:
                     print(f"Metadata cleanup warning: {e}")
                 new_doc.init_doc()
                 new_doc.save(output_path, garbage=4, deflate=True, clean=True)
+        return True
 
     @staticmethod
     def generate_page_preview(
@@ -322,7 +337,12 @@ class PdfProcessor:
         page.insert_image(page.rect, filename=image_path, keep_proportion=True)
 
     @staticmethod
-    def join_and_save(output_path: str, assets_metadata: list):
+    def join_and_save(
+        output_path: str,
+        assets_metadata: list,
+        progress_callback=None,
+        is_cancelled_cb=None,
+    ):
         """
         リスト上の全アセットを一本の物理PDFとして結合保存する。
         assets_metadata: [
@@ -330,9 +350,16 @@ class PdfProcessor:
             ...
         ]
         """
+        total_items = len(assets_metadata)
+        current_item = 0
+
         with fitz.open() as new_doc:
             target_width = PdfProcessor._resolve_target_width_from_assets(assets_metadata)
             for meta in assets_metadata:
+                # 中断チェック
+                if is_cancelled_cb and is_cancelled_cb():
+                    return False
+
                 path = meta["path"]
                 crop_coords = meta["crop_coords"]
                 scale_factor = meta["scale_factor"]
@@ -342,7 +369,7 @@ class PdfProcessor:
                     with PdfProcessor._open_as_pdf(path) as src_doc:
                         if not crop_coords:
                             if not is_image_file:
-                                # PDFは（必要なら回転正規化後に）そのまま挿入
+                                # PDFはそのまま挿入
                                 new_doc.insert_pdf(src_doc)
                             else:
                                 # 画像は幅を基準PDFに合わせて1ページ化
@@ -350,7 +377,7 @@ class PdfProcessor:
                                     new_doc, path, target_width
                                 )
                         else:
-                            # 切り抜き処理は正規化済みPDFビューで実行
+                            # 切り抜き処理
                             for page_index in range(len(src_doc)):
                                 for rect in crop_coords:
                                     PdfProcessor._append_cropped_page(
@@ -363,26 +390,39 @@ class PdfProcessor:
                 except Exception as e:
                     print(f"Error merging {path}: {e}")
 
+                current_item += 1
+                if progress_callback:
+                    progress_callback(current_item, total_items)
+
             # 最終的なPDFを物理ファイルに書き出す
             new_doc.save(output_path)
+        return True
 
     @staticmethod
-    def export_organized_pdf(instructions: list[dict], output_path: str):
+    def export_organized_pdf(
+        instructions: list[dict],
+        output_path: str,
+        progress_callback=None,
+        is_cancelled_cb=None,
+    ):
         """
         OrganizeDeskWidgetのリスト順序・除外フラグに基づき、PDFを構築・保存する。
-        instructions: [
-            {"type": "pdf_page", "source_path": str, "page_index": int, "excluded": bool},
-            {"type": "image_file", "source_path": str, "excluded": bool},
-            ...
-        ]
         """
+        total_items = len(instructions)
+        current_item = 0
+
         with fitz.open() as new_doc:
             target_width = PdfProcessor._resolve_target_width_from_instructions(
                 instructions
             )
             for item in instructions:
+                # 中断チェック
+                if is_cancelled_cb and is_cancelled_cb():
+                    return False
+
                 # 除外フラグが立っている場合はスキップ
                 if item.get("excluded", False):
+                    current_item += 1
                     continue
 
                 src_path = item["source_path"]
@@ -391,11 +431,9 @@ class PdfProcessor:
                 try:
                     if item_type == "pdf_page":
                         page_idx = item["page_index"]
-                        # PDFから特定の1ページを抽出して挿入
                         with PdfProcessor._open_as_pdf(src_path) as src_doc:
                             new_doc.insert_pdf(src_doc, from_page=page_idx, to_page=page_idx)
                     elif item_type == "image_file":
-                        # 画像は幅を基準PDFに合わせて挿入
                         PdfProcessor._append_image_as_width_matched_page(
                             new_doc, src_path, target_width
                         )
@@ -403,5 +441,10 @@ class PdfProcessor:
                     print(f"Error exporting item {src_path}: {e}")
                     raise e
 
+                current_item += 1
+                if progress_callback:
+                    progress_callback(current_item, total_items)
+
             # 最終的なPDFを物理ファイルに書き出す
             new_doc.save(output_path)
+        return True

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QStyledItemDelegate,
     QStyle,
+    QProgressDialog,
 )
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QColor, QPen
 from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect, QEvent
@@ -29,7 +30,7 @@ from workspace_models import (
 from pdf_processor import PdfProcessor
 from preview_view import PdfPreviewView
 from graphics_view import PdfGraphicsView
-from worker import OrganizePreviewWorker
+from worker import OrganizePreviewWorker, ExportWorker
 
 
 class BaseDeskWidget(QStackedWidget):
@@ -86,6 +87,54 @@ class BaseDeskWidget(QStackedWidget):
     def is_ready_to_load(self) -> bool:
         """このデスクに新しいアセットをロードしてもよいか判定する（必要に応じてオーバーライドする）"""
         return True
+
+    def run_export_task(self, task_type, output_path, **params):
+        """
+        共通の書き出しタスク実行エンジン。
+        モーダルなプログレスダイアログを表示し、バックグラウンドで処理を行う。
+        """
+        # ダイアログの設定
+        progress = QProgressDialog("PDFを書き出し中...", "キャンセル", 0, 100, self.window())
+        progress.setWindowTitle("進行状況")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(True)
+        progress.setValue(0)
+
+        # ワーカーとスレッドの準備
+        self._export_thread = QThread()
+        self._export_worker = ExportWorker(task_type, output_path=output_path, **params)
+        self._export_worker.moveToThread(self._export_thread)
+
+        # 進捗更新時のラムダ：ラベルテキストとバーの値を更新
+        def update_progress(current, total):
+            progress.setValue(int(current / total * 100))
+            progress.setLabelText(f"処理中... ({current}/{total})")
+
+        # 信号の接続
+        self._export_thread.started.connect(self._export_worker.run)
+        self._export_worker.progress_updated.connect(update_progress)
+        self._export_worker.finished.connect(self._on_export_finished_base)
+        self._export_worker.finished.connect(lambda: progress.close())
+        self._export_worker.finished.connect(self._export_thread.quit)
+        self._export_worker.finished.connect(self._export_worker.deleteLater)
+        self._export_thread.finished.connect(self._export_thread.deleteLater)
+
+        # キャンセル時の連動
+        progress.canceled.connect(self._export_worker.cancel)
+
+        # 実行開始
+        self._export_thread.start()
+
+    def _on_export_finished_base(self, success, message):
+        """書き出し完了時のデフォルト処理"""
+        if success:
+            QMessageBox.information(self.window(), "完了", message)
+        elif "キャンセル" not in message:
+            QMessageBox.critical(self.window(), "エラー", message)
+        else:
+            # キャンセル時は静かに終了（必要ならログ出す程度）
+            pass
 
 
 class CropDeskWidget(BaseDeskWidget):
@@ -186,19 +235,14 @@ class CropDeskWidget(BaseDeskWidget):
             return
 
         # 2. 実行
-        try:
-            # UIオブジェクトから座標リストを取得 (graphics_view に集約されている)
-            crop_rects = self.editor.get_crop_coordinates()
-
-            PdfProcessor.crop_and_save(
-                input_path=self.editor.pdf_path,
-                output_path=output_path,
-                crop_rects=crop_rects,
-                scale_factor=self.editor.scale_factor,
-            )
-            QMessageBox.information(self, "完了", f"PDFを保存しました：\n{output_path}")
-        except Exception as e:
-            QMessageBox.critical(self, "エラー", f"保存に失敗しました：\n{str(e)}")
+        crop_rects = self.editor.get_crop_coordinates()
+        self.run_export_task(
+            "crop",
+            input_path=self.editor.pdf_path,
+            output_path=output_path,
+            crop_rects=crop_rects,
+            scale_factor=self.editor.scale_factor,
+        )
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
@@ -424,11 +468,7 @@ class JoinDeskWidget(BaseDeskWidget):
                         )
 
         # 3. 物理書き出し実行
-        try:
-            PdfProcessor.join_and_save(file_path, assets_metadata)
-            QMessageBox.information(self, "完了", f"PDFを保存しました：\n{file_path}")
-        except Exception as e:
-            QMessageBox.critical(self, "エラー", f"保存に失敗しました：\n{str(e)}")
+        self.run_export_task("join", output_path=file_path, assets_metadata=assets_metadata)
 
     def on_preview_enter(self):
         """連結リストの各アセット（Source/Cropped）から画像を収集して非同期でプレビュー表示"""
@@ -911,20 +951,9 @@ class OrganizeDeskWidget(BaseDeskWidget):
                 instructions.append(meta)
 
         # 書き出しの実行
-        try:
-            # 処理中のフィードバック
-            self.setCursor(Qt.WaitCursor)
-
-            PdfProcessor.export_organized_pdf(instructions, output_path)
-
-            self.setCursor(Qt.ArrowCursor)
-            QMessageBox.information(
-                self, "完了", f"PDFを書き出しました:\n{output_path}"
-            )
-
-        except Exception as e:
-            self.setCursor(Qt.ArrowCursor)
-            QMessageBox.critical(self, "エラー", f"書き出しに失敗しました:\n{e}")
+        self.run_export_task(
+            "organize", instructions=instructions, output_path=output_path
+        )
 
     def set_asset(self, asset: WorkspaceAsset):
         """

@@ -295,3 +295,66 @@ class OrganizePreviewWorker(QObject):
             self.error.emit(str(e))
         finally:
             self.finished.emit()
+
+
+class ExportWorker(QObject):
+    """
+    バックグラウンドでPDFの書き出し処理を行うワーカー。
+    PdfProcessor の重いメソッドを別スレッドで実行し、進捗を通知する。
+    """
+
+    progress_updated = Signal(int, int)  # current, total
+    finished = Signal(bool, str)  # success, message
+    error = Signal(str)
+
+    def __init__(self, task_type, **kwargs):
+        """
+        task_type: 'crop', 'join', 'organize'
+        kwargs: PdfProcessor の各メソッドに必要な引数
+        """
+        super().__init__()
+        self.task_type = task_type
+        self.params = kwargs
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def _is_cancelled_cb(self):
+        return self._is_cancelled
+
+    def _progress_cb(self, current, total):
+        self.progress_updated.emit(current, total)
+
+    def run(self):
+        try:
+            success = False
+            if self.task_type == "crop":
+                success = PdfProcessor.crop_and_save(
+                    **self.params,
+                    progress_callback=self._progress_cb,
+                    is_cancelled_cb=self._is_cancelled_cb,
+                )
+            elif self.task_type == "join":
+                success = PdfProcessor.join_and_save(
+                    **self.params,
+                    progress_callback=self._progress_cb,
+                    is_cancelled_cb=self._is_cancelled_cb,
+                )
+            elif self.task_type == "organize":
+                success = PdfProcessor.export_organized_pdf(
+                    **self.params,
+                    progress_callback=self._progress_cb,
+                    is_cancelled_cb=self._is_cancelled_cb,
+                )
+
+            if self._is_cancelled:
+                self.finished.emit(False, "キャンセルされました")
+            elif success:
+                self.finished.emit(True, "保存が完了しました")
+            else:
+                self.finished.emit(False, "保存に失敗しました")
+
+        except Exception as e:
+            self.error.emit(str(e))
+            self.finished.emit(False, f"エラーが発生しました: {str(e)}")
