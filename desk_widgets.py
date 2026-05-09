@@ -206,7 +206,7 @@ class CropDeskWidget(BaseDeskWidget):
         self.save_btn = QPushButton("素材棚に登録")
         self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setStyleSheet(
-            "font-weight: bold; background-color: #fce4ec; height: 35px;"
+            "font-weight: bold; background-color: #e3f2fd; height: 35px;"
         )
         self.save_btn.clicked.connect(self.save_as_asset)
         ctrl_bar.addWidget(self.save_btn)
