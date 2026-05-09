@@ -124,34 +124,44 @@ class BaseDeskWidget(QStackedWidget):
         def on_task_complete(success, msg):
             """
             書き出し処理の終了シーケンス。
-            ダイアログのクローズ、通知、リソースの破棄を順番に実行する。
+            信号を遮断し、ダイアログを閉じ、スレッドを安全に停止させる。
             """
             print(f"DEBUG: on_task_complete started. Success={success}")
-            # 1. ダイアログを閉じる
+
+            # 1. まず進捗更新シグナルを遮断する（古いイベントの混入防止）
+            try:
+                self._export_worker.progress_updated.disconnect()
+            except:
+                pass
+
+            # 2. ダイアログを隠す
             if self._active_progress_dialog:
                 self._active_progress_dialog.reset()
                 self._active_progress_dialog.hide()
                 print("DEBUG: progress dialog reset.")
 
-            # 2. 描画の衝突を避けるため、100ms待ってから通知とクリーンアップを行う
-            def final_cleanup():
-                print(f"DEBUG: executing final_cleanup. Success={success}")
-                self._on_export_finished_base(success, msg)
-                self._export_thread.quit()
-                self._export_worker.deleteLater()
-                self._export_thread.deleteLater()
-                # 最後に参照を解除
-                self._active_progress_dialog = None
-                print("DEBUG: cleanup complete.")
+            # 3. メッセージを出す前にスレッドに終了を命じる
+            # これにより、バックグラウンド側は安全に終了処理へ進める
+            self._export_thread.quit()
 
-            QTimer.singleShot(100, final_cleanup)
+            # 4. 完了通知を表示（モーダル表示のため、OKを押すまでここでブロックされる）
+            self._on_export_finished_base(success, msg)
+
+            # 5. 最後に参照を解除
+            self._active_progress_dialog = None
+            print("DEBUG: cleanup logic finished.")
 
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
-        # 進捗更新も確実に QueuedConnection にして UI スレッドで実行させる
+        # 進捗更新
         self._export_worker.progress_updated.connect(update_progress)
-        # 完了時の一連の処理を単一の関数に集約
+        # 完了時の一連の処理
         self._export_worker.finished.connect(on_task_complete)
+
+        # 【Smart Fix】終わったら自分自身を消去するように予約しておく
+        # これにより、手動で deleteLater() を呼ぶ複雑さが消え、スレッド間の不整合も防げます
+        self._export_worker.finished.connect(self._export_worker.deleteLater)
+        self._export_thread.finished.connect(self._export_thread.deleteLater)
 
         # キャンセル時の連動
         p.canceled.connect(self._export_worker.cancel)
