@@ -102,7 +102,9 @@ class BaseDeskWidget(QStackedWidget):
         p.setWindowTitle("進行状況")
         p.setWindowModality(Qt.WindowModal)
         p.setMinimumDuration(0)
-        p.setAutoClose(True)
+        # 【Smart Fix】自動クローズと自動リセットを無効化し、制御をプログラム側に一任する
+        p.setAutoClose(False)
+        p.setAutoReset(False)
         p.setValue(0)
 
         # ワーカーとスレッドの準備
@@ -125,11 +127,12 @@ class BaseDeskWidget(QStackedWidget):
             ダイアログのクローズ、通知、リソースの破棄を順番に実行する。
             """
             print(f"DEBUG: on_task_complete started. Success={success}")
-            # 1. まずダイアログを閉じる
+            # 1. ダイアログを閉じる
             if self._active_progress_dialog:
                 self._active_progress_dialog.close()
+                print("DEBUG: progress dialog closed.")
 
-            # 2. 描画の衝突（Recursive repaint）を避けるため、100ms待ってから通知とクリーンアップを行う
+            # 2. 描画の衝突を避けるため、100ms待ってから通知とクリーンアップを行う
             def final_cleanup():
                 print(f"DEBUG: executing final_cleanup. Success={success}")
                 self._on_export_finished_base(success, msg)
@@ -145,11 +148,9 @@ class BaseDeskWidget(QStackedWidget):
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
         # 進捗更新も確実に QueuedConnection にして UI スレッドで実行させる
-        self._export_worker.progress_updated.connect(
-            update_progress, Qt.QueuedConnection
-        )
+        self._export_worker.progress_updated.connect(update_progress)
         # 完了時の一連の処理を単一の関数に集約
-        self._export_worker.finished.connect(on_task_complete, Qt.QueuedConnection)
+        self._export_worker.finished.connect(on_task_complete)
 
         # キャンセル時の連動
         p.canceled.connect(self._export_worker.cancel)
