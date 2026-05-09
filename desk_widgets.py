@@ -129,8 +129,9 @@ class BaseDeskWidget(QStackedWidget):
             print(f"DEBUG: on_task_complete started. Success={success}")
             # 1. ダイアログを閉じる
             if self._active_progress_dialog:
-                self._active_progress_dialog.close()
-                print("DEBUG: progress dialog closed.")
+                self._active_progress_dialog.reset()
+                self._active_progress_dialog.hide()
+                print("DEBUG: progress dialog reset.")
 
             # 2. 描画の衝突を避けるため、100ms待ってから通知とクリーンアップを行う
             def final_cleanup():
