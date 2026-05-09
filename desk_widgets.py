@@ -95,14 +95,15 @@ class BaseDeskWidget(QStackedWidget):
         """
         print(f"DEBUG: run_export_task started. Type={task_type}, Path={output_path}")
         # ダイアログの設定
-        progress = QProgressDialog(
+        self._active_progress_dialog = QProgressDialog(
             "PDFを書き出し中...", "キャンセル", 0, 100, self.window()
         )
-        progress.setWindowTitle("進行状況")
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.setAutoClose(True)
-        progress.setValue(0)
+        p = self._active_progress_dialog
+        p.setWindowTitle("進行状況")
+        p.setWindowModality(Qt.WindowModal)
+        p.setMinimumDuration(0)
+        p.setAutoClose(True)
+        p.setValue(0)
 
         # ワーカーとスレッドの準備
         self._export_thread = QThread()
@@ -111,8 +112,12 @@ class BaseDeskWidget(QStackedWidget):
 
         # 進捗更新時のラムダ：ラベルテキストとバーの値を更新
         def update_progress(current, total):
-            progress.setValue(int(current / total * 100))
-            progress.setLabelText(f"処理中... ({current}/{total})")
+            if not self._active_progress_dialog:
+                return
+            val = int(current / total * 100)
+            print(f"DEBUG: update_progress: {val}% ({current}/{total})")
+            self._active_progress_dialog.setValue(val)
+            self._active_progress_dialog.setLabelText(f"処理中... ({current}/{total})")
 
         def on_task_complete(success, msg):
             """
@@ -120,15 +125,22 @@ class BaseDeskWidget(QStackedWidget):
             ダイアログのクローズ、通知、リソースの破棄を順番に実行する。
             """
             print(f"DEBUG: on_task_complete started. Success={success}")
-            # 1. ダイアログを閉じる
-            progress.close()
-            # 2. 完了通知を出す
-            self._on_export_finished_base(success, msg)
-            # 3. リソースの後片付け
-            self._export_thread.quit()
-            self._export_worker.deleteLater()
-            self._export_thread.deleteLater()
-            print("DEBUG: on_task_complete finished.")
+            # 1. まずダイアログを閉じる
+            if self._active_progress_dialog:
+                self._active_progress_dialog.close()
+
+            # 2. 描画の衝突（Recursive repaint）を避けるため、100ms待ってから通知とクリーンアップを行う
+            def final_cleanup():
+                print(f"DEBUG: executing final_cleanup. Success={success}")
+                self._on_export_finished_base(success, msg)
+                self._export_thread.quit()
+                self._export_worker.deleteLater()
+                self._export_thread.deleteLater()
+                # 最後に参照を解除
+                self._active_progress_dialog = None
+                print("DEBUG: cleanup complete.")
+
+            QTimer.singleShot(100, final_cleanup)
 
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
@@ -140,7 +152,7 @@ class BaseDeskWidget(QStackedWidget):
         self._export_worker.finished.connect(on_task_complete, Qt.QueuedConnection)
 
         # キャンセル時の連動
-        progress.canceled.connect(self._export_worker.cancel)
+        p.canceled.connect(self._export_worker.cancel)
 
         # 実行開始
         self._export_thread.start()
