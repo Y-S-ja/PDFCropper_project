@@ -230,6 +230,7 @@ class MainWindow(QMainWindow):
         self.preview_panel = PreviewPanel()
         self.preview_dock.setWidget(self.preview_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.preview_dock)
+        self.preview_dock.hide()
 
         view_menu.addAction(self.preview_dock.toggleViewAction())
 
