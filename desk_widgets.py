@@ -93,8 +93,7 @@ class BaseDeskWidget(QStackedWidget):
         共通の書き出しタスク実行エンジン。
         モーダルなプログレスダイアログを表示し、バックグラウンドで処理を行う。
         """
-        print(f"DEBUG: run_export_task started. Type={task_type}, Path={output_path}")
-        
+
         # プログレスダイアログの準備
         p = QProgressDialog("準備中...", "キャンセル", 0, 100, self.window())
         p.setWindowTitle("PDF書き出し")
@@ -137,14 +136,11 @@ class BaseDeskWidget(QStackedWidget):
         """
         書き出し処理の終了シーケンス（メインスレッドで実行）。
         """
-        print("--- DEBUG: _on_export_task_complete START ---")
-        print(f"DEBUG: Current Executing Thread: {QThread.currentThread()}")
-        print(f"DEBUG: Widget Affinity: {self.thread()}")
-        
+
         # 1. 信号の切断
         try:
             self._export_worker.progress_updated.disconnect()
-            print("DEBUG: Signals disconnected.")
+
         except:
             pass
 
@@ -152,47 +148,36 @@ class BaseDeskWidget(QStackedWidget):
         if self._active_progress_dialog:
             self._active_progress_dialog.reset()
             self._active_progress_dialog.hide()
-            print("DEBUG: progress dialog reset/hidden.")
 
         # 3. 完了通知を表示（メインスレッドなので安全）
         self._on_export_finished_base(success, msg)
 
         # 4. 後片付けを遅延実行
         def final_cleanup():
-            print("--- DEBUG: final_cleanup START ---")
+
             try:
                 if self._export_thread:
-                    print("DEBUG: Quitting thread...")
                     self._export_thread.quit()
-                    if not self._export_thread.wait(1000):
-                        print("DEBUG: Warning: Thread wait timed out.")
-                
+
                 if self._export_worker:
-                    print("DEBUG: Deleting worker...")
                     self._export_worker.deleteLater()
-                
+
                 if self._export_thread:
-                    print("DEBUG: Deleting thread object...")
                     self._export_thread.deleteLater()
-                
+
                 self._active_progress_dialog = None
-                print("DEBUG: Cleanup successful.")
-            except Exception as e:
-                print(f"DEBUG: Exception in final_cleanup: {e}")
-            print("--- DEBUG: final_cleanup END ---")
+            except Exception:
+                pass
 
         QTimer.singleShot(0, final_cleanup)
 
     def _on_export_finished_base(self, success, message):
         """書き出し完了時のデフォルト処理"""
-        print("--- DEBUG: _on_export_finished_base START ---")
+
         if success:
             QMessageBox.information(self.window(), "完了", message)
         elif "キャンセル" not in message:
             QMessageBox.critical(self.window(), "エラー", message)
-        else:
-            print("DEBUG: Export was cancelled by user.")
-        print("DEBUG: _on_export_finished_base finished.")
 
 
 class CropDeskWidget(BaseDeskWidget):
