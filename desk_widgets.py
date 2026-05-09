@@ -117,39 +117,64 @@ class BaseDeskWidget(QStackedWidget):
             if not self._active_progress_dialog:
                 return
             val = int(current / total * 100)
-            print(f"DEBUG: update_progress: {val}% ({current}/{total})")
             self._active_progress_dialog.setValue(val)
             self._active_progress_dialog.setLabelText(f"処理中... ({current}/{total})")
 
         def on_task_complete(success, msg):
             """
-            書き出し処理の終了シーケンス。
-            信号を遮断し、ダイアログを閉じ、スレッドを安全に停止させる。
+            書き出し処理の終了シーケンス（デバッグ強化版）。
             """
-            print(f"DEBUG: on_task_complete started. Success={success}")
+            print("--- DEBUG: on_task_complete START ---")
+            print(f"DEBUG: Current (UI) Thread: {QThread.currentThread()}")
 
-            # 1. まず進捗更新シグナルを遮断する（古いイベントの混入防止）
+            # 1. まず進捗更新シグナルを遮断する
             try:
                 self._export_worker.progress_updated.disconnect()
-            except:
-                pass
+                print("DEBUG: Signals disconnected.")
+            except Exception as e:
+                print(f"DEBUG: Signal disconnect failed: {e}")
 
             # 2. ダイアログを隠す
             if self._active_progress_dialog:
                 self._active_progress_dialog.reset()
                 self._active_progress_dialog.hide()
-                print("DEBUG: progress dialog reset.")
+                print("DEBUG: progress dialog reset/hidden.")
 
-            # 3. メッセージを出す前にスレッドに終了を命じる
-            # これにより、バックグラウンド側は安全に終了処理へ進める
-            self._export_thread.quit()
-
-            # 4. 完了通知を表示（モーダル表示のため、OKを押すまでここでブロックされる）
+            # 3. 完了通知を表示（モーダル表示のため、OKを押すまでここでブロックされる）
+            print("DEBUG: Showing MessageBox...")
             self._on_export_finished_base(success, msg)
+            print("DEBUG: MessageBox closed.")
 
-            # 5. 最後に参照を解除
-            self._active_progress_dialog = None
-            print("DEBUG: cleanup logic finished.")
+            # 4. メッセージが閉じた直後に、安全に後片付けを実行
+            def final_cleanup():
+                print("--- DEBUG: final_cleanup START ---")
+                try:
+                    if self._export_thread:
+                        print(
+                            f"DEBUG: Thread Affinity before quit: {self._export_thread.thread()}"
+                        )
+                        print("DEBUG: Quitting thread...")
+                        self._export_thread.quit()
+                        # 少しだけ待機してスレッドの完全停止を待つ
+                        if not self._export_thread.wait(1000):
+                            print("DEBUG: Warning: Thread wait timed out.")
+
+                    if self._export_worker:
+                        print("DEBUG: Deleting worker...")
+                        self._export_worker.deleteLater()
+
+                    if self._export_thread:
+                        print("DEBUG: Deleting thread object...")
+                        self._export_thread.deleteLater()
+
+                    self._active_progress_dialog = None
+                    print("DEBUG: Cleanup successful.")
+                except Exception as e:
+                    print(f"DEBUG: Exception in final_cleanup: {e}")
+                print("--- DEBUG: final_cleanup END ---")
+
+            # ユーザーがOKを押した後、一瞬だけ遅らせてクリーンアップを実行
+            QTimer.singleShot(0, final_cleanup)
 
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
@@ -158,10 +183,8 @@ class BaseDeskWidget(QStackedWidget):
         # 完了時の一連の処理
         self._export_worker.finished.connect(on_task_complete)
 
-        # 【Smart Fix】終わったら自分自身を消去するように予約しておく
-        # これにより、手動で deleteLater() を呼ぶ複雑さが消え、スレッド間の不整合も防げます
-        self._export_worker.finished.connect(self._export_worker.deleteLater)
-        self._export_thread.finished.connect(self._export_thread.deleteLater)
+        # 【デバッグ中】自動予約は一旦停止し、final_cleanup での挙動を追跡します
+        # (finished.connect(deleteLater) は削除されました)
 
         # キャンセル時の連動
         p.canceled.connect(self._export_worker.cancel)
@@ -171,13 +194,23 @@ class BaseDeskWidget(QStackedWidget):
 
     def _on_export_finished_base(self, success, message):
         """書き出し完了時のデフォルト処理"""
-        print(
-            f"DEBUG: _on_export_finished_base called. Success={success}, Msg={message}"
-        )
+        print("--- DEBUG: _on_export_finished_base START ---")
+        curr = QThread.currentThread()
+        self_thread = self.thread()
+        win_thread = self.window().thread()
+        print(f"DEBUG: Current Executing Thread: {curr}")
+        print(f"DEBUG: Widget Affinity: {self_thread}")
+        print(f"DEBUG: Window Affinity: {win_thread}")
+
+        if curr != win_thread:
+            print("!!! WARNING: Current thread is NOT the window's thread !!!")
+
         if success:
-            QMessageBox.information(self.window(), "完了", message)
+            print("DEBUG: Showing information box (parent=None as test)...")
+            QMessageBox.information(None, "完了", message)
         elif "キャンセル" not in message:
-            QMessageBox.critical(self.window(), "エラー", message)
+            print("DEBUG: Showing critical box (parent=None as test)...")
+            QMessageBox.critical(None, "エラー", message)
         else:
             print("DEBUG: Export was cancelled by user.")
         print("DEBUG: _on_export_finished_base finished.")
