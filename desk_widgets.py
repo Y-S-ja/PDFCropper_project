@@ -112,33 +112,30 @@ class BaseDeskWidget(QStackedWidget):
             progress.setValue(int(current / total * 100))
             progress.setLabelText(f"処理中... ({current}/{total})")
 
-        def on_worker_finished(success, msg):
-            print(f"DEBUG: Worker finished signal received in UI thread. Success={success}")
-            # 直接 close() せず、タイマーで一瞬遅らせてデッドロックを回避する
-            QTimer.singleShot(0, progress.close)
-            print("DEBUG: Progress dialog close request queued.")
+        def on_task_complete(success, msg):
+            """
+            書き出し処理の終了シーケンス。
+            ダイアログのクローズ、通知、リソースの破棄を順番に実行する。
+            """
+            print(f"DEBUG: on_task_complete started. Success={success}")
+            # 1. ダイアログを閉じる
+            progress.close()
+            # 2. 完了通知を出す
+            self._on_export_finished_base(success, msg)
+            # 3. リソースの後片付け
+            self._export_thread.quit()
+            self._export_worker.deleteLater()
+            self._export_thread.deleteLater()
+            print("DEBUG: on_task_complete finished.")
 
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
-        self._export_worker.progress_updated.connect(update_progress)
-
-        # 1. まずプログレスダイアログを閉じる (QueuedConnectionでスレッドセーフに)
-        self._export_worker.finished.connect(on_worker_finished, Qt.QueuedConnection)
-
-        # 2. スレッドを停止させる
-        self._export_worker.finished.connect(self._export_thread.quit, Qt.QueuedConnection)
-
-        # 3. 完了通知を遅延実行
-        self._export_worker.finished.connect(
-            lambda success, msg: QTimer.singleShot(
-                0, lambda: self._on_export_finished_base(success, msg)
-            ),
-            Qt.QueuedConnection,
+        # 進捗更新も確実に QueuedConnection にして UI スレッドで実行させる
+        self._export_worker.progress_updated.connect(
+            update_progress, Qt.QueuedConnection
         )
-
-        # 4. 最後にリソースを破棄
-        self._export_worker.finished.connect(self._export_worker.deleteLater)
-        self._export_thread.finished.connect(self._export_thread.deleteLater)
+        # 完了時の一連の処理を単一の関数に集約
+        self._export_worker.finished.connect(on_task_complete, Qt.QueuedConnection)
 
         # キャンセル時の連動
         progress.canceled.connect(self._export_worker.cancel)
