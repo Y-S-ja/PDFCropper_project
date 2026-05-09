@@ -140,8 +140,7 @@ class BaseDeskWidget(QStackedWidget):
         # 1. 信号の切断
         try:
             self._export_worker.progress_updated.disconnect()
-
-        except:
+        except Exception:
             pass
 
         # 2. ダイアログを隠す
