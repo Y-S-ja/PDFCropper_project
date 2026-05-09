@@ -327,34 +327,46 @@ class ExportWorker(QObject):
         self.progress_updated.emit(current, total)
 
     def run(self):
+        print(f"DEBUG: ExportWorker.run started. Task={self.task_type}")
         try:
             success = False
             if self.task_type == "crop":
+                print("DEBUG: Executing PdfProcessor.crop_and_save...")
                 success = PdfProcessor.crop_and_save(
                     **self.params,
                     progress_callback=self._progress_cb,
                     is_cancelled_cb=self._is_cancelled_cb,
                 )
             elif self.task_type == "join":
+                print("DEBUG: Executing PdfProcessor.join_and_save...")
                 success = PdfProcessor.join_and_save(
                     **self.params,
                     progress_callback=self._progress_cb,
                     is_cancelled_cb=self._is_cancelled_cb,
                 )
             elif self.task_type == "organize":
+                print("DEBUG: Executing PdfProcessor.export_organized_pdf...")
                 success = PdfProcessor.export_organized_pdf(
                     **self.params,
                     progress_callback=self._progress_cb,
                     is_cancelled_cb=self._is_cancelled_cb,
                 )
 
+            print(f"DEBUG: PdfProcessor execution finished. Success={success}")
+
             if self._is_cancelled:
+                print("DEBUG: Task was cancelled. Emitting finished(False, ...)")
                 self.finished.emit(False, "キャンセルされました")
             elif success:
+                print("DEBUG: Task succeeded. Emitting finished(True, ...)")
                 self.finished.emit(True, "保存が完了しました")
             else:
+                print("DEBUG: Task failed. Emitting finished(False, ...)")
                 self.finished.emit(False, "保存に失敗しました")
 
         except Exception as e:
+            print(f"DEBUG: Exception in ExportWorker: {str(e)}")
             self.error.emit(str(e))
             self.finished.emit(False, f"エラーが発生しました: {str(e)}")
+        finally:
+            print("DEBUG: ExportWorker.run finished (finally block).")

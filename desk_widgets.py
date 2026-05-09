@@ -93,6 +93,7 @@ class BaseDeskWidget(QStackedWidget):
         共通の書き出しタスク実行エンジン。
         モーダルなプログレスダイアログを表示し、バックグラウンドで処理を行う。
         """
+        print(f"DEBUG: run_export_task started. Type={task_type}, Path={output_path}")
         # ダイアログの設定
         progress = QProgressDialog("PDFを書き出し中...", "キャンセル", 0, 100, self.window())
         progress.setWindowTitle("進行状況")
@@ -111,21 +112,28 @@ class BaseDeskWidget(QStackedWidget):
             progress.setValue(int(current / total * 100))
             progress.setLabelText(f"処理中... ({current}/{total})")
 
+        def on_worker_finished(success, msg):
+            print(f"DEBUG: Worker finished signal received in UI thread. Success={success}")
+            # 直接 close() せず、タイマーで一瞬遅らせてデッドロックを回避する
+            QTimer.singleShot(0, progress.close)
+            print("DEBUG: Progress dialog close request queued.")
+
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
         self._export_worker.progress_updated.connect(update_progress)
 
-        # 1. まずプログレスダイアログを閉じる
-        self._export_worker.finished.connect(lambda: progress.close())
+        # 1. まずプログレスダイアログを閉じる (QueuedConnectionでスレッドセーフに)
+        self._export_worker.finished.connect(on_worker_finished, Qt.QueuedConnection)
 
         # 2. スレッドを停止させる
-        self._export_worker.finished.connect(self._export_thread.quit)
+        self._export_worker.finished.connect(self._export_thread.quit, Qt.QueuedConnection)
 
-        # 3. 完了通知を遅延実行（ダイアログが完全に閉じた後に実行するため）
+        # 3. 完了通知を遅延実行
         self._export_worker.finished.connect(
             lambda success, msg: QTimer.singleShot(
                 0, lambda: self._on_export_finished_base(success, msg)
-            )
+            ),
+            Qt.QueuedConnection,
         )
 
         # 4. 最後にリソースを破棄
@@ -140,13 +148,14 @@ class BaseDeskWidget(QStackedWidget):
 
     def _on_export_finished_base(self, success, message):
         """書き出し完了時のデフォルト処理"""
+        print(f"DEBUG: _on_export_finished_base called. Success={success}, Msg={message}")
         if success:
             QMessageBox.information(self.window(), "完了", message)
         elif "キャンセル" not in message:
             QMessageBox.critical(self.window(), "エラー", message)
         else:
-            # キャンセル時は静かに終了（必要ならログ出す程度）
-            pass
+            print("DEBUG: Export was cancelled by user.")
+        print("DEBUG: _on_export_finished_base finished.")
 
 
 class CropDeskWidget(BaseDeskWidget):
