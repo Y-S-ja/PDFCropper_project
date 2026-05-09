@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
 )
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QColor, QPen
-from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect, QEvent
+from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect, QEvent, Slot
 
 from workspace_models import (
     SourceAsset,
@@ -94,25 +94,24 @@ class BaseDeskWidget(QStackedWidget):
         モーダルなプログレスダイアログを表示し、バックグラウンドで処理を行う。
         """
         print(f"DEBUG: run_export_task started. Type={task_type}, Path={output_path}")
-        # ダイアログの設定
-        self._active_progress_dialog = QProgressDialog(
-            "PDFを書き出し中...", "キャンセル", 0, 100, self.window()
-        )
-        p = self._active_progress_dialog
-        p.setWindowTitle("進行状況")
+        
+        # プログレスダイアログの準備
+        p = QProgressDialog("準備中...", "キャンセル", 0, 100, self.window())
+        p.setWindowTitle("PDF書き出し")
         p.setWindowModality(Qt.WindowModal)
-        p.setMinimumDuration(0)
-        # 【Smart Fix】自動クローズと自動リセットを無効化し、制御をプログラム側に一任する
         p.setAutoClose(False)
         p.setAutoReset(False)
+        p.setMinimumDuration(0)
         p.setValue(0)
+        p.show()
+        self._active_progress_dialog = p
 
         # ワーカーとスレッドの準備
         self._export_thread = QThread()
         self._export_worker = ExportWorker(task_type, output_path=output_path, **params)
         self._export_worker.moveToThread(self._export_thread)
 
-        # 進捗更新時のラムダ：ラベルテキストとバーの値を更新
+        # 進捗更新時の処理
         def update_progress(current, total):
             if not self._active_progress_dialog:
                 return
@@ -120,71 +119,12 @@ class BaseDeskWidget(QStackedWidget):
             self._active_progress_dialog.setValue(val)
             self._active_progress_dialog.setLabelText(f"処理中... ({current}/{total})")
 
-        def on_task_complete(success, msg):
-            """
-            書き出し処理の終了シーケンス（デバッグ強化版）。
-            """
-            print("--- DEBUG: on_task_complete START ---")
-            print(f"DEBUG: Current (UI) Thread: {QThread.currentThread()}")
-
-            # 1. まず進捗更新シグナルを遮断する
-            try:
-                self._export_worker.progress_updated.disconnect()
-                print("DEBUG: Signals disconnected.")
-            except Exception as e:
-                print(f"DEBUG: Signal disconnect failed: {e}")
-
-            # 2. ダイアログを隠す
-            if self._active_progress_dialog:
-                self._active_progress_dialog.reset()
-                self._active_progress_dialog.hide()
-                print("DEBUG: progress dialog reset/hidden.")
-
-            # 3. 完了通知を表示（モーダル表示のため、OKを押すまでここでブロックされる）
-            print("DEBUG: Showing MessageBox...")
-            self._on_export_finished_base(success, msg)
-            print("DEBUG: MessageBox closed.")
-
-            # 4. メッセージが閉じた直後に、安全に後片付けを実行
-            def final_cleanup():
-                print("--- DEBUG: final_cleanup START ---")
-                try:
-                    if self._export_thread:
-                        print(
-                            f"DEBUG: Thread Affinity before quit: {self._export_thread.thread()}"
-                        )
-                        print("DEBUG: Quitting thread...")
-                        self._export_thread.quit()
-                        # 少しだけ待機してスレッドの完全停止を待つ
-                        if not self._export_thread.wait(1000):
-                            print("DEBUG: Warning: Thread wait timed out.")
-
-                    if self._export_worker:
-                        print("DEBUG: Deleting worker...")
-                        self._export_worker.deleteLater()
-
-                    if self._export_thread:
-                        print("DEBUG: Deleting thread object...")
-                        self._export_thread.deleteLater()
-
-                    self._active_progress_dialog = None
-                    print("DEBUG: Cleanup successful.")
-                except Exception as e:
-                    print(f"DEBUG: Exception in final_cleanup: {e}")
-                print("--- DEBUG: final_cleanup END ---")
-
-            # ユーザーがOKを押した後、一瞬だけ遅らせてクリーンアップを実行
-            QTimer.singleShot(0, final_cleanup)
-
         # 信号の接続
         self._export_thread.started.connect(self._export_worker.run)
-        # 進捗更新
+        # 進捗更新 (AutoConnection: 描画パフォーマンスを維持)
         self._export_worker.progress_updated.connect(update_progress)
-        # 完了時の一連の処理
-        self._export_worker.finished.connect(on_task_complete)
-
-        # 【デバッグ中】自動予約は一旦停止し、final_cleanup での挙動を追跡します
-        # (finished.connect(deleteLater) は削除されました)
+        # 完了時 (メソッドに接続することで、Qtが自動的にメインスレッドで実行してくれます)
+        self._export_worker.finished.connect(self._on_export_task_complete)
 
         # キャンセル時の連動
         p.canceled.connect(self._export_worker.cancel)
@@ -192,25 +132,64 @@ class BaseDeskWidget(QStackedWidget):
         # 実行開始
         self._export_thread.start()
 
+    @Slot(bool, str)
+    def _on_export_task_complete(self, success, msg):
+        """
+        書き出し処理の終了シーケンス（メインスレッドで実行）。
+        """
+        print("--- DEBUG: _on_export_task_complete START ---")
+        print(f"DEBUG: Current Executing Thread: {QThread.currentThread()}")
+        print(f"DEBUG: Widget Affinity: {self.thread()}")
+        
+        # 1. 信号の切断
+        try:
+            self._export_worker.progress_updated.disconnect()
+            print("DEBUG: Signals disconnected.")
+        except:
+            pass
+
+        # 2. ダイアログを隠す
+        if self._active_progress_dialog:
+            self._active_progress_dialog.reset()
+            self._active_progress_dialog.hide()
+            print("DEBUG: progress dialog reset/hidden.")
+
+        # 3. 完了通知を表示（メインスレッドなので安全）
+        self._on_export_finished_base(success, msg)
+
+        # 4. 後片付けを遅延実行
+        def final_cleanup():
+            print("--- DEBUG: final_cleanup START ---")
+            try:
+                if self._export_thread:
+                    print("DEBUG: Quitting thread...")
+                    self._export_thread.quit()
+                    if not self._export_thread.wait(1000):
+                        print("DEBUG: Warning: Thread wait timed out.")
+                
+                if self._export_worker:
+                    print("DEBUG: Deleting worker...")
+                    self._export_worker.deleteLater()
+                
+                if self._export_thread:
+                    print("DEBUG: Deleting thread object...")
+                    self._export_thread.deleteLater()
+                
+                self._active_progress_dialog = None
+                print("DEBUG: Cleanup successful.")
+            except Exception as e:
+                print(f"DEBUG: Exception in final_cleanup: {e}")
+            print("--- DEBUG: final_cleanup END ---")
+
+        QTimer.singleShot(0, final_cleanup)
+
     def _on_export_finished_base(self, success, message):
         """書き出し完了時のデフォルト処理"""
         print("--- DEBUG: _on_export_finished_base START ---")
-        curr = QThread.currentThread()
-        self_thread = self.thread()
-        win_thread = self.window().thread()
-        print(f"DEBUG: Current Executing Thread: {curr}")
-        print(f"DEBUG: Widget Affinity: {self_thread}")
-        print(f"DEBUG: Window Affinity: {win_thread}")
-
-        if curr != win_thread:
-            print("!!! WARNING: Current thread is NOT the window's thread !!!")
-
         if success:
-            print("DEBUG: Showing information box (parent=None as test)...")
-            QMessageBox.information(None, "完了", message)
+            QMessageBox.information(self.window(), "完了", message)
         elif "キャンセル" not in message:
-            print("DEBUG: Showing critical box (parent=None as test)...")
-            QMessageBox.critical(None, "エラー", message)
+            QMessageBox.critical(self.window(), "エラー", message)
         else:
             print("DEBUG: Export was cancelled by user.")
         print("DEBUG: _on_export_finished_base finished.")
@@ -799,7 +778,7 @@ class OrganizeListWidget(QListWidget):
 
         # ビュー自体の設定も更新（これで余白計算が正確になる）
         self.setIconSize(QSize(base_w, base_h))
-        # すでに生成されている（またはこれから生成される）アイテムの整合性を保つため再描画
+        # すでに生成されている（またはこれから生成される）アイテムの整合性を保つため re-描画
         self.viewport().update()
 
     def clear(self):
