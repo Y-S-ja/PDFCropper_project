@@ -318,30 +318,45 @@ class PdfGraphicsView(QGraphicsView):
     # これらは UndoStack 経由で呼び出されることを想定しており、
     # 実行時に新たな Undo コマンドを生成しない。
 
-    def _raw_add_item(self, item, index: int):
-        """アイテムをリストとシーンの指定位置に追加する"""
-        if item not in self.rects:
-            if index >= len(self.rects):
-                self.rects.append(item)
-            else:
-                self.rects.insert(index, item)
+    def _raw_add_items(self, items: list, start_index: Optional[int] = None):
+        """複数のアイテムを一括でリストとシーンに追加する"""
+        if not items:
+            return
 
-        if not item.scene():
-            self._scene.addItem(item)
+        for i, item in enumerate(items):
+            if item not in self.rects:
+                if start_index is None:
+                    self.rects.append(item)
+                else:
+                    self.rects.insert(start_index + i, item)
+
+            if not item.scene():
+                self._scene.addItem(item)
+
+        self.update_numbers()
+        self.rectsChanged.emit(self.rects)
+
+    def _raw_add_item(self, item, index: int):
+        """単一のアイテムを追加する（一括処理版を呼び出す）"""
+        self._raw_add_items([item], index)
+
+    def _raw_remove_items(self, items: list):
+        """複数のアイテムを一括でリストとシーンから除外する"""
+        if not items:
+            return
+
+        for item in items:
+            if item in self.rects:
+                self.rects.remove(item)
+            if item.scene():
+                self._scene.removeItem(item)
 
         self.update_numbers()
         self.rectsChanged.emit(self.rects)
 
     def _raw_remove_item(self, item):
-        """アイテムをリストとシーンから除外する"""
-        if item in self.rects:
-            self.rects.remove(item)
-
-        if item.scene():
-            self._scene.removeItem(item)
-
-        self.update_numbers()
-        self.rectsChanged.emit(self.rects)
+        """単一のアイテムを除外する（一括処理版を呼び出す）"""
+        self._raw_remove_items([item])
 
     def _raw_apply_transforms(self, transforms):
         """複数のアイテムの変形を一括適用する"""

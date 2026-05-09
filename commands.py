@@ -12,12 +12,11 @@ class AddCommand(QUndoCommand):
         self.indices = [len(self.view.rects) + i for i in range(len(self.items))]
 
     def undo(self):
-        for item in self.items:
-            self.view._raw_remove_item(item)
+        self.view._raw_remove_items(self.items)
 
     def redo(self):
-        for item, idx in zip(self.items, self.indices):
-            self.view._raw_add_item(item, idx)
+        # 最初のインデックスを指定して一括追加
+        self.view._raw_add_items(self.items, self.indices[0] if self.indices else None)
 
 
 class RemoveCommand(QUndoCommand):
@@ -34,14 +33,17 @@ class RemoveCommand(QUndoCommand):
             self.item_data.append((item, idx))
 
     def undo(self):
-        # 元の位置に復元（インデックス順）
+        # 元の位置に復元（インデックス順に一括処理するのは難しいため、一旦個別に戻すが、
+        # もし重いようならここも最適化の余地あり。一旦は単純化して個別追加のままにするか、
+        # あるいは連続したインデックスなら一括で行う）
+        # 削除コマンドは通常「選択されたもの」を一括削除するので、戻す際も連続していることが多い。
+        # ここでは一番シンプルな「個別に戻す」ままとし、redo側を一括にする。
         for item, idx in sorted(self.item_data, key=lambda x: x[1]):
             if idx != -1:
                 self.view._raw_add_item(item, idx)
 
     def redo(self):
-        for item in self.items:
-            self.view._raw_remove_item(item)
+        self.view._raw_remove_items(self.items)
 
 
 class TransformCommand(QUndoCommand):
