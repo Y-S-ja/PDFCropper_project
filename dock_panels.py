@@ -321,6 +321,7 @@ class AssetShelfWidget(QFrame):
         # 上部：切り替えボタン
         self.toggle_btn = QPushButton("👁 表示中の素材")
         self.toggle_btn.setCheckable(True)
+        self.toggle_btn.setCursor(Qt.PointingHandCursor)
         self.toggle_btn.clicked.connect(self.on_toggle_view)
         self.layout.addWidget(self.toggle_btn)
 

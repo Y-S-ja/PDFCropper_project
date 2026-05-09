@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTabWidget,
     QDockWidget,
+    QAbstractButton,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
@@ -139,6 +140,10 @@ class MainWindow(QMainWindow):
         self.workspace_toolbar.addAction(self.action_new_organize)
         self.workspace_toolbar.addSeparator()
 
+        # ツールバー内の全ボタンにカーソルを設定
+        for btn in self.workspace_toolbar.findChildren(QAbstractButton):
+            btn.setCursor(Qt.PointingHandCursor)
+
         # 表示モード切替ツールバー
         self.mode_toolbar = self.addToolBar("表示モード")
         self.mode_toolbar.setMovable(False)
@@ -154,6 +159,10 @@ class MainWindow(QMainWindow):
 
         self.mode_toolbar.addAction(self.action_editor)
         self.mode_toolbar.addAction(self.action_preview)
+
+        # ツールバー内の全ボタンにカーソルを設定
+        for btn in self.mode_toolbar.findChildren(QAbstractButton):
+            btn.setCursor(Qt.PointingHandCursor)
 
         # テンプレート用ツールバー
         self.template_toolbar = self.addToolBar("テンプレート")
@@ -176,6 +185,10 @@ class MainWindow(QMainWindow):
         btn_auto.setStyleSheet("font-weight: bold; color: #005a9e;")
         btn_auto.clicked.connect(self._handle_auto_detect)
         self.template_toolbar.addWidget(btn_auto)
+
+        # ツールバー内のボタンにカーソルを一括設定
+        for btn in self.template_toolbar.findChildren(QAbstractButton):
+            btn.setCursor(Qt.PointingHandCursor)
 
     def _init_central_widget(self) -> None:
         self.tab_widget = WorkspaceTabWidget()

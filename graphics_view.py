@@ -159,6 +159,10 @@ class PdfGraphicsView(QGraphicsView):
 
         self.candidate_panel.hide()
 
+        # ボタンのカーソルを一括設定
+        for btn in self.candidate_panel.findChildren(QPushButton):
+            btn.setCursor(Qt.PointingHandCursor)
+
     def hit_test(self, pos: QPoint) -> HitTestResult:
         """指定された座標にあるアイテムの種類を判定する"""
         item = self.itemAt(pos)

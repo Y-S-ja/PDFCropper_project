@@ -204,6 +204,7 @@ class CropDeskWidget(BaseDeskWidget):
         # 操作バー
         ctrl_bar = QHBoxLayout()
         self.save_btn = QPushButton("素材棚に登録")
+        self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setStyleSheet(
             "font-weight: bold; background-color: #fce4ec; height: 35px;"
         )
@@ -211,6 +212,7 @@ class CropDeskWidget(BaseDeskWidget):
         ctrl_bar.addWidget(self.save_btn)
 
         self.export_btn = QPushButton("PDFとして保存")
+        self.export_btn.setCursor(Qt.PointingHandCursor)
         self.export_btn.setStyleSheet(
             "font-weight: bold; background-color: #e8f5e9; height: 35px;"
         )
@@ -425,6 +427,7 @@ class JoinDeskWidget(BaseDeskWidget):
         ctrl_bar = QHBoxLayout()
 
         self.save_btn = QPushButton("素材棚に登録")
+        self.save_btn.setCursor(Qt.PointingHandCursor)
         self.save_btn.setStyleSheet(
             "font-weight: bold; background-color: #e3f2fd; height: 35px;"
         )
@@ -432,6 +435,7 @@ class JoinDeskWidget(BaseDeskWidget):
         ctrl_bar.addWidget(self.save_btn)
 
         self.export_btn = QPushButton("PDFとして保存")
+        self.export_btn.setCursor(Qt.PointingHandCursor)
         self.export_btn.setStyleSheet(
             "font-weight: bold; background-color: #e8f5e9; height: 35px;"
         )
@@ -940,6 +944,10 @@ class OrganizeDeskWidget(BaseDeskWidget):
         self.toggle_show_btn.setCheckable(True)
         self.toggle_show_btn.toggled.connect(self._on_toggle_show_info)
         toolbar.addWidget(self.toggle_show_btn)
+
+        # カーソルを一括設定
+        for btn in [export_btn, self.toggle_show_btn]:
+            btn.setCursor(Qt.PointingHandCursor)
 
         toolbar.addStretch()
 
