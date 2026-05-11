@@ -142,6 +142,9 @@ class PdfProcessor:
             total_steps = total_pages * total_crops
             current_step = 0
 
+            # 基準となる横幅（最初のページの幅）を取得
+            target_width = src_doc[0].rect.width if total_pages > 0 else None
+
             with fitz.open() as new_doc:
                 for page_index in range(total_pages):
                     for rect in crop_rects:
@@ -150,7 +153,12 @@ class PdfProcessor:
                             return False
 
                         PdfProcessor._append_cropped_page(
-                            new_doc, src_doc, page_index, rect, scale_factor
+                            new_doc,
+                            src_doc,
+                            page_index,
+                            rect,
+                            scale_factor,
+                            target_width=target_width,
                         )
                         current_step += 1
                         if progress_callback:
@@ -232,6 +240,7 @@ class PdfProcessor:
         page_index: int,
         rect: tuple,
         scale_factor: float,
+        target_width: float = None,
     ):
         """
         [内部専用] 元のドキュメントの指定ページを新しいドキュメントの末尾に追加し、切り抜き枠を適用する
@@ -252,8 +261,14 @@ class PdfProcessor:
         pdf_rect = trans.to_source(visual_rect)
 
         # 1. 完全にクリーンな(0, 0)始まりの新しいページを作成する
-        # サイズは視覚的な切り抜きサイズ（visual_rectの幅・高さ）に合わせる
-        new_page = new_doc.new_page(width=visual_rect.width, height=visual_rect.height)
+        # target_width が指定されている場合はそれに合わせ、指定がない場合は視覚的な切り抜きサイズに合わせる
+        if target_width:
+            aspect_ratio = visual_rect.height / visual_rect.width
+            w, h = target_width, target_width * aspect_ratio
+        else:
+            w, h = visual_rect.width, visual_rect.height
+
+        new_page = new_doc.new_page(width=w, height=h)
 
         # 2. 元のPDFの該当ページから、変換した座標(pdf_rect)を抽出して新しいページへ転写
         # show_pdf_page は、ソースページの rotation 属性を見て自動的に回転を考慮して転写してくれる
@@ -263,6 +278,25 @@ class PdfProcessor:
             page_index,  # 転送元ページ番号
             clip=pdf_rect,  # 転送元から切り出す範囲（ソース座標）
         )
+
+    @staticmethod
+    def _append_width_matched_pdf_page(
+        new_doc: fitz.Document,
+        src_doc: fitz.Document,
+        page_index: int,
+        target_width: float,
+    ):
+        """
+        [内部専用] 指定したPDFページを、アスペクト比を維持しつつ指定の横幅にスケーリングして追加する
+        """
+        src_page = src_doc[page_index]
+        # src_page.rect は回転適用済みの視覚的な矩形
+        aspect_ratio = src_page.rect.height / src_page.rect.width
+        target_height = target_width * aspect_ratio
+
+        new_page = new_doc.new_page(width=target_width, height=target_height)
+        # show_pdf_page は new_page.rect に合わせて自動でスケーリングされる
+        new_page.show_pdf_page(new_page.rect, src_doc, page_index)
 
     @staticmethod
     def _resolve_target_width_from_assets(
@@ -371,8 +405,11 @@ class PdfProcessor:
                     with PdfProcessor._open_as_pdf(path) as src_doc:
                         if not crop_coords:
                             if not is_image_file:
-                                # PDFはそのまま挿入
-                                new_doc.insert_pdf(src_doc)
+                                # PDFは基準の横幅に合わせてスケーリングして挿入
+                                for p_idx in range(len(src_doc)):
+                                    PdfProcessor._append_width_matched_pdf_page(
+                                        new_doc, src_doc, p_idx, target_width
+                                    )
                             else:
                                 # 画像は幅を基準PDFに合わせて1ページ化
                                 PdfProcessor._append_image_as_width_matched_page(
@@ -388,6 +425,7 @@ class PdfProcessor:
                                         page_index,
                                         rect,
                                         scale_factor,
+                                        target_width=target_width,
                                     )
                 except Exception as e:
                     print(f"Error merging {path}: {e}")
@@ -434,8 +472,9 @@ class PdfProcessor:
                     if item_type == "pdf_page":
                         page_idx = item["page_index"]
                         with PdfProcessor._open_as_pdf(src_path) as src_doc:
-                            new_doc.insert_pdf(
-                                src_doc, from_page=page_idx, to_page=page_idx
+                            # 横幅を揃えるため、スケーリングして挿入
+                            PdfProcessor._append_width_matched_pdf_page(
+                                new_doc, src_doc, page_idx, target_width
                             )
                     elif item_type == "image_file":
                         PdfProcessor._append_image_as_width_matched_page(
