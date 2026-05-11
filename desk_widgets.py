@@ -923,6 +923,11 @@ class OrganizeListWidget(QListWidget):
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             # 選択中のアイテムを除外・復旧トグル
             self.toggle_selected_items_exclusion()
+        elif event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            # Enterキーでも詳細ダイアログを開く（ダブルクリックと同じ信号を発行）
+            item = self.currentItem()
+            if item:
+                self.itemDoubleClicked.emit(item)
         else:
             super().keyPressEvent(event)
 
