@@ -240,8 +240,11 @@ class CropDeskWidget(BaseDeskWidget):
             QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
             return
 
+        base, ext = os.path.splitext(os.path.basename(self.editor.pdf_path))
+        default_name = f"asset_{base}_cropped{ext}"
+
         name, ok = QInputDialog.getText(
-            self, "パーツとして保存", "素材名:", text="New_Part"
+            self, "パーツとして保存", "素材名:", text=default_name
         )
         if not ok or not name:
             return
