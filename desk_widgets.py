@@ -1024,12 +1024,15 @@ class PageDetailDialog(QDialog):
         layout.addLayout(footer)
 
         # ズーム用イベントフィルタ
+        # ズーム・キー入力用イベントフィルタ
+        self.view.installEventFilter(self)
         self.view.viewport().installEventFilter(self)
 
         # 初期表示
         self.update_display()
 
     def eventFilter(self, source, event):
+        # ズーム操作 (Ctrl + Wheel)
         if source == self.view.viewport() and event.type() == QEvent.Wheel:
             if event.modifiers() == Qt.ControlModifier:
                 angle = event.angleDelta().y()
@@ -1038,7 +1041,31 @@ class PageDetailDialog(QDialog):
                 self.zoom_factor = max(0.1, min(self.zoom_factor, 5.0))
                 self._apply_zoom()
                 return True
+
+        # キー入力操作 (QGraphicsViewにフォーカスがある時もページ移動を優先)
+        if event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Left:
+                self.show_previous()
+                return True
+            elif event.key() == Qt.Key_Right:
+                self.show_next()
+                return True
+            elif event.key() in (Qt.Key_Space, Qt.Key_Delete, Qt.Key_Backspace):
+                self.toggle_exclusion()
+                return True
+
         return super().eventFilter(source, event)
+
+    def keyPressEvent(self, event):
+        """キー操作によるナビゲーションと除外切り替え"""
+        if event.key() == Qt.Key_Left:
+            self.show_previous()
+        elif event.key() == Qt.Key_Right:
+            self.show_next()
+        elif event.key() in (Qt.Key_Space, Qt.Key_Delete, Qt.Key_Backspace):
+            self.toggle_exclusion()
+        else:
+            super().keyPressEvent(event)
 
     def _apply_zoom(self):
         transform = QTransform()
