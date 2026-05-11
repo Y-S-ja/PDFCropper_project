@@ -1038,6 +1038,14 @@ class PageDetailDialog(QDialog):
         self.update_display()
         self._fit_window_to_page()
 
+    def showEvent(self, event):
+        """ウィンドウが完全に表示され、サイズが確定したタイミングでフィットさせる"""
+        super().showEvent(event)
+        # 初回起動時やウィンドウが表示された瞬間に正確なサイズでフィットさせる
+        if self.scene.items():
+            self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+            self.zoom_factor = self.view.transform().m11()
+
     def eventFilter(self, source, event):
         # ズーム操作 (Ctrl + Wheel)
         if source == self.view.viewport() and event.type() == QEvent.Wheel:
