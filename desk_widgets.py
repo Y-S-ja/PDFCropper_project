@@ -984,13 +984,18 @@ class PageDetailDialog(QDialog):
 
         # メインビュー（QGraphicsView + ズーム対応）
         self.view = QGraphicsView()
+        self.view.setStyleSheet("""
+            QGraphicsView {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: #f5f5f5;
+            }
+        """)
         self.scene = QGraphicsScene(self)
         self.view.setScene(self.scene)
         self.view.setRenderHint(QPainter.SmoothPixmapTransform)
         self.view.setRenderHint(QPainter.Antialiasing)
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.view.setBackgroundBrush(QColor("#f5f5f5"))
-        self.view.setFrameShape(QFrame.NoFrame)
         layout.addWidget(self.view)
 
         # 下部操作エリア
