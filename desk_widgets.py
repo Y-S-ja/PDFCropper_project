@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsPixmapItem,
     QGraphicsDropShadowEffect,
+    QApplication,
 )
 from PySide6.QtGui import (
     QIcon,
@@ -968,8 +969,7 @@ class PageDetailDialog(QDialog):
         self.zoom_factor = 1.0
 
         self.setWindowTitle("ページ詳細")
-        self.resize(800, 900)
-        self.setMinimumSize(400, 500)
+        self.setMinimumSize(300, 400)
 
         # UI構築
         layout = QVBoxLayout(self)
@@ -1034,8 +1034,9 @@ class PageDetailDialog(QDialog):
         self.view.installEventFilter(self)
         self.view.viewport().installEventFilter(self)
 
-        # 初期表示
+        # 初期表示とウィンドウサイズの最適化
         self.update_display()
+        self._fit_window_to_page()
 
     def eventFilter(self, source, event):
         # ズーム操作 (Ctrl + Wheel)
@@ -1099,6 +1100,9 @@ class PageDetailDialog(QDialog):
         else:
             self.header_label.setText(f"🖼️ {base_name}")
 
+        # 画像のレンダリング
+        self.render_high_res(meta)
+
         # 除外ボタンの状態更新
         is_excluded = meta.get("excluded", False)
         self.toggle_exclude_btn.setChecked(is_excluded)
@@ -1113,12 +1117,41 @@ class PageDetailDialog(QDialog):
                 "background-color: #ffebee; color: #c62828; font-weight: bold;"
             )
 
-        # 画像のレンダリング
-        self.render_high_res(meta)
-
         # ナビゲーションボタンの制御
         self.prev_btn.setEnabled(self.current_row > 0)
         self.next_btn.setEnabled(self.current_row < self.list_widget.count() - 1)
+
+    def _fit_window_to_page(self):
+        """表示中の画像のアスペクト比に合わせてウィンドウサイズを最適化する"""
+        items = self.scene.items()
+        pix_item = next((i for i in items if isinstance(i, QGraphicsPixmapItem)), None)
+        if not pix_item:
+            return
+
+        rect = pix_item.pixmap().rect()
+        pw, ph = rect.width(), rect.height()
+        if pw <= 0 or ph <= 0:
+            return
+
+        # 利用可能な画面領域を取得
+        screen = QApplication.primaryScreen().availableGeometry()
+        # ヘッダー、フッター、マージン分を考慮して最大サイズを制限
+        margin_w = 60
+        margin_h = 180
+        max_vw = screen.width() * 0.85 - margin_w
+        max_vh = screen.height() * 0.85 - margin_h
+
+        # アスペクト比を維持して最大サイズに収まるビューサイズを計算
+        scale = min(max_vw / pw, max_vh / ph, 1.0)
+        vw = int(pw * scale)
+        vh = int(ph * scale)
+
+        # ビューのサイズを設定し、ウィンドウ全体をフィットさせる
+        # 固定サイズにせず、推奨サイズとして設定することでその後の手動リサイズを許容する
+        self.view.setMinimumSize(vw // 2, vh // 2)  # 最小サイズは半分程度に
+        self.view.resize(vw, vh)
+        self.resize(vw + margin_w, vh + margin_h)
+        self.adjustSize()
 
     def render_high_res(self, meta):
         """高解像度で画像を生成し表示する（同期的に実行されるが、ダイアログ内なので許容）"""
