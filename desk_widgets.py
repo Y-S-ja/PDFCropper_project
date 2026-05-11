@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QGraphicsView,
     QGraphicsScene,
     QGraphicsPixmapItem,
+    QGraphicsDropShadowEffect,
 )
 from PySide6.QtGui import (
     QIcon,
@@ -1145,9 +1146,19 @@ class PageDetailDialog(QDialog):
             if not q_img.isNull():
                 pixmap = QPixmap.fromImage(q_img)
                 pix_item = QGraphicsPixmapItem(pixmap)
+
+                # 影のエフェクトを追加
+                shadow = QGraphicsDropShadowEffect()
+                shadow.setBlurRadius(30)
+                shadow.setOffset(0, 0)
+                shadow.setColor(QColor(0, 0, 0, 60))
+                pix_item.setGraphicsEffect(shadow)
+
                 self.scene.addItem(pix_item)
-                self.scene.setSceneRect(pix_item.boundingRect())
-                self.view.fitInView(pix_item, Qt.KeepAspectRatio)
+                self.scene.setSceneRect(
+                    pix_item.boundingRect().adjusted(-20, -20, 20, 20)
+                )
+                self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
                 self.zoom_factor = self.view.transform().m11()
 
         except Exception as e:
