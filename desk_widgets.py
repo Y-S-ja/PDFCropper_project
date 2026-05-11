@@ -17,9 +17,35 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
     QStyle,
     QProgressDialog,
+    QDialog,
+    QLabel,
+    QFrame,
+    QGraphicsView,
+    QGraphicsScene,
+    QGraphicsPixmapItem,
 )
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction, QColor, QPen
-from PySide6.QtCore import Qt, Signal, QSize, QThread, QTimer, QRect, QEvent, Slot
+from PySide6.QtGui import (
+    QIcon,
+    QPixmap,
+    QPainter,
+    QAction,
+    QColor,
+    QPen,
+    QImage,
+    QTransform,
+    QBrush,
+)
+from PySide6.QtCore import (
+    Qt,
+    Signal,
+    QSize,
+    QThread,
+    QTimer,
+    QRect,
+    QEvent,
+    Slot,
+    QPoint,
+)
 
 from workspace_models import (
     SourceAsset,
@@ -926,6 +952,182 @@ class OrganizeListWidget(QListWidget):
         self._schedule_reindex()
 
 
+class PageDetailDialog(QDialog):
+    """
+    Organizeタブのアイテムをダブルクリックした際に表示される、
+    ページの詳細表示（Quick Look）ダイアログ。
+    """
+
+    exclusionChanged = Signal(int, bool)  # row_index, is_excluded
+
+    def __init__(self, parent_list_widget, initial_row, parent=None):
+        super().__init__(parent)
+        self.list_widget = parent_list_widget
+        self.current_row = initial_row
+        self.zoom_factor = 1.0
+
+        self.setWindowTitle("ページ詳細")
+        self.resize(800, 900)
+        self.setMinimumSize(400, 500)
+
+        # UI構築
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # ヘッダー（ファイル情報とページ番号）
+        self.header_label = QLabel()
+        self.header_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+        layout.addWidget(self.header_label)
+
+        # メインビュー（QGraphicsView + ズーム対応）
+        self.view = QGraphicsView()
+        self.scene = QGraphicsScene(self)
+        self.view.setScene(self.scene)
+        self.view.setRenderHint(QPainter.SmoothPixmapTransform)
+        self.view.setRenderHint(QPainter.Antialiasing)
+        self.view.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.view.setBackgroundBrush(QColor("#f5f5f5"))
+        self.view.setFrameShape(QFrame.NoFrame)
+        layout.addWidget(self.view)
+
+        # 下部操作エリア
+        footer = QHBoxLayout()
+
+        # ナビゲーション
+        self.prev_btn = QPushButton("◀ 前のページ")
+        self.next_btn = QPushButton("次のページ ▶")
+        for btn in [self.prev_btn, self.next_btn]:
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumHeight(40)
+
+        self.prev_btn.clicked.connect(self.show_previous)
+        self.next_btn.clicked.connect(self.show_next)
+
+        footer.addWidget(self.prev_btn)
+        footer.addStretch()
+
+        # 除外切り替え
+        self.toggle_exclude_btn = QPushButton()
+        self.toggle_exclude_btn.setCheckable(True)
+        self.toggle_exclude_btn.setCursor(Qt.PointingHandCursor)
+        self.toggle_exclude_btn.setMinimumHeight(40)
+        self.toggle_exclude_btn.setMinimumWidth(150)
+        self.toggle_exclude_btn.clicked.connect(self.toggle_exclusion)
+        footer.addWidget(self.toggle_exclude_btn)
+
+        footer.addStretch()
+        footer.addWidget(self.next_btn)
+
+        layout.addLayout(footer)
+
+        # ズーム用イベントフィルタ
+        self.view.viewport().installEventFilter(self)
+
+        # 初期表示
+        self.update_display()
+
+    def eventFilter(self, source, event):
+        if source == self.view.viewport() and event.type() == QEvent.Wheel:
+            if event.modifiers() == Qt.ControlModifier:
+                angle = event.angleDelta().y()
+                factor = 1.1 if angle > 0 else 0.9
+                self.zoom_factor *= factor
+                self.zoom_factor = max(0.1, min(self.zoom_factor, 5.0))
+                self._apply_zoom()
+                return True
+        return super().eventFilter(source, event)
+
+    def _apply_zoom(self):
+        transform = QTransform()
+        transform.scale(self.zoom_factor, self.zoom_factor)
+        self.view.setTransform(transform)
+
+    def update_display(self):
+        """現在の行の情報に基づいてUIを更新する"""
+        item = self.list_widget.item(self.current_row)
+        if not item:
+            return
+
+        meta = item.data(Qt.UserRole)
+        if not isinstance(meta, dict):
+            return
+
+        # ヘッダー情報の更新
+        m_type = meta.get("type")
+        m_path = meta.get("source_path")
+        m_page = meta.get("page_index")
+        base_name = os.path.basename(m_path)
+
+        if m_type == "pdf_page":
+            self.header_label.setText(f"📄 {base_name} - Page {m_page + 1}")
+        else:
+            self.header_label.setText(f"🖼️ {base_name}")
+
+        # 除外ボタンの状態更新
+        is_excluded = meta.get("excluded", False)
+        self.toggle_exclude_btn.setChecked(is_excluded)
+        if is_excluded:
+            self.toggle_exclude_btn.setText("⭕ 出力に含める")
+            self.toggle_exclude_btn.setStyleSheet("background-color: #e8f5e9; color: #2e7d32; font-weight: bold;")
+        else:
+            self.toggle_exclude_btn.setText("❌ 出力から除外")
+            self.toggle_exclude_btn.setStyleSheet("background-color: #ffebee; color: #c62828; font-weight: bold;")
+
+        # 画像のレンダリング
+        self.render_high_res(meta)
+
+        # ナビゲーションボタンの制御
+        self.prev_btn.setEnabled(self.current_row > 0)
+        self.next_btn.setEnabled(self.current_row < self.list_widget.count() - 1)
+
+    def render_high_res(self, meta):
+        """高解像度で画像を生成し表示する（同期的に実行されるが、ダイアログ内なので許容）"""
+        self.scene.clear()
+        m_path = meta.get("source_path")
+
+        try:
+            if meta.get("type") == "pdf_page":
+                m_page = meta.get("page_index")
+                with fitz.open(m_path) as doc:
+                    page = doc[m_page]
+                    # 高解像度（300dpi相当）でレンダリング
+                    mat = fitz.Matrix(4.0, 4.0)
+                    pix = page.get_pixmap(matrix=mat)
+                    q_img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+            else:
+                q_img = QImage(m_path)
+
+            if not q_img.isNull():
+                pixmap = QPixmap.fromImage(q_img)
+                pix_item = QGraphicsPixmapItem(pixmap)
+                self.scene.addItem(pix_item)
+                self.scene.setSceneRect(pix_item.boundingRect())
+                self.view.fitInView(pix_item, Qt.KeepAspectRatio)
+                self.zoom_factor = self.view.transform().m11()
+
+        except Exception as e:
+            msg = self.scene.addSimpleText(f"読み込みエラー: {e}")
+            msg.setBrush(QBrush(QColor("red")))
+
+    def show_previous(self):
+        if self.current_row > 0:
+            self.current_row -= 1
+            self.update_display()
+
+    def show_next(self):
+        if self.current_row < self.list_widget.count() - 1:
+            self.current_row += 1
+            self.update_display()
+
+    def toggle_exclusion(self):
+        """現在のアイテムの除外状態を反転させる"""
+        # 親リストウィジェットのメソッドを呼び出して状態を更新
+        self.list_widget.toggle_exclusion_at_index(self.current_row)
+        # UI（ボタン表示など）を再同期
+        self.update_display()
+
+
 class OrganizeDeskWidget(BaseDeskWidget):
     """
     ベースPDFと画像をサムネイル展開して並べ替え・削除・挿入を行うデスク。
@@ -956,6 +1158,7 @@ class OrganizeDeskWidget(BaseDeskWidget):
 
         self.editor = OrganizeListWidget()
         self.editor.items_added.connect(self.request_previews)
+        self.editor.itemDoubleClicked.connect(self._on_item_double_clicked)
 
         self.worker_thread = None
         self.worker = None
@@ -978,6 +1181,15 @@ class OrganizeDeskWidget(BaseDeskWidget):
             if meta:
                 instructions.append(meta)
         self.preview.update_organized_previews(instructions)
+
+    def _on_item_double_clicked(self, item):
+        """アイテムがダブルクリックされたら詳細ダイアログを表示"""
+        row = self.editor.row(item)
+        if row == -1:
+            return
+
+        dialog = PageDetailDialog(self.editor, row, self)
+        dialog.exec()
 
     def _on_toggle_show_info(self, checked):
         """オーバーレイの常時表示フラグを切り替える"""
