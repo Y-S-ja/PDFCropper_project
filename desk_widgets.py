@@ -977,7 +977,9 @@ class PageDetailDialog(QDialog):
 
         # ヘッダー（ファイル情報とページ番号）
         self.header_label = QLabel()
-        self.header_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+        self.header_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold; color: #333;"
+        )
         layout.addWidget(self.header_label)
 
         # メインビュー（QGraphicsView + ズーム対応）
@@ -1069,10 +1071,14 @@ class PageDetailDialog(QDialog):
         self.toggle_exclude_btn.setChecked(is_excluded)
         if is_excluded:
             self.toggle_exclude_btn.setText("⭕ 出力に含める")
-            self.toggle_exclude_btn.setStyleSheet("background-color: #e8f5e9; color: #2e7d32; font-weight: bold;")
+            self.toggle_exclude_btn.setStyleSheet(
+                "background-color: #e8f5e9; color: #2e7d32; font-weight: bold;"
+            )
         else:
             self.toggle_exclude_btn.setText("❌ 出力から除外")
-            self.toggle_exclude_btn.setStyleSheet("background-color: #ffebee; color: #c62828; font-weight: bold;")
+            self.toggle_exclude_btn.setStyleSheet(
+                "background-color: #ffebee; color: #c62828; font-weight: bold;"
+            )
 
         # 画像のレンダリング
         self.render_high_res(meta)
@@ -1094,7 +1100,13 @@ class PageDetailDialog(QDialog):
                     # 高解像度（300dpi相当）でレンダリング
                     mat = fitz.Matrix(4.0, 4.0)
                     pix = page.get_pixmap(matrix=mat)
-                    q_img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
+                    q_img = QImage(
+                        pix.samples,
+                        pix.width,
+                        pix.height,
+                        pix.stride,
+                        QImage.Format_RGB888,
+                    )
             else:
                 q_img = QImage(m_path)
 
