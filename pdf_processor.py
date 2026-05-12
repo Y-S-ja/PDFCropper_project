@@ -6,25 +6,32 @@ from pdf_metadata import normalize_pdf_rotation_to_bytes
 class PdfPageTransformer:
     """
     PDFページの座標系（生データ ⇔ 視覚的表示）を変換する。
-    Rotation（回転）設定を反映し、視覚的な位置と内部座標を相互にマッピングする。
-    ※ transformation_matrix と異なり UserUnit を含まないため、外部のスケール管理と共存できる。
+    pypdfによる物理正規化が成功していれば回転は0度になるが、
+    保険として論理的な回転補正ロジックも最小限のコストで保持する。
     """
 
     def __init__(self, page):
-        # rotation_matrix は、MediaBox(生座標)を視覚的な配置(page.rect)へ変換する行列
-        self.matrix = page.rotation_matrix
-        self.inv_matrix = ~self.matrix
+        self.rotation = page.rotation
+        # 回転が0度の場合は行列計算をスキップするためのフラグ
+        self.is_identity = self.rotation == 0
+        if not self.is_identity:
+            self.matrix = page.rotation_matrix
+            self.inv_matrix = ~self.matrix
 
     def to_visual(self, rect):
-        """PDF内部の生座標を、UI表示用の視覚座標（回転反映済み）に変換"""
+        """PDF内部の生座標を、UI表示用の視覚座標に変換"""
         if rect is None:
             return None
+        if self.is_identity:
+            return rect
         return rect * self.matrix
 
     def to_source(self, rect):
         """UIの指定（視覚座標）を、PDF内部の生座標に戻す"""
         if rect is None:
             return None
+        if self.is_identity:
+            return rect
         return rect * self.inv_matrix
 
 
@@ -109,18 +116,23 @@ class PdfProcessor:
 
     @staticmethod
     def _open_as_pdf(path: str) -> fitz.Document:
-        """指定パスを開き、必要に応じて画像変換や回転正規化を行って返す（with構文対応）"""
+        """
+        指定パスを開き、必要に応じて物理的な回転正規化を行ってから返す。
+        物理正規化（pypdf）を優先し、PyMuPDFでの座標ズレを根本から防ぐ。
+        """
+        # 1. 画像ファイルの場合はPDFに変換
         doc = fitz.open(path)
         if not doc.is_pdf:
             with doc:
                 return fitz.open("pdf", doc.convert_to_pdf())
-
-        # PDFは pypdf で回転正規化を試みる
         doc.close()
+
+        # 2. PDFは pypdf で物理的な回転正規化を試みる (保険ではなく主軸)
         normalized_bytes = normalize_pdf_rotation_to_bytes(path)
         if normalized_bytes is not None:
             return fitz.open("pdf", normalized_bytes)
 
+        # 3. 正規化に失敗した、あるいは不要な場合のみオリジナルをそのまま開く
         return fitz.open(path)
 
     @staticmethod
@@ -246,7 +258,9 @@ class PdfProcessor:
         [内部専用] 元のドキュメントの指定ページを新しいドキュメントの末尾に追加し、切り抜き枠を適用する
         """
         src_page = src_doc[page_index]
-        trans = PdfPageTransformer(src_page)
+        trans = PdfPageTransformer(
+            src_page
+        )  # 物理正規化されていれば identity として動作
 
         # UIの視覚座標（ポイント単位にスケール済み）
         left, top, right, bottom = rect
