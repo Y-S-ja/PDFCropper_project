@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QDialog,
     QLabel,
-    QFrame,
     QGraphicsView,
     QGraphicsScene,
     QGraphicsPixmapItem,
@@ -46,7 +45,6 @@ from PySide6.QtCore import (
     QRect,
     QEvent,
     Slot,
-    QPoint,
 )
 
 from workspace_models import (
@@ -55,7 +53,6 @@ from workspace_models import (
     JoinedAsset,
     WorkspaceAsset,
 )
-from pdf_processor import PdfProcessor
 from preview_view import PdfPreviewView
 from graphics_view import PdfGraphicsView
 from worker import OrganizePreviewWorker, ExportWorker
