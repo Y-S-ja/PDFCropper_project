@@ -308,6 +308,7 @@ class AssetShelfWidget(QFrame):
         super().__init__()
         self.asset_mgr = asset_mgr
         self.show_hidden = False  # 現在非表示リストを見ているか
+        self.setAcceptDrops(True)
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(5, 5, 5, 5)
@@ -329,6 +330,24 @@ class AssetShelfWidget(QFrame):
         self.layout.addWidget(self.list_widget)
 
         self.asset_mgr.assets_changed.connect(self.refresh_list)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        for url in urls:
+            file_path = url.toLocalFile()
+            if file_path:
+                ext = file_path.lower()
+                if ext.endswith(".pdf") or ext.endswith(PdfProcessor.IMAGE_EXTENSIONS):
+                    self.asset_mgr.create_source(file_path)
+        event.acceptProposedAction()
 
     def on_toggle_view(self):
         self.show_hidden = self.toggle_btn.isChecked()

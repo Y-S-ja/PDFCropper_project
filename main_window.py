@@ -414,7 +414,6 @@ class MainWindow(QMainWindow):
             file_path = url.toLocalFile()
             if self._is_supported_file(file_path):
                 self.load_new_pdf(file_path)
-                break
 
     def _is_supported_file(self, file_path: str) -> bool:
         """指定されたファイルパスがサポートされている形式かチェックする"""
