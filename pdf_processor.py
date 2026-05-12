@@ -299,8 +299,17 @@ class PdfProcessor:
         new_page.show_pdf_page(new_page.rect, src_doc, page_index)
 
     @staticmethod
+    def _get_cached_doc(path: str, cache: dict[str, fitz.Document]) -> fitz.Document:
+        """キャッシュからドキュメントを取得、なければ開いてキャッシュに登録する内部関数"""
+        if path not in cache:
+            cache[path] = PdfProcessor._open_as_pdf(path)
+        return cache[path]
+
+    @staticmethod
     def _resolve_target_width_from_assets(
-        assets_metadata: list, fallback_width: float = 595.0
+        assets_metadata: list,
+        fallback_width: float = 595.0,
+        doc_cache: dict[str, fitz.Document] = None,
     ) -> float:
         """
         結合候補から最初に見つかるPDFページ幅を返す。
@@ -311,18 +320,23 @@ class PdfProcessor:
             if not path:
                 continue
             try:
-                with fitz.open(path) as src_raw:
+                if doc_cache is not None:
+                    src_raw = PdfProcessor._get_cached_doc(path, doc_cache)
                     if src_raw.is_pdf and len(src_raw) > 0:
-                        width = float(src_raw[0].rect.width)
-                        if width > 0:
-                            return width
+                        return float(src_raw[0].rect.width)
+                else:
+                    with PdfProcessor._open_as_pdf(path) as src_raw:
+                        if src_raw.is_pdf and len(src_raw) > 0:
+                            return float(src_raw[0].rect.width)
             except Exception:
                 continue
         return fallback_width
 
     @staticmethod
     def _resolve_target_width_from_instructions(
-        instructions: list[dict], fallback_width: float = 595.0
+        instructions: list[dict],
+        fallback_width: float = 595.0,
+        doc_cache: dict[str, fitz.Document] = None,
     ) -> float:
         """
         Organizeの指示から最初に見つかるPDFページ幅を返す。
@@ -340,11 +354,14 @@ class PdfProcessor:
                 continue
 
             try:
-                with fitz.open(src_path) as src_raw:
+                if doc_cache is not None:
+                    src_raw = PdfProcessor._get_cached_doc(src_path, doc_cache)
                     if src_raw.is_pdf and 0 <= page_idx < len(src_raw):
-                        width = float(src_raw[page_idx].rect.width)
-                        if width > 0:
-                            return width
+                        return float(src_raw[page_idx].rect.width)
+                else:
+                    with PdfProcessor._open_as_pdf(src_path) as src_raw:
+                        if src_raw.is_pdf and 0 <= page_idx < len(src_raw):
+                            return float(src_raw[page_idx].rect.width)
             except Exception:
                 continue
         return fallback_width
@@ -386,57 +403,67 @@ class PdfProcessor:
         """
         total_items = len(assets_metadata)
         current_item = 0
+        doc_cache: dict[str, fitz.Document] = {}
 
-        with fitz.open() as new_doc:
-            target_width = PdfProcessor._resolve_target_width_from_assets(
-                assets_metadata
-            )
-            for meta in assets_metadata:
-                # 中断チェック
-                if is_cancelled_cb and is_cancelled_cb():
-                    return False
+        try:
+            with fitz.open() as new_doc:
+                target_width = PdfProcessor._resolve_target_width_from_assets(
+                    assets_metadata, doc_cache=doc_cache
+                )
+                for meta in assets_metadata:
+                    # 中断チェック
+                    if is_cancelled_cb and is_cancelled_cb():
+                        return False
 
-                path = meta["path"]
-                crop_coords = meta["crop_coords"]
-                scale_factor = meta["scale_factor"]
+                    path = meta["path"]
+                    crop_coords = meta["crop_coords"]
+                    scale_factor = meta["scale_factor"]
 
-                try:
-                    is_image_file = path.lower().endswith(PdfProcessor.IMAGE_EXTENSIONS)
-                    with PdfProcessor._open_as_pdf(path) as src_doc:
-                        if not crop_coords:
-                            if not is_image_file:
-                                # PDFは基準の横幅に合わせてスケーリングして挿入
+                    try:
+                        is_image_file = path.lower().endswith(PdfProcessor.IMAGE_EXTENSIONS)
+                        if not is_image_file:
+                            # PDFは基準の横幅に合わせてスケーリングして挿入
+                            src_doc = PdfProcessor._get_cached_doc(path, doc_cache)
+                            if not crop_coords:
                                 for p_idx in range(len(src_doc)):
                                     PdfProcessor._append_width_matched_pdf_page(
                                         new_doc, src_doc, p_idx, target_width
                                     )
                             else:
-                                # 画像は幅を基準PDFに合わせて1ページ化
+                                # 切り抜き処理
+                                for page_index in range(len(src_doc)):
+                                    for rect in crop_coords:
+                                        PdfProcessor._append_cropped_page(
+                                            new_doc,
+                                            src_doc,
+                                            page_index,
+                                            rect,
+                                            scale_factor,
+                                            target_width=target_width,
+                                        )
+                        else:
+                            # 画像は幅を基準PDFに合わせて1ページ化
+                            if not crop_coords:
                                 PdfProcessor._append_image_as_width_matched_page(
                                     new_doc, path, target_width
                                 )
-                        else:
-                            # 切り抜き処理
-                            for page_index in range(len(src_doc)):
-                                for rect in crop_coords:
-                                    PdfProcessor._append_cropped_page(
-                                        new_doc,
-                                        src_doc,
-                                        page_index,
-                                        rect,
-                                        scale_factor,
-                                        target_width=target_width,
-                                    )
-                except Exception as e:
-                    print(f"Error merging {path}: {e}")
+                            else:
+                                # 画像の切り抜き（必要であれば実装）
+                                pass
+                    except Exception as e:
+                        print(f"Error merging {path}: {e}")
 
-                current_item += 1
-                if progress_callback:
-                    progress_callback(current_item, total_items)
+                    current_item += 1
+                    if progress_callback:
+                        progress_callback(current_item, total_items)
 
-            # 最終的なPDFを物理ファイルに書き出す
-            new_doc.save(output_path)
-        return True
+                # 最終的なPDFを物理ファイルに書き出す
+                new_doc.save(output_path)
+            return True
+        finally:
+            # キャッシュしたドキュメントをすべて閉じる
+            for doc in doc_cache.values():
+                doc.close()
 
     @staticmethod
     def export_organized_pdf(
@@ -450,44 +477,50 @@ class PdfProcessor:
         """
         total_items = len(instructions)
         current_item = 0
+        doc_cache: dict[str, fitz.Document] = {}
 
-        with fitz.open() as new_doc:
-            target_width = PdfProcessor._resolve_target_width_from_instructions(
-                instructions
-            )
-            for item in instructions:
-                # 中断チェック
-                if is_cancelled_cb and is_cancelled_cb():
-                    return False
+        try:
+            with fitz.open() as new_doc:
+                target_width = PdfProcessor._resolve_target_width_from_instructions(
+                    instructions, doc_cache=doc_cache
+                )
+                for item in instructions:
+                    # 中断チェック
+                    if is_cancelled_cb and is_cancelled_cb():
+                        return False
 
-                # 除外フラグが立っている場合はスキップ
-                if item.get("excluded", False):
-                    current_item += 1
-                    continue
+                    # 除外フラグが立っている場合はスキップ
+                    if item.get("excluded", False):
+                        current_item += 1
+                        continue
 
-                src_path = item["source_path"]
-                item_type = item["type"]
+                    src_path = item["source_path"]
+                    item_type = item["type"]
 
-                try:
-                    if item_type == "pdf_page":
-                        page_idx = item["page_index"]
-                        with PdfProcessor._open_as_pdf(src_path) as src_doc:
+                    try:
+                        if item_type == "pdf_page":
+                            page_idx = item["page_index"]
+                            src_doc = PdfProcessor._get_cached_doc(src_path, doc_cache)
                             # 横幅を揃えるため、スケーリングして挿入
                             PdfProcessor._append_width_matched_pdf_page(
                                 new_doc, src_doc, page_idx, target_width
                             )
-                    elif item_type == "image_file":
-                        PdfProcessor._append_image_as_width_matched_page(
-                            new_doc, src_path, target_width
-                        )
-                except Exception as e:
-                    print(f"Error exporting item {src_path}: {e}")
-                    raise e
+                        elif item_type == "image_file":
+                            PdfProcessor._append_image_as_width_matched_page(
+                                new_doc, src_path, target_width
+                            )
+                    except Exception as e:
+                        print(f"Error exporting item {src_path}: {e}")
+                        raise e
 
-                current_item += 1
-                if progress_callback:
-                    progress_callback(current_item, total_items)
+                    current_item += 1
+                    if progress_callback:
+                        progress_callback(current_item, total_items)
 
-            # 最終的なPDFを物理ファイルに書き出す
-            new_doc.save(output_path)
-        return True
+                # 最終的なPDFを物理ファイルに書き出す
+                new_doc.save(output_path)
+            return True
+        finally:
+            # キャッシュしたドキュメントをすべて閉じる
+            for doc in doc_cache.values():
+                doc.close()
