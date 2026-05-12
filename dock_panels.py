@@ -17,13 +17,7 @@ from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
 from PySide6.QtGui import QPixmap
 from pdf_processor import PdfProcessor
 from graphics_items import myCropBox
-from workspace_models import (
-    AssetManager,
-    SourceAsset,
-    CroppedAsset,
-    JoinedAsset,
-    WorkspaceAsset,
-)
+from workspace_models import AssetManager, SourceAsset, JoinedAsset
 
 
 class PropertyPanel(QWidget):
