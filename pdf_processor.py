@@ -484,14 +484,20 @@ class PdfProcessor:
                 target_width = PdfProcessor._resolve_target_width_from_instructions(
                     instructions, doc_cache=doc_cache
                 )
-                for item in instructions:
+                i = 0
+                while i < total_items:
                     # 中断チェック
                     if is_cancelled_cb and is_cancelled_cb():
                         return False
 
+                    item = instructions[i]
+
                     # 除外フラグが立っている場合はスキップ
                     if item.get("excluded", False):
                         current_item += 1
+                        i += 1
+                        if progress_callback:
+                            progress_callback(current_item, total_items)
                         continue
 
                     src_path = item["source_path"]
@@ -499,23 +505,53 @@ class PdfProcessor:
 
                     try:
                         if item_type == "pdf_page":
-                            page_idx = item["page_index"]
                             src_doc = PdfProcessor._get_cached_doc(src_path, doc_cache)
-                            # 横幅を揃えるため、スケーリングして挿入
-                            PdfProcessor._append_width_matched_pdf_page(
-                                new_doc, src_doc, page_idx, target_width
-                            )
+                            start_page_idx = item["page_index"]
+
+                            # 高速コピー（insert_pdf）が可能な範囲（ラン）を特定する
+                            run_end_i = i - 1
+                            if abs(src_doc[start_page_idx].rect.width - target_width) < 0.1:
+                                run_end_i = i
+                                while run_end_i + 1 < total_items:
+                                    next_item = instructions[run_end_i + 1]
+                                    if (not next_item.get("excluded") and
+                                        next_item.get("type") == "pdf_page" and
+                                        next_item.get("source_path") == src_path and
+                                        next_item.get("page_index") == instructions[run_end_i]["page_index"] + 1 and
+                                        abs(src_doc[next_item["page_index"]].rect.width - target_width) < 0.1):
+                                        run_end_i += 1
+                                    else:
+                                        break
+
+                            if run_end_i >= i:
+                                # 一括挿入（またはリサイズ不要な単一ページ挿入）
+                                num_processed = (run_end_i - i) + 1
+                                end_page_idx = instructions[run_end_i]["page_index"]
+                                new_doc.insert_pdf(src_doc, from_page=start_page_idx, to_page=end_page_idx)
+                            else:
+                                # 個別挿入（リサイズあり）
+                                num_processed = 1
+                                PdfProcessor._append_width_matched_pdf_page(
+                                    new_doc, src_doc, start_page_idx, target_width
+                                )
+
+                            # 共通の進捗更新とインデックス加算
+                            current_item += num_processed
+                            if progress_callback:
+                                progress_callback(current_item, total_items)
+                            i += num_processed
+
                         elif item_type == "image_file":
                             PdfProcessor._append_image_as_width_matched_page(
                                 new_doc, src_path, target_width
                             )
+                            current_item += 1
+                            if progress_callback:
+                                progress_callback(current_item, total_items)
+                            i += 1
                     except Exception as e:
                         print(f"Error exporting item {src_path}: {e}")
                         raise e
-
-                    current_item += 1
-                    if progress_callback:
-                        progress_callback(current_item, total_items)
 
                 # 最終的なPDFを物理ファイルに書き出す
                 new_doc.save(output_path)
