@@ -509,7 +509,6 @@ class PdfGraphicsView(QGraphicsView):
             for url in event.mimeData().urls():
                 if url.toLocalFile().lower().endswith(".pdf"):
                     event.acceptProposedAction()
-                    # super().dragMoveEvent(event)
                     return
         super().dragMoveEvent(event)
 
