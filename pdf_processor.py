@@ -420,7 +420,9 @@ class PdfProcessor:
                     scale_factor = meta["scale_factor"]
 
                     try:
-                        is_image_file = path.lower().endswith(PdfProcessor.IMAGE_EXTENSIONS)
+                        is_image_file = path.lower().endswith(
+                            PdfProcessor.IMAGE_EXTENSIONS
+                        )
                         if not is_image_file:
                             # PDFは基準の横幅に合わせてスケーリングして挿入
                             src_doc = PdfProcessor._get_cached_doc(path, doc_cache)
@@ -510,15 +512,25 @@ class PdfProcessor:
 
                             # 高速コピー（insert_pdf）が可能な範囲（ラン）を特定する
                             run_end_i = i - 1
-                            if abs(src_doc[start_page_idx].rect.width - target_width) < 0.1:
+                            if (
+                                abs(src_doc[start_page_idx].rect.width - target_width)
+                                < 0.1
+                            ):
                                 run_end_i = i
                                 while run_end_i + 1 < total_items:
                                     next_item = instructions[run_end_i + 1]
-                                    if (not next_item.get("excluded") and
-                                        next_item.get("type") == "pdf_page" and
-                                        next_item.get("source_path") == src_path and
-                                        next_item.get("page_index") == instructions[run_end_i]["page_index"] + 1 and
-                                        abs(src_doc[next_item["page_index"]].rect.width - target_width) < 0.1):
+                                    if (
+                                        not next_item.get("excluded")
+                                        and next_item.get("type") == "pdf_page"
+                                        and next_item.get("source_path") == src_path
+                                        and next_item.get("page_index")
+                                        == instructions[run_end_i]["page_index"] + 1
+                                        and abs(
+                                            src_doc[next_item["page_index"]].rect.width
+                                            - target_width
+                                        )
+                                        < 0.1
+                                    ):
                                         run_end_i += 1
                                     else:
                                         break
@@ -527,7 +539,11 @@ class PdfProcessor:
                                 # 一括挿入（またはリサイズ不要な単一ページ挿入）
                                 num_processed = (run_end_i - i) + 1
                                 end_page_idx = instructions[run_end_i]["page_index"]
-                                new_doc.insert_pdf(src_doc, from_page=start_page_idx, to_page=end_page_idx)
+                                new_doc.insert_pdf(
+                                    src_doc,
+                                    from_page=start_page_idx,
+                                    to_page=end_page_idx,
+                                )
                             else:
                                 # 個別挿入（リサイズあり）
                                 num_processed = 1
