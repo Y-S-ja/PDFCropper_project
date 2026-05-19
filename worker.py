@@ -111,6 +111,7 @@ class JoinPreviewWorker(QObject):
 
     def run(self):
         """リスト上の全アセットを順に処理し、画像を生成する"""
+        doc_cache = {}
         try:
             total_items = len(self.assets_metadata)
             if total_items == 0:
@@ -119,6 +120,12 @@ class JoinPreviewWorker(QObject):
             batch = []
             batch_size = 5
             global_idx = 0
+
+            # 基準となる横幅を計算
+            target_width_pts = PdfProcessor._resolve_target_width_from_assets(
+                self.assets_metadata, doc_cache=doc_cache
+            )
+            target_width_px = int(target_width_pts * (self.preview_dpi / 72.0))
 
             for i, meta in enumerate(self.assets_metadata):
                 if self._is_cancelled:
@@ -129,48 +136,57 @@ class JoinPreviewWorker(QObject):
                 scale_factor = meta["scale_factor"]
 
                 try:
-                    with fitz.open(path) as doc:
-                        for page_idx in range(len(doc)):
-                            if self._is_cancelled:
-                                return
+                    # PDFまたは画像を統一して扱うため、PdfProcessor._get_cached_docを利用
+                    doc = PdfProcessor._get_cached_doc(path, doc_cache)
+                    for page_idx in range(len(doc)):
+                        if self._is_cancelled:
+                            return
 
-                            if not crop_coords:
-                                # 全ページ表示の場合
-                                pix = doc[page_idx].get_pixmap(dpi=self.preview_dpi)
-                                img = QImage(
-                                    pix.samples,
-                                    pix.width,
-                                    pix.height,
-                                    pix.stride,
-                                    QImage.Format_RGB888,
-                                ).copy()
-                                batch.append((global_idx, [img]))
+                        if not crop_coords:
+                            # 全ページ表示の場合
+                            pix = doc[page_idx].get_pixmap(dpi=self.preview_dpi)
+                            img = QImage(
+                                pix.samples,
+                                pix.width,
+                                pix.height,
+                                pix.stride,
+                                QImage.Format_RGB888,
+                            ).copy()
+                            # ターゲット幅に合わせてリサイズ
+                            if img.width() != target_width_px:
+                                img = img.scaledToWidth(target_width_px, Qt.SmoothTransformation)
+                            batch.append((global_idx, [img]))
+                            global_idx += 1
+                        else:
+                            # 切り抜き表示の場合
+                            page_previews = PdfProcessor._get_previews_for_page(
+                                doc,
+                                page_idx,
+                                crop_coords,
+                                scale_factor,
+                                self.preview_dpi,
+                            )
+                            # 有効な画像だけを抽出
+                            valid_imgs = []
+                            for img in page_previews:
+                                if img:
+                                    if img.width() != target_width_px:
+                                        img = img.scaledToWidth(target_width_px, Qt.SmoothTransformation)
+                                    valid_imgs.append(img)
+                            if valid_imgs:
+                                batch.append((global_idx, valid_imgs))
                                 global_idx += 1
-                            else:
-                                # 切り抜き表示の場合
-                                page_previews = PdfProcessor._get_previews_for_page(
-                                    doc,
-                                    page_idx,
-                                    crop_coords,
-                                    scale_factor,
-                                    self.preview_dpi,
-                                )
-                                # 有効な画像だけを抽出
-                                valid_imgs = [img for img in page_previews if img]
-                                if valid_imgs:
-                                    batch.append((global_idx, valid_imgs))
-                                    global_idx += 1
 
-                            # 進捗通知（アセット単位 + 詳細の微調整などは呼び出し側で想定）
-                            self.progress_updated.emit(i + 1, total_items)
+                        # 進捗通知（アセット単位 + 詳細の微調整などは呼び出し側で想定）
+                        self.progress_updated.emit(i + 1, total_items)
 
-                            # バッチ送信
-                            if len(batch) >= batch_size:
-                                self.page_ready.emit(batch)
-                                batch = []
-                                QThread.msleep(30)
-                            else:
-                                QThread.msleep(5)
+                        # バッチ送信
+                        if len(batch) >= batch_size:
+                            self.page_ready.emit(batch)
+                            batch = []
+                            QThread.msleep(30)
+                        else:
+                            QThread.msleep(5)
 
                 except Exception as e:
                     print(f"Error processing {path} in JoinWorker: {e}")
@@ -182,6 +198,8 @@ class JoinPreviewWorker(QObject):
         except Exception as e:
             self.error.emit(str(e))
         finally:
+            for doc in doc_cache.values():
+                doc.close()
             self.finished.emit()
 
 
@@ -219,6 +237,13 @@ class OrganizePreviewWorker(QObject):
             batch = []
             batch_size = 5
 
+            # 基準となる横幅を計算
+            target_width_pts = PdfProcessor._resolve_target_width_from_instructions(
+                self.request_list, doc_cache=pdf_docs
+            )
+            # 144dpi相当 (mat = 2.0)
+            target_width_px = int(target_width_pts * 2.0)
+
             for i, metadata in enumerate(self.request_list):
                 if self._is_cancelled:
                     break
@@ -234,10 +259,7 @@ class OrganizePreviewWorker(QObject):
                 try:
                     if m_type == "pdf_page":
                         # PDFから1ページ分をレンダリング
-                        if m_path not in pdf_docs:
-                            pdf_docs[m_path] = fitz.open(m_path)
-
-                        doc = pdf_docs[m_path]
+                        doc = PdfProcessor._get_cached_doc(m_path, pdf_docs)
                         if 0 <= m_page < len(doc):
                             page = doc[m_page]
                             # 144dpi相当 (72 * 2.0)
@@ -254,15 +276,14 @@ class OrganizePreviewWorker(QObject):
                     elif m_type == "image_file":
                         # 画像ファイルを直接読み込み
                         img = QImage(m_path)
-                        if not img.isNull() and self.image_max_edge:
-                            img = img.scaled(
-                                self.image_max_edge,
-                                self.image_max_edge,
-                                Qt.KeepAspectRatio,
-                                Qt.SmoothTransformation,
-                            )
+                        # フルプレビューの場合はimage_max_edgeを無視してターゲット幅に統一する
+                        # （後段で scaledToWidth を一律に適用する）
 
                     if img and not img.isNull():
+                        # 幅を基準値に統一する
+                        if img.width() != target_width_px:
+                            img = img.scaledToWidth(target_width_px, Qt.SmoothTransformation)
+
                         # item_id と画像のペアをバッチに保存
                         item_id = metadata.get("item_id")
                         batch.append((item_id, img.copy()))
