@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QMenu,
 )
-from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication
+from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QTimer, QCoreApplication, QEvent
 from PySide6.QtGui import QPixmap
 from pdf_processor import PdfProcessor
 from graphics_items import myCropBox
@@ -327,9 +327,19 @@ class AssetShelfWidget(QFrame):
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.list_widget.installEventFilter(self)
         self.layout.addWidget(self.list_widget)
 
         self.asset_mgr.assets_changed.connect(self.refresh_list)
+
+    def eventFilter(self, source, event):
+        if source == self.list_widget and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                item = self.list_widget.currentItem()
+                if item:
+                    self.on_item_double_clicked(item)
+                return True
+        return super().eventFilter(source, event)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
