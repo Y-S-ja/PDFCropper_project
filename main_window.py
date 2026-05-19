@@ -207,6 +207,8 @@ class MainWindow(QMainWindow):
 
         # 棚のアイテムがダブルクリックされたときの処理
         self.shelf_widget.assetSelected.connect(self.on_asset_from_shelf)
+        # 棚のアイテムが複数選択されてEnterキーが押されたときの処理
+        self.shelf_widget.assetsSelected.connect(self.on_assets_from_shelf)
 
         # ドックウィジェットのタブ位置を上部に設定
         self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
@@ -393,6 +395,24 @@ class MainWindow(QMainWindow):
             self.open_asset(asset)
         else:
             print(f"Asset {asset_id} not found")
+
+    def on_assets_from_shelf(self, asset_ids: List[str]) -> None:
+        if not asset_ids:
+            return
+            
+        desk = self.current_desk()
+        if isinstance(desk, JoinDeskWidget):
+            for asset_id in asset_ids:
+                asset = self.asset_mgr.get_asset(asset_id)
+                if asset:
+                    self.open_asset(asset)
+        else:
+            # Joinタブ以外の場合は、フォーカスされているアイテム、または先頭の要素を開く
+            item = self.shelf_widget.list_widget.currentItem()
+            asset_id = item.data(Qt.UserRole) if item else asset_ids[0]
+            if asset_id not in asset_ids:
+                asset_id = asset_ids[0]
+            self.on_asset_from_shelf(asset_id)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():

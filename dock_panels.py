@@ -303,6 +303,7 @@ class AssetShelfWidget(QFrame):
     """
 
     assetSelected = Signal(str)  # ダブルクリックされた素材IDを通知
+    assetsSelected = Signal(list) # Enterキーで複数選択された素材IDを通知
 
     def __init__(self, asset_mgr: AssetManager):
         super().__init__()
@@ -323,6 +324,7 @@ class AssetShelfWidget(QFrame):
         # リスト
         self.list_widget = QListWidget()
         self.list_widget.setDragDropMode(QListWidget.InternalMove)
+        self.list_widget.setSelectionMode(QListWidget.ExtendedSelection)
         self.list_widget.model().rowsMoved.connect(self.on_rows_moved)
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -335,9 +337,10 @@ class AssetShelfWidget(QFrame):
     def eventFilter(self, source, event):
         if source == self.list_widget and event.type() == QEvent.KeyPress:
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-                item = self.list_widget.currentItem()
-                if item:
-                    self.on_item_double_clicked(item)
+                selected_items = self.list_widget.selectedItems()
+                if selected_items:
+                    asset_ids = [item.data(Qt.UserRole) for item in selected_items]
+                    self.assetsSelected.emit(asset_ids)
                 return True
         return super().eventFilter(source, event)
 
