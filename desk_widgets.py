@@ -168,28 +168,36 @@ class BaseDeskWidget(QStackedWidget):
         except Exception:
             pass
 
-        # 2. ダイアログを隠す
+        # 2. スレッドを先に同期的に停止する
+        #    finished シグナルを受け取った時点でワーカーの処理は終わっているため、
+        #    quit() + wait() を即座に呼び出してスレッドを完全に終わらせる。
+        #    これをしないままメッセージボックス（モーダル）を開くと、
+        #    スレッドが生きたまま Qt の描画イベントが発生し
+        #    QBackingStore の不整合が起きてクラッシュする。
+        if self._export_thread:
+            self._export_thread.quit()
+            self._export_thread.wait()  # スレッドの完全停止を同期的に待つ
+
+        # 3. ダイアログを隠す（スレッド停止後なので安全）
         if self._active_progress_dialog:
             self._active_progress_dialog.reset()
             self._active_progress_dialog.hide()
+            self._active_progress_dialog.deleteLater()
+            self._active_progress_dialog = None
 
-        # 3. 完了通知を表示（メインスレッドなので安全）
+        # 4. 完了通知を表示（スレッドが完全停止しているので安全）
         self._on_export_finished_base(success, msg)
 
-        # 4. 後片付けを遅延実行
+        # 5. ワーカーとスレッドオブジェクトを後片付け
         def final_cleanup():
-
             try:
-                if self._export_thread:
-                    self._export_thread.quit()
-
                 if self._export_worker:
                     self._export_worker.deleteLater()
+                    self._export_worker = None
 
                 if self._export_thread:
                     self._export_thread.deleteLater()
-
-                self._active_progress_dialog = None
+                    self._export_thread = None
             except Exception:
                 pass
 
