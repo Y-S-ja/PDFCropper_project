@@ -12,7 +12,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
-from copy_options import PageCopyOptions, CopyScope, ConflictPolicy, PageCopyEngine
+from copy_options import (
+    PageCopyOptions,
+    CopyScope,
+    ConflictPolicy,
+    PageCopyEngine,
+    FitPolicy,
+)
 from workspace_models import (
     AssetManager,
     WorkspaceAsset,
@@ -196,22 +202,39 @@ class MainWindow(QMainWindow):
         self.btn_copy_pages.setText("📋 全ページに枠をコピー")
         self.btn_copy_pages.setPopupMode(QToolButton.MenuButtonPopup)
         self.btn_copy_pages.setStyleSheet("font-weight: bold; color: #2e7d32;")
-        self.btn_copy_pages.clicked.connect(lambda: self._handle_copy_pages(CopyScope.ALL))
+        self.btn_copy_pages.clicked.connect(
+            lambda: self._handle_copy_pages(CopyScope.ALL, FitPolicy.PROPORTIONAL)
+        )
 
         copy_menu = QMenu(self.btn_copy_pages)
-        act_all = copy_menu.addAction("全ページにコピー")
-        act_all.triggered.connect(lambda: self._handle_copy_pages(CopyScope.ALL))
+        act_all = copy_menu.addAction("全ページにコピー（自動調整）")
+        act_all.triggered.connect(
+            lambda: self._handle_copy_pages(CopyScope.ALL, FitPolicy.PROPORTIONAL)
+        )
 
-        act_fwd = copy_menu.addAction("以降の全ページにコピー")
-        act_fwd.triggered.connect(lambda: self._handle_copy_pages(CopyScope.FORWARD))
+        act_fwd = copy_menu.addAction("以降の全ページにコピー（自動調整）")
+        act_fwd.triggered.connect(
+            lambda: self._handle_copy_pages(CopyScope.FORWARD, FitPolicy.PROPORTIONAL)
+        )
 
         copy_menu.addSeparator()
 
         act_odd = copy_menu.addAction("奇数ページのみにコピー")
-        act_odd.triggered.connect(lambda: self._handle_copy_pages(CopyScope.ODD_PAGES))
+        act_odd.triggered.connect(
+            lambda: self._handle_copy_pages(CopyScope.ODD_PAGES, FitPolicy.PROPORTIONAL)
+        )
 
         act_even = copy_menu.addAction("偶数ページのみにコピー")
-        act_even.triggered.connect(lambda: self._handle_copy_pages(CopyScope.EVEN_PAGES))
+        act_even.triggered.connect(
+            lambda: self._handle_copy_pages(CopyScope.EVEN_PAGES, FitPolicy.PROPORTIONAL)
+        )
+
+        copy_menu.addSeparator()
+
+        act_orig = copy_menu.addAction("全ページにコピー（元サイズ維持）")
+        act_orig.triggered.connect(
+            lambda: self._handle_copy_pages(CopyScope.ALL, FitPolicy.ORIGINAL)
+        )
 
         self.btn_copy_pages.setMenu(copy_menu)
         self.template_toolbar.addWidget(self.btn_copy_pages)
@@ -289,7 +312,9 @@ class MainWindow(QMainWindow):
         if view:
             view.auto_detect_frames()
 
-    def _handle_copy_pages(self, scope: CopyScope) -> None:
+    def _handle_copy_pages(
+        self, scope: CopyScope, fit_policy: FitPolicy = FitPolicy.PROPORTIONAL
+    ) -> None:
         desk = self.current_desk()
         if not isinstance(desk, CropDeskWidget):
             QMessageBox.information(
@@ -317,7 +342,11 @@ class MainWindow(QMainWindow):
             )
             return
 
-        options = PageCopyOptions(scope=scope, conflict=ConflictPolicy.OVERWRITE)
+        options = PageCopyOptions(
+            scope=scope,
+            conflict=ConflictPolicy.OVERWRITE,
+            fit_policy=fit_policy,
+        )
         target_pages = PageCopyEngine.resolve_target_pages(
             view.current_page_index, total_pages, options
         )
@@ -335,6 +364,11 @@ class MainWindow(QMainWindow):
             CopyScope.EVEN_PAGES: "偶数ページ",
         }
         name = scope_names.get(scope, "対象ページ")
+        adjust_note = (
+            "※ コピー先ページのサイズに合わせて枠が自動調整されます。\n"
+            if fit_policy == FitPolicy.PROPORTIONAL
+            else "※ 元の枠サイズをそのまま維持します。\n"
+        )
 
         # 確認ダイアログ
         ret = QMessageBox.question(
@@ -342,6 +376,7 @@ class MainWindow(QMainWindow):
             "枠のコピー確認",
             f"現在のページの切り抜き枠（{len(current_rects)}個）を、\n"
             f"{name}（対象: {len(target_pages)}ページ）にコピーしますか？\n\n"
+            f"{adjust_note}"
             f"※ 対象ページに既存の枠がある場合は上書きされます。",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes,

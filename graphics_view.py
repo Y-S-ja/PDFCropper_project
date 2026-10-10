@@ -2,7 +2,7 @@ import os
 import copy
 from dataclasses import dataclass
 from typing import Optional, List, Tuple, Dict, Union
-from copy_options import PageCopyOptions, ConflictPolicy, PageCopyEngine
+from copy_options import PageCopyOptions, ConflictPolicy, PageCopyEngine, FitPolicy
 from PySide6.QtWidgets import (
     QPushButton,
     QMessageBox,
@@ -770,10 +770,14 @@ class PdfGraphicsView(QGraphicsView):
         return rects_by_page
 
     def copy_current_page_rects(
-        self, total_pages: int, options: Optional[PageCopyOptions] = None
+        self,
+        total_pages: int,
+        options: Optional[PageCopyOptions] = None,
+        page_sizes: Optional[List[Tuple[float, float]]] = None,
     ) -> List[int]:
         """
         現在のページの切り抜き枠を設定（options）に基づいて他のページに一括コピーする。
+        options.fit_policy が PROPORTIONAL の場合、コピー先のページサイズに合わせて自動伸縮する。
         実際にコピーが行われたページ番号のリストを返す。
         """
         if options is None:
@@ -789,18 +793,44 @@ class PdfGraphicsView(QGraphicsView):
         target_pages = PageCopyEngine.resolve_target_pages(
             self.current_page_index, total_pages, options
         )
+        if not target_pages:
+            return []
+
+        # ページ寸法の取得（未指定の場合はPDFファイルから直接取得）
+        sizes = page_sizes
+        if sizes is None and self.pdf_path and os.path.exists(self.pdf_path):
+            try:
+                import fitz
+                with fitz.open(self.pdf_path) as doc:
+                    sizes = [(page.rect.width, page.rect.height) for page in doc]
+            except Exception as e:
+                print(f"[PageCopy] Warning reading page sizes: {e}")
+                sizes = None
+
+        src_size = (
+            sizes[self.current_page_index]
+            if sizes and 0 <= self.current_page_index < len(sizes)
+            else (1.0, 1.0)
+        )
+
         copied_pages = []
 
         for p in target_pages:
+            dst_size = sizes[p] if sizes and 0 <= p < len(sizes) else src_size
+
+            # コピー先ページのサイズに合わせてスナップショットを変換
+            transformed_items = PageCopyEngine.transform_snapshot(
+                current_snapshot, src_size, dst_size, options.fit_policy
+            )
+
             existing = self._state._page_rects_store.get(p, [])
             if options.conflict == ConflictPolicy.SKIP and existing:
                 continue
             elif options.conflict == ConflictPolicy.APPEND:
-                new_items = copy.deepcopy(current_snapshot)
-                self._state._page_rects_store[p] = existing + new_items
+                self._state._page_rects_store[p] = existing + transformed_items
                 copied_pages.append(p)
             else:  # OVERWRITE
-                self._state._page_rects_store[p] = copy.deepcopy(current_snapshot)
+                self._state._page_rects_store[p] = transformed_items
                 copied_pages.append(p)
 
         return copied_pages
