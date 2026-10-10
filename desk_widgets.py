@@ -228,6 +228,7 @@ class CropDeskWidget(BaseDeskWidget):
         super().__init__(parent)
         self.asset_mgr = asset_mgr
         self.parent_asset_id = None  # 現在読み込んでいる素材のID
+        self._total_pages = 1  # PDFの総ページ数
 
         # エディタ部（PDF表示部 + 操作バー）
         self.editor_widget = QWidget()
@@ -254,6 +255,29 @@ class CropDeskWidget(BaseDeskWidget):
 
         layout.addLayout(ctrl_bar)
 
+        # ページナビゲーションバー
+        nav_bar = QHBoxLayout()
+        nav_bar.setContentsMargins(4, 2, 4, 2)
+
+        self.prev_page_btn = QPushButton("◀ 前のページ")
+        self.prev_page_btn.setCursor(Qt.PointingHandCursor)
+        self.prev_page_btn.setEnabled(False)
+        self.prev_page_btn.clicked.connect(self._go_prev_page)
+        nav_bar.addWidget(self.prev_page_btn)
+
+        self.page_label = QLabel("- / -")
+        self.page_label.setAlignment(Qt.AlignCenter)
+        self.page_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        nav_bar.addWidget(self.page_label, 1)  # stretch=1 で中央に伸びる
+
+        self.next_page_btn = QPushButton("次のページ ▶")
+        self.next_page_btn.setCursor(Qt.PointingHandCursor)
+        self.next_page_btn.setEnabled(False)
+        self.next_page_btn.clicked.connect(self._go_next_page)
+        nav_bar.addWidget(self.next_page_btn)
+
+        layout.addLayout(nav_bar)
+
         self.editor = PdfGraphicsView()
         self.editor.fileDropped.connect(self.fileDropped.emit)
         self.editor.selectionChanged.connect(self.selectionChanged.emit)
@@ -268,8 +292,11 @@ class CropDeskWidget(BaseDeskWidget):
             QMessageBox.warning(self, "エラー", "素材が読み込まれていません")
             return
 
-        rects = self.editor.rects
-        if not rects:
+        # 現在のページの枠もストアに保存してから全ページ分を収集
+        self.editor._save_current_page_rects()
+        all_rects = self._collect_all_page_rects()
+
+        if not all_rects:
             QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
             return
 
@@ -284,7 +311,7 @@ class CropDeskWidget(BaseDeskWidget):
 
         # myCropBox (UIオブジェクト) のリストから実際のシーン座標 (QRectF) を抽出する
         scene_rects = [
-            box.mapToScene(box.rect()).boundingRect() for box in self.editor.rects
+            box.mapToScene(box.rect()).boundingRect() for box in all_rects
         ]
 
         # 素材棚に登録
@@ -301,7 +328,11 @@ class CropDeskWidget(BaseDeskWidget):
             QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
             return
 
-        if not self.editor.rects:
+        # 現在のページの枠もストアに保存してから全ページ分を収集
+        self.editor._save_current_page_rects()
+        all_rects = self._collect_all_page_rects()
+
+        if not all_rects:
             QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
             return
 
@@ -315,7 +346,7 @@ class CropDeskWidget(BaseDeskWidget):
             return
 
         # 2. 実行
-        crop_rects = self.editor.get_crop_coordinates()
+        crop_rects = self.editor.get_crop_coordinates(all_rects)
         self.run_export_task(
             "crop",
             input_path=self.editor.pdf_path,
@@ -326,16 +357,61 @@ class CropDeskWidget(BaseDeskWidget):
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
+        # 現在ページの枠も保存してから全ページ分の枠を収集する
+        self.editor._save_current_page_rects()
+        all_rects = self._collect_all_page_rects()
         self.preview.update_previews(
-            self.editor.pdf_path, self.editor.rects, self.editor.scale_factor
+            self.editor.pdf_path, all_rects, self.editor.scale_factor
         )
+
+    def _collect_all_page_rects(self) -> list:
+        """全ページの切り抜き枠をページストアから収集して一つのリストにまとめる"""
+        all_rects = []
+        store = self.editor._state._page_rects_store
+        for page_idx in sorted(store.keys()):
+            # 各ページのスナップショットから仮のmyCropBoxを再構築して返す
+            for pos, rect, rect_id, group_id, quadrant_id in store[page_idx]:
+                from graphics_items import myCropBox as _myCropBox
+                box = _myCropBox(rect)
+                box.setPos(pos)
+                box.rect_id = rect_id
+                box.group_id = group_id
+                box.quadrant_id = quadrant_id
+                all_rects.append(box)
+        return all_rects
+
+    def _update_nav_ui(self):
+        """ページナビゲーションUIの状態を現在ページに合わせて更新する"""
+        idx = self.editor.current_page_index
+        total = self._total_pages
+        self.page_label.setText(f"ページ {idx + 1} / {total}")
+        self.prev_page_btn.setEnabled(idx > 0)
+        self.next_page_btn.setEnabled(idx < total - 1)
+
+    def _go_prev_page(self):
+        """前のページに移動する"""
+        idx = self.editor.current_page_index
+        if idx > 0:
+            self.editor.load_pdf_page(self.editor.pdf_path, idx - 1)
+            self._update_nav_ui()
+            self.contentChanged.emit(self.editor.rects)
+
+    def _go_next_page(self):
+        """次のページに移動する"""
+        idx = self.editor.current_page_index
+        if idx < self._total_pages - 1:
+            self.editor.load_pdf_page(self.editor.pdf_path, idx + 1)
+            self._update_nav_ui()
+            self.contentChanged.emit(self.editor.rects)
 
     def set_asset(self, asset: WorkspaceAsset):
         """アセットの種類を判別して、キャンバスの初期化と復元を行う"""
         match asset:
             case SourceAsset():
                 self.parent_asset_id = asset.id
-                self.editor.load_from_path(asset.path)
+                total = self.editor.load_from_path(asset.path)
+                self._total_pages = total
+                self._update_nav_ui()
 
             case CroppedAsset():
                 parent = self.asset_mgr.get_asset(asset.parent_id)
@@ -346,7 +422,9 @@ class CropDeskWidget(BaseDeskWidget):
                     return
                 # 親としてロード
                 self.parent_asset_id = parent.id
-                self.editor.load_from_path(parent.path)
+                total = self.editor.load_from_path(parent.path)
+                self._total_pages = total
+                self._update_nav_ui()
                 # 枠を復元
                 self.editor.restore_boxes(asset.crop_rects)
 

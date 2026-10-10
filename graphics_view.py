@@ -43,6 +43,9 @@ class ProjectState:
         self._rect_count = 0
         self._undo_stack = QUndoStack(view)
         self._pre_action_states = None
+        # ページごとの切り抜き枠スナップショットを保存する辞書
+        # {page_index: [(pos, rect, rect_id, group_id, quadrant_id), ...]}
+        self._page_rects_store: dict = {}
 
 
 class PdfGraphicsView(QGraphicsView):
@@ -462,20 +465,36 @@ class PdfGraphicsView(QGraphicsView):
         text.tag = "intro_text"
         self.center_A_on_B(text, self.field_rect)
 
-    def load_pdf_page(self, file_path):
+    def load_pdf_page(self, file_path, page_index: int = 0):
+        """指定したページをシーンに読み込む。既存の枠はページストアに退避する。"""
         if not os.path.exists(file_path):
             print(f"❌ ファイルが見つかりません: {file_path}")
             return
 
-        # 1. 共通処理でシーンとステートを刷新
-        self._setup_new_scene()
+        # 別ファイルへの切り替えはフルリセット（新ファイルなのでページストアも不要）
+        is_new_file = self.pdf_path != file_path
+        if is_new_file:
+            self._setup_new_scene()
+            self.rectsChanged.emit(self.rects)
+            self.pdf_path = file_path
+        else:
+            # 同一ファイルのページ切り替え: 現在の枠を保存してから切り替える
+            self._save_current_page_rects()
+            # シーンから枠アイテムのみ取り外す（UndoStack は維持しない）
+            for box in list(self.rects):
+                if box.scene():
+                    self._scene.removeItem(box)
+            self.rects.clear()
+            # PDFアイテムの差し替え（既存シーンを再利用）
+            if self.pdf_item and self.pdf_item.scene():
+                self._scene.removeItem(self.pdf_item)
+            self.pdf_path = file_path
 
-        self.rectsChanged.emit(self.rects)
-        self.pdf_path = file_path
+        self.current_page_index = page_index
 
-        # 6. PDF読み込み
+        # PDF読み込み
         try:
-            pixmap, original_width = PdfProcessor.get_page_image(file_path)
+            pixmap, original_width = PdfProcessor.get_page_image(file_path, page_index)
             print(f"pdf_image created: {pixmap}")
             # シーンに画像を追加
             self.pdf_item = self._scene.addPixmap(pixmap)
@@ -487,13 +506,19 @@ class PdfGraphicsView(QGraphicsView):
         # PDF本来のサイズとの比率を計算（これが唯一の計算）
         self.scale_factor = original_width / pixmap.width()
 
-        # 最初の表示を小さくする（0.4倍）
-        self.resetTransform()
-        self.scale(0.4, 0.4)
+        if is_new_file:
+            # 最初の表示を小さくする（0.4倍）
+            self.resetTransform()
+            self.scale(0.4, 0.4)
 
         self.update_scene_limit()
         # 読み込み直後に、ビューの中心をキャンバスの中央に合わせる
         self.centerOn(self.pdf_item.boundingRect().center())
+
+        # 対象ページに保存済みの枠があれば復元する（ページ切り替え時）
+        if not is_new_file:
+            self._restore_page_rects(page_index)
+            self.rectsChanged.emit(self.rects)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -598,10 +623,61 @@ class PdfGraphicsView(QGraphicsView):
             return ret == QMessageBox.Yes
         return True
 
-    def load_from_path(self, path: str):
-        """パスからページを読み出し、デスクを初期化する"""
+    def load_from_path(self, path: str) -> int:
+        """パスからページを読み出し、デスクを初期化する。PDFの総ページ数を返す。"""
+        import fitz
         self.pdf_path = path
-        self.load_pdf_page(path)
+        self.load_pdf_page(path, 0)
+        # ページ数の取得（ナビゲーションUIで使用）
+        try:
+            with fitz.open(path) as doc:
+                return len(doc)
+        except Exception:
+            return 1
+
+    def _save_current_page_rects(self):
+        """現在のページの切り抜き枠状態をページストアに保存する"""
+        if self.pdf_path is None:
+            return
+        page_idx = self.current_page_index
+        snapshot = []
+        for box in self.rects:
+            snapshot.append((
+                QPointF(box.pos()),
+                QRectF(box.rect()),
+                box.rect_id,
+                box.group_id,
+                box.quadrant_id,
+            ))
+        self._state._page_rects_store[page_idx] = snapshot
+        print(f"[PageNav] Saved {len(snapshot)} rects for page {page_idx}")
+
+    def _restore_page_rects(self, page_index: int):
+        """ページストアから指定ページの切り抜き枠を復元する"""
+        snapshot = self._state._page_rects_store.get(page_index, [])
+        print(f"[PageNav] Restoring {len(snapshot)} rects for page {page_index}")
+        for pos, rect, rect_id, group_id, quadrant_id in snapshot:
+            box = myCropBox(rect)
+            box.setPos(pos)
+            box.confirmed = True
+            box.tag = "selection_rect"
+            box.rect_id = rect_id
+            box.group_id = group_id
+            box.quadrant_id = quadrant_id
+
+            # バッジ（番号）
+            badge = myBadge(len(self.rects) + 1, parent=box)
+            badge.setPos(rect.topLeft())
+
+            # シグナル接続
+            box.geometryChanged.connect(self._handle_item_geometry_changed)
+            box.deltaResized.connect(self._handle_item_delta_resized)
+            box.transformationFinished.connect(self._handle_transformation_finished)
+
+            self._scene.addItem(box)
+            self.rects.append(box)
+
+        self.update_numbers()
 
     def restore_boxes(self, rects: list):
         """既存の切り抜き枠（QRectF）のリストを受け取り、myCropBoxとして画面に復元する"""
@@ -669,15 +745,20 @@ class PdfGraphicsView(QGraphicsView):
             target = items[0]
         self.selectionChanged.emit(target)
 
-    def get_crop_coordinates(self) -> List[Tuple[float, float, float, float]]:
-        """UI部品(myCropBox)から正規化された(シーン上の)座標リストを取得する"""
+    def get_crop_coordinates(
+        self, boxes: Optional[list] = None
+    ) -> List[Tuple[float, float, float, float]]:
+        """UI部品(myCropBox)から正規化された(シーン上の)座標リストを取得する。
+        boxesが指定されない場合は現在ページの self.rects を対象とする。"""
+        target = boxes if boxes is not None else self.rects
         coords = []
-        for item in self.rects:
+        for item in target:
             s_rect = item.mapToScene(item.rect()).boundingRect()
             coords.append(
                 (s_rect.left(), s_rect.top(), s_rect.right(), s_rect.bottom())
             )
         return coords
+
 
     def get_snapshot(self):
         """座標、サイズ、および固有ID、同期用IDを含めたスナップショットを取る"""
