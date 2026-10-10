@@ -57,21 +57,47 @@ class SourceAsset(WorkspaceAsset):
 class CroppedAsset(WorkspaceAsset):
     """
     既存のアセットに対して切り抜き枠（レシピ）を適用したアセット。
+    crop_rects_by_page: ページ番号をキーとする QRectF のリスト
     """
 
     def __init__(
         self,
         name: str,
         parent_id: str,
-        crop_rects: List[QRectF],
+        crop_rects: Union[Dict[int, List[QRectF]], List[QRectF]],
         scale_factor: float = 1.0,  # シーン座標からPDF座標への変換係数
         asset_id: str = None,
     ):
         super().__init__(name, asset_id)
         self.parent_id = parent_id
-        self.crop_rects = crop_rects
         self.scale_factor = scale_factor
         self.is_intermediate = True
+
+        # 辞書形式に正規化して保持
+        if isinstance(crop_rects, dict):
+            self.crop_rects_by_page: Dict[int, List[QRectF]] = {
+                int(k): list(v) for k, v in crop_rects.items()
+            }
+        elif isinstance(crop_rects, list):
+            # 旧形式（単一リスト）の場合は0ページ目に割り当て
+            self.crop_rects_by_page: Dict[int, List[QRectF]] = {0: list(crop_rects)}
+        else:
+            self.crop_rects_by_page = {}
+
+    @property
+    def crop_rects(self) -> List[QRectF]:
+        """後方互換用プロパティ: 全ページの枠をフラットに結合したリスト"""
+        flat = []
+        for p in sorted(self.crop_rects_by_page.keys()):
+            flat.extend(self.crop_rects_by_page[p])
+        return flat
+
+    @crop_rects.setter
+    def crop_rects(self, value: Union[Dict[int, List[QRectF]], List[QRectF]]):
+        if isinstance(value, dict):
+            self.crop_rects_by_page = {int(k): list(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            self.crop_rects_by_page = {0: list(value)}
 
     def _rect_to_list(self, rect: QRectF) -> list:
         return [rect.x(), rect.y(), rect.width(), rect.height()]
@@ -83,20 +109,39 @@ class CroppedAsset(WorkspaceAsset):
     def to_dict(self) -> dict:
         d = super().to_dict()
         d["parent_id"] = self.parent_id
+        # 新形式: ページごとの辞書
+        d["crop_rects_by_page"] = {
+            str(p): [self._rect_to_list(rect) for rect in rects]
+            for p, rects in self.crop_rects_by_page.items()
+        }
+        # 旧形式互換用: フラットリストも残す
         d["crop_rects"] = [self._rect_to_list(rect) for rect in self.crop_rects]
         d["scale_factor"] = self.scale_factor
         return d
 
     @classmethod
     def from_dict(cls, data: dict):
-        rects = [cls._list_to_rect(rect) for rect in data["crop_rects"]]
-        return cls(
-            data["name"],
-            data["parent_id"],
-            rects,
-            data.get("scale_factor", 1.0),
-            data["id"],
-        )
+        if "crop_rects_by_page" in data:
+            rects_by_page = {}
+            for p, r_list in data["crop_rects_by_page"].items():
+                rects_by_page[int(p)] = [cls._list_to_rect(rect) for rect in r_list]
+            return cls(
+                data["name"],
+                data["parent_id"],
+                rects_by_page,
+                data.get("scale_factor", 1.0),
+                data["id"],
+            )
+        else:
+            # 旧データ互換
+            rects = [cls._list_to_rect(rect) for rect in data.get("crop_rects", [])]
+            return cls(
+                data["name"],
+                data["parent_id"],
+                rects,
+                data.get("scale_factor", 1.0),
+                data["id"],
+            )
 
 
 class JoinedAsset(WorkspaceAsset):

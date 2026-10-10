@@ -292,11 +292,10 @@ class CropDeskWidget(BaseDeskWidget):
             QMessageBox.warning(self, "エラー", "素材が読み込まれていません")
             return
 
-        # 現在のページの枠もストアに保存してから全ページ分を収集
-        self.editor._save_current_page_rects()
-        all_rects = self._collect_all_page_rects()
+        # ページごとの切り抜き枠（QRectF）を収集
+        scene_rects_by_page = self.editor.get_scene_rects_by_page()
 
-        if not all_rects:
+        if not scene_rects_by_page:
             QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
             return
 
@@ -309,14 +308,12 @@ class CropDeskWidget(BaseDeskWidget):
         if not ok or not name:
             return
 
-        # myCropBox (UIオブジェクト) のリストから実際のシーン座標 (QRectF) を抽出する
-        scene_rects = [
-            box.mapToScene(box.rect()).boundingRect() for box in all_rects
-        ]
-
-        # 素材棚に登録
+        # 素材棚に登録 (ページごとの QRectF 辞書を渡す)
         self.asset_mgr.create_cropped(
-            self.parent_asset_id, scene_rects, self.editor.scale_factor, name=name
+            self.parent_asset_id,
+            scene_rects_by_page,
+            self.editor.scale_factor,
+            name=name,
         )
         QMessageBox.information(
             self, "完了", f"パーツ '{name}' を素材棚に登録しました。"
@@ -328,11 +325,9 @@ class CropDeskWidget(BaseDeskWidget):
             QMessageBox.warning(self, "エラー", "PDFファイルが読み込まれていません")
             return
 
-        # 現在のページの枠もストアに保存してから全ページ分を収集
-        self.editor._save_current_page_rects()
-        all_rects = self._collect_all_page_rects()
+        crops_by_page = self.editor.get_crops_by_page()
 
-        if not all_rects:
+        if not crops_by_page:
             QMessageBox.warning(self, "エラー", "切り抜き枠が設定されていません")
             return
 
@@ -345,23 +340,20 @@ class CropDeskWidget(BaseDeskWidget):
         if not output_path:
             return
 
-        # 2. 実行
-        crop_rects = self.editor.get_crop_coordinates(all_rects)
+        # 2. 実行 (ページごとの切り抜き座標辞書を渡す)
         self.run_export_task(
             "crop",
             input_path=self.editor.pdf_path,
             output_path=output_path,
-            crop_rects=crop_rects,
+            crop_rects=crops_by_page,
             scale_factor=self.editor.scale_factor,
         )
 
     def on_preview_enter(self):
         """切り抜き枠の状態からプレビューを生成"""
-        # 現在ページの枠も保存してから全ページ分の枠を収集する
-        self.editor._save_current_page_rects()
-        all_rects = self._collect_all_page_rects()
+        crops_by_page = self.editor.get_crops_by_page()
         self.preview.update_previews(
-            self.editor.pdf_path, all_rects, self.editor.scale_factor
+            self.editor.pdf_path, crops_by_page, self.editor.scale_factor
         )
 
     def _collect_all_page_rects(self) -> list:
@@ -425,8 +417,10 @@ class CropDeskWidget(BaseDeskWidget):
                 total = self.editor.load_from_path(parent.path)
                 self._total_pages = total
                 self._update_nav_ui()
-                # 枠を復元
-                self.editor.restore_boxes(asset.crop_rects)
+                # 枠をページごとに復元
+                self.editor.restore_boxes_by_page(
+                    getattr(asset, "crop_rects_by_page", asset.crop_rects)
+                )
 
     def is_ready_to_load(self) -> bool:
         """このデスクに新しいアセットをロードしてもよいか判定する"""

@@ -1,4 +1,5 @@
 import fitz
+from typing import Union
 from PySide6.QtGui import QImage, QPixmap
 from pdf_metadata import normalize_pdf_rotation_to_bytes
 
@@ -139,42 +140,68 @@ class PdfProcessor:
     def crop_and_save(
         input_path: str,
         output_path: str,
-        crop_rects: list,
+        crop_rects: Union[dict, list],
         scale_factor: float,
         progress_callback=None,
         is_cancelled_cb=None,
     ):
         """
         クロップ処理を行い、新しいPDFとして保存する
-        crop_rects: [(left, top, right, bottom), ...] のような数値タプルのリスト
+        crop_rects:
+            辞書形式 {page_index: [(left, top, right, bottom), ...]}
+            またはリスト形式 [(left, top, right, bottom), ...] (後方互換用: 全ページ適用)
         """
         with PdfProcessor._open_as_pdf(input_path) as src_doc:
             total_pages = len(src_doc)
-            total_crops = len(crop_rects)
-            total_steps = total_pages * total_crops
+            is_dict_mode = isinstance(crop_rects, dict)
+
+            if is_dict_mode:
+                total_steps = sum(len(rects) for rects in crop_rects.values())
+            else:
+                total_crops = len(crop_rects)
+                total_steps = total_pages * total_crops
+
             current_step = 0
 
-            # 基準となる横幅（最初のページの幅）を取得
-            target_width = src_doc[0].rect.width if total_pages > 0 else None
-
             with fitz.open() as new_doc:
-                for page_index in range(total_pages):
-                    for rect in crop_rects:
-                        # 中断チェック
-                        if is_cancelled_cb and is_cancelled_cb():
-                            return False
+                if is_dict_mode:
+                    for page_index in sorted(crop_rects.keys()):
+                        if page_index < 0 or page_index >= total_pages:
+                            continue
+                        page_width = src_doc[page_index].rect.width
+                        for rect in crop_rects[page_index]:
+                            if is_cancelled_cb and is_cancelled_cb():
+                                return False
 
-                        PdfProcessor._append_cropped_page(
-                            new_doc,
-                            src_doc,
-                            page_index,
-                            rect,
-                            scale_factor,
-                            target_width=target_width,
-                        )
-                        current_step += 1
-                        if progress_callback:
-                            progress_callback(current_step, total_steps)
+                            PdfProcessor._append_cropped_page(
+                                new_doc,
+                                src_doc,
+                                page_index,
+                                rect,
+                                scale_factor,
+                                target_width=page_width,
+                            )
+                            current_step += 1
+                            if progress_callback:
+                                progress_callback(current_step, total_steps)
+                else:
+                    for page_index in range(total_pages):
+                        page_width = src_doc[page_index].rect.width
+                        for rect in crop_rects:
+                            if is_cancelled_cb and is_cancelled_cb():
+                                return False
+
+                            PdfProcessor._append_cropped_page(
+                                new_doc,
+                                src_doc,
+                                page_index,
+                                rect,
+                                scale_factor,
+                                target_width=page_width,
+                            )
+                            current_step += 1
+                            if progress_callback:
+                                progress_callback(current_step, total_steps)
 
                 new_doc.set_page_labels([])
                 try:

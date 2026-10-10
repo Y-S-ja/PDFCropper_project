@@ -36,16 +36,29 @@ class PreviewWorker(QObject):
 
                 batch = []
                 batch_size = 5
+                is_dict = isinstance(self.crop_coords, dict)
+                if is_dict:
+                    target_pages = [
+                        p for p in sorted(self.crop_coords.keys()) if 0 <= p < total_pages
+                    ]
+                    total_work = max(len(target_pages), 1)
+                else:
+                    target_pages = list(range(total_pages))
+                    total_work = max(total_pages, 1)
 
-                for page_idx in range(total_pages):
+                for step_idx, page_idx in enumerate(target_pages):
                     if self._is_cancelled:
                         return
+
+                    page_coords = (
+                        self.crop_coords[page_idx] if is_dict else self.crop_coords
+                    )
 
                     # 1ページ分の抽出 (QImageのリストが返ってくる)
                     images = PdfProcessor._get_previews_for_page(
                         doc,
                         page_idx,
-                        self.crop_coords,
+                        page_coords,
                         self.scale_factor,
                         preview_dpi=144,
                     )
@@ -68,7 +81,7 @@ class PreviewWorker(QObject):
                     batch.append((page_idx, processed_images))
 
                     # 進捗を通知
-                    self.progress_updated.emit(page_idx + 1, total_pages)
+                    self.progress_updated.emit(step_idx + 1, total_work)
 
                     # 一定量たまったら送信
                     if len(batch) >= batch_size:

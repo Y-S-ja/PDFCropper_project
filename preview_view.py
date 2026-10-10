@@ -149,40 +149,51 @@ class PdfPreviewView(QWidget):
         except Exception:
             return
 
-        # プログレスバーの設定
-        self.progress_bar.setRange(0, page_count)
+        # 2. 枠データの正規化（辞書形式 {page_idx: [coords, ...]} へ変換）
+        if isinstance(rects, dict):
+            crops_by_page = {
+                int(k): list(v) for k, v in rects.items()
+            }
+        else:
+            # リスト形式（旧互換）: myCropBoxオブジェクトか座標タプルかを判定して全ページに配置
+            flat_coords = []
+            for item in rects:
+                if hasattr(item, "scene_rect"):
+                    r = item.scene_rect
+                    flat_coords.append((r.left(), r.top(), r.right(), r.bottom()))
+                elif isinstance(item, (tuple, list)):
+                    flat_coords.append(tuple(item))
+            crops_by_page = {p: flat_coords for p in range(page_count)}
+
+        # 対象ページ数の集計とプログレスバー設定
+        active_pages = [p for p in sorted(crops_by_page.keys()) if 0 <= p < page_count]
+        total_active = max(len(active_pages), 1)
+        self.progress_bar.setRange(0, total_active)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFormat(f"0 / {page_count} ページを処理中... (0%)")
+        self.progress_bar.setFormat(f"0 / {total_active} ページを処理中... (0%)")
         self.progress_bar.show()
 
-        # 2. レイアウト計算とプレースホルダーの一括配置
-        crop_coordinates = []
+        # 3. レイアウト計算とプレースホルダーの一括配置
         current_y = 20
         spacing = 30
 
-        box_info = []
-        for box in rects:
-            r = box.scene_rect
-            coords = (r.left(), r.top(), r.right(), r.bottom())
-            crop_coordinates.append(coords)
+        for page_idx in active_pages:
+            for rect_idx, coords in enumerate(crops_by_page[page_idx]):
+                f_rect = fitz.Rect(
+                    coords[0] * scale_factor,
+                    coords[1] * scale_factor,
+                    coords[2] * scale_factor,
+                    coords[3] * scale_factor,
+                )
+                w, h = f_rect.width * 2, f_rect.height * 2
 
-            f_rect = fitz.Rect(
-                coords[0] * scale_factor,
-                coords[1] * scale_factor,
-                coords[2] * scale_factor,
-                coords[3] * scale_factor,
-            )
-            box_info.append((f_rect.width * 2, f_rect.height * 2))
-
-        for page_idx in range(page_count):
-            for rect_idx, (w, h) in enumerate(box_info):
                 rect_item = QGraphicsRectItem(0, 0, w, h)
                 rect_item.setPos(0, current_y)
                 rect_item.setBrush(QBrush(QColor("#e8e8e8")))
                 rect_item.setPen(QPen(QColor("#cccccc"), 1))
                 self.scene.addItem(rect_item)
 
-                text_item = QGraphicsSimpleTextItem(f"Page {page_idx + 1}")
+                text_item = QGraphicsSimpleTextItem(f"Page {page_idx + 1} - #{rect_idx + 1}")
                 text_item.setBrush(QBrush(QColor("#999999")))
                 text_w = text_item.boundingRect().width()
                 text_h = text_item.boundingRect().height()
@@ -204,7 +215,7 @@ class PdfPreviewView(QWidget):
 
         # 別スレッドでの実行準備
         self.thread = QThread()
-        self.worker = PreviewWorker(pdf_path, crop_coordinates, scale_factor, 1.0)
+        self.worker = PreviewWorker(pdf_path, crops_by_page, scale_factor, 1.0)
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)

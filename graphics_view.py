@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict, Union
 from PySide6.QtWidgets import (
     QPushButton,
     QMessageBox,
@@ -696,6 +696,76 @@ class PdfGraphicsView(QGraphicsView):
 
             # シーンとリストへ直接追加 (初期ロードのため Undo には積まない)
             self._raw_add_item(box, len(self.rects))
+
+    def restore_boxes_by_page(self, data: Union[Dict[int, List[QRectF]], List[QRectF]]):
+        """
+        辞書 {page_index: [QRectF, ...]} またはリスト [QRectF, ...] から枠を復元する。
+        """
+        self._scene.clearSelection()
+        for box in list(self.rects):
+            if box.scene():
+                self._scene.removeItem(box)
+        self.rects.clear()
+        self._state._page_rects_store.clear()
+
+        if isinstance(data, dict):
+            for page_idx, rect_list in data.items():
+                snapshot = []
+                for idx, r in enumerate(rect_list):
+                    snapshot.append((
+                        QPointF(r.topLeft()),
+                        QRectF(0, 0, r.width(), r.height()),
+                        idx + 1,
+                        None,
+                        None,
+                    ))
+                self._state._page_rects_store[int(page_idx)] = snapshot
+            # 現在のページの枠を復元
+            self._restore_page_rects(self.current_page_index)
+            self.rectsChanged.emit(self.rects)
+        elif isinstance(data, list):
+            # 後方互換: 単一リストの場合は現在ページに復元
+            self.restore_boxes(data)
+            self._save_current_page_rects()
+
+    def get_crops_by_page(self) -> Dict[int, List[Tuple[float, float, float, float]]]:
+        """
+        全ページ分の切り抜き枠をページごとの正規化シーン座標タプルで取得する。
+        戻り値: {page_index: [(left, top, right, bottom), ...]}
+        """
+        self._save_current_page_rects()
+        crops_by_page: Dict[int, List[Tuple[float, float, float, float]]] = {}
+        store = self._state._page_rects_store
+        for page_idx in sorted(store.keys()):
+            coords_list = []
+            for pos, rect, _, _, _ in store[page_idx]:
+                s_rect = rect.translated(pos)
+                coords_list.append((
+                    s_rect.left(),
+                    s_rect.top(),
+                    s_rect.right(),
+                    s_rect.bottom(),
+                ))
+            if coords_list:
+                crops_by_page[page_idx] = coords_list
+        return crops_by_page
+
+    def get_scene_rects_by_page(self) -> Dict[int, List[QRectF]]:
+        """
+        CroppedAsset 保存用。各ページごとの QRectF リストを取得する。
+        戻り値: {page_index: [QRectF, ...]}
+        """
+        self._save_current_page_rects()
+        rects_by_page: Dict[int, List[QRectF]] = {}
+        store = self._state._page_rects_store
+        for page_idx in sorted(store.keys()):
+            qrect_list = []
+            for pos, rect, _, _, _ in store[page_idx]:
+                s_rect = rect.translated(pos)
+                qrect_list.append(s_rect)
+            if qrect_list:
+                rects_by_page[page_idx] = qrect_list
+        return rects_by_page
 
     def mouseMoveEvent(self, event):
         # モードへの委譲
