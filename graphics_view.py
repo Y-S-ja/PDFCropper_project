@@ -3,6 +3,7 @@ import copy
 from dataclasses import dataclass
 from typing import Optional, List, Tuple, Dict, Union
 from copy_options import PageCopyOptions, ConflictPolicy, PageCopyEngine, FitPolicy
+from cursor_utils import with_wait_cursor
 from PySide6.QtWidgets import (
     QPushButton,
     QMessageBox,
@@ -769,6 +770,7 @@ class PdfGraphicsView(QGraphicsView):
                 rects_by_page[page_idx] = qrect_list
         return rects_by_page
 
+    @with_wait_cursor
     def copy_current_page_rects(
         self,
         total_pages: int,

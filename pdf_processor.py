@@ -617,3 +617,9 @@ class PdfProcessor:
             # キャッシュしたドキュメントをすべて閉じる
             for doc in doc_cache.values():
                 doc.close()
+
+
+# UIスレッドから呼び出された際に自動で砂時計カーソルにするラッパーを登録
+from cursor_utils import auto_wrap_class_methods
+auto_wrap_class_methods(PdfProcessor)
+
