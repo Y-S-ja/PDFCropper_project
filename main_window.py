@@ -7,9 +7,12 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QDockWidget,
     QAbstractButton,
+    QToolButton,
+    QMenu,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QDragEnterEvent, QDragMoveEvent, QDropEvent
+from copy_options import PageCopyOptions, CopyScope, ConflictPolicy, PageCopyEngine
 from workspace_models import (
     AssetManager,
     WorkspaceAsset,
@@ -186,6 +189,33 @@ class MainWindow(QMainWindow):
         btn_auto.clicked.connect(self._handle_auto_detect)
         self.template_toolbar.addWidget(btn_auto)
 
+        self.template_toolbar.addSeparator()
+
+        # 枠の他ページコピーボタン（ドロップダウン付き）
+        self.btn_copy_pages = QToolButton()
+        self.btn_copy_pages.setText("📋 全ページに枠をコピー")
+        self.btn_copy_pages.setPopupMode(QToolButton.MenuButtonPopup)
+        self.btn_copy_pages.setStyleSheet("font-weight: bold; color: #2e7d32;")
+        self.btn_copy_pages.clicked.connect(lambda: self._handle_copy_pages(CopyScope.ALL))
+
+        copy_menu = QMenu(self.btn_copy_pages)
+        act_all = copy_menu.addAction("全ページにコピー")
+        act_all.triggered.connect(lambda: self._handle_copy_pages(CopyScope.ALL))
+
+        act_fwd = copy_menu.addAction("以降の全ページにコピー")
+        act_fwd.triggered.connect(lambda: self._handle_copy_pages(CopyScope.FORWARD))
+
+        copy_menu.addSeparator()
+
+        act_odd = copy_menu.addAction("奇数ページのみにコピー")
+        act_odd.triggered.connect(lambda: self._handle_copy_pages(CopyScope.ODD_PAGES))
+
+        act_even = copy_menu.addAction("偶数ページのみにコピー")
+        act_even.triggered.connect(lambda: self._handle_copy_pages(CopyScope.EVEN_PAGES))
+
+        self.btn_copy_pages.setMenu(copy_menu)
+        self.template_toolbar.addWidget(self.btn_copy_pages)
+
         # ツールバー内のボタンにカーソルを一括設定
         for btn in self.template_toolbar.findChildren(QAbstractButton):
             btn.setCursor(Qt.PointingHandCursor)
@@ -258,6 +288,73 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if view:
             view.auto_detect_frames()
+
+    def _handle_copy_pages(self, scope: CopyScope) -> None:
+        desk = self.current_desk()
+        if not isinstance(desk, CropDeskWidget):
+            QMessageBox.information(
+                self, "案内", "この機能は「切り抜きデスク」でのみ利用できます。"
+            )
+            return
+
+        view = self.current_view()
+        if not view:
+            return
+
+        total_pages = getattr(desk, "_total_pages", 1)
+        if total_pages <= 1:
+            QMessageBox.information(
+                self, "案内", "複数ページのPDFでのみ利用できます。"
+            )
+            return
+
+        # 現在のページに枠があるか確認
+        view._save_current_page_rects()
+        current_rects = view.rects
+        if not current_rects:
+            QMessageBox.warning(
+                self, "エラー", "現在ページにコピー元の切り抜き枠がありません。"
+            )
+            return
+
+        options = PageCopyOptions(scope=scope, conflict=ConflictPolicy.OVERWRITE)
+        target_pages = PageCopyEngine.resolve_target_pages(
+            view.current_page_index, total_pages, options
+        )
+
+        if not target_pages:
+            QMessageBox.information(
+                self, "案内", "対象となるページがありません。"
+            )
+            return
+
+        scope_names = {
+            CopyScope.ALL: "全ページ",
+            CopyScope.FORWARD: "以降の全ページ",
+            CopyScope.ODD_PAGES: "奇数ページ",
+            CopyScope.EVEN_PAGES: "偶数ページ",
+        }
+        name = scope_names.get(scope, "対象ページ")
+
+        # 確認ダイアログ
+        ret = QMessageBox.question(
+            self,
+            "枠のコピー確認",
+            f"現在のページの切り抜き枠（{len(current_rects)}個）を、\n"
+            f"{name}（対象: {len(target_pages)}ページ）にコピーしますか？\n\n"
+            f"※ 対象ページに既存の枠がある場合は上書きされます。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if ret != QMessageBox.Yes:
+            return
+
+        copied = view.copy_current_page_rects(total_pages, options)
+        QMessageBox.information(
+            self,
+            "完了",
+            f"{len(copied)} ページに切り抜き枠をコピーしました。",
+        )
 
     def _on_tab_changed(self, index: int) -> None:
         """タブが切り替わったら、現在のビューの選択状態をパネルに繋ぎ変える"""

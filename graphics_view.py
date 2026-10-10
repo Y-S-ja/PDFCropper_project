@@ -1,6 +1,8 @@
 import os
+import copy
 from dataclasses import dataclass
 from typing import Optional, List, Tuple, Dict, Union
+from copy_options import PageCopyOptions, ConflictPolicy, PageCopyEngine
 from PySide6.QtWidgets import (
     QPushButton,
     QMessageBox,
@@ -766,6 +768,43 @@ class PdfGraphicsView(QGraphicsView):
             if qrect_list:
                 rects_by_page[page_idx] = qrect_list
         return rects_by_page
+
+    def copy_current_page_rects(
+        self, total_pages: int, options: Optional[PageCopyOptions] = None
+    ) -> List[int]:
+        """
+        現在のページの切り抜き枠を設定（options）に基づいて他のページに一括コピーする。
+        実際にコピーが行われたページ番号のリストを返す。
+        """
+        if options is None:
+            options = PageCopyOptions()
+
+        self._save_current_page_rects()
+        current_snapshot = self._state._page_rects_store.get(
+            self.current_page_index, []
+        )
+        if not current_snapshot:
+            return []
+
+        target_pages = PageCopyEngine.resolve_target_pages(
+            self.current_page_index, total_pages, options
+        )
+        copied_pages = []
+
+        for p in target_pages:
+            existing = self._state._page_rects_store.get(p, [])
+            if options.conflict == ConflictPolicy.SKIP and existing:
+                continue
+            elif options.conflict == ConflictPolicy.APPEND:
+                new_items = copy.deepcopy(current_snapshot)
+                self._state._page_rects_store[p] = existing + new_items
+                copied_pages.append(p)
+            else:  # OVERWRITE
+                self._state._page_rects_store[p] = copy.deepcopy(current_snapshot)
+                copied_pages.append(p)
+
+        return copied_pages
+
 
     def mouseMoveEvent(self, event):
         # モードへの委譲
