@@ -1245,10 +1245,10 @@ class PdfGraphicsView(QGraphicsView):
                 box.setPos(QPointF(x, y))
 
                 # 外枠スタイル設定
-                pen = QPen(QColor(0, 120, 215), 3)
-                pen.setCosmetic(True)
-                box.setPen(pen)
-                box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+                # pen = QPen(QColor(0, 120, 215), 3)
+                # pen.setCosmetic(True)
+                # box.setPen(pen)
+                # box.setBrush(QBrush(QColor(0, 120, 215, 40)))
 
                 box.tag = "selection_rect"
                 self.rect_count += 1
