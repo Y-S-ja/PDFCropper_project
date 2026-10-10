@@ -1216,6 +1216,66 @@ class PdfGraphicsView(QGraphicsView):
         ]
         self.add_template_boxes(data)
 
+    def add_template_xy(self, cols: int, rows: int):
+        """
+        指定した列数(X)・行数(Y)でページを等分割して配置する。
+        グループ同期・対称性同期は無効（group_id=None, quadrant_id=None）。
+        """
+        if not self.pdf_item or cols <= 0 or rows <= 0:
+            return
+
+        # ページの画像サイズを取得
+        canvas_rect = self.pdf_item.pixmap().rect()
+        total_w = canvas_rect.width()
+        total_h = canvas_rect.height()
+
+        cell_w = total_w / cols
+        cell_h = total_h / rows
+
+        created_boxes = []
+
+        # 上から下 (row)、左から右 (col) の順に配置
+        for row in range(rows):
+            for col in range(cols):
+                x = col * cell_w
+                y = row * cell_h
+                size_rect = QRectF(0, 0, cell_w, cell_h)
+
+                box = myCropBox(size_rect)
+                box.setPos(QPointF(x, y))
+
+                # 外枠スタイル設定
+                pen = QPen(QColor(0, 120, 215), 3)
+                pen.setCosmetic(True)
+                box.setPen(pen)
+                box.setBrush(QBrush(QColor(0, 120, 215, 40)))
+
+                box.tag = "selection_rect"
+                self.rect_count += 1
+                box.rect_id = self.rect_count
+
+                # 【重要】同期・対称性を無効化
+                box.group_id = None
+                box.quadrant_id = None
+                box.allowed_rect = None  # 枠の移動制限も設けず自由に動かせるようにする
+
+                # シグナル接続（単体での変形完了通知などは維持）
+                box.geometryChanged.connect(self._handle_item_geometry_changed)
+                box.deltaResized.connect(self._handle_item_delta_resized)
+                box.transformationFinished.connect(self._handle_transformation_finished)
+
+                # 番号バッジ
+                temp_idx = len(self.rects) + len(created_boxes) + 1
+                badge = myBadge(temp_idx, parent=box)
+                badge.setPos(size_rect.topLeft())
+
+                created_boxes.append(box)
+
+        # 一括追加を UndoStack に登録
+        self.undo_stack.push(
+            AddCommand(self, created_boxes, f"{cols}x{rows}分割テンプレートの追加")
+        )
+    
     def auto_detect_frames(self):
         """現在のページから枠線を自動検知して候補を表示する"""
         if not self.pdf_path:

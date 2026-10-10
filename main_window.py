@@ -33,6 +33,7 @@ from desk_widgets import (
     DEFAULT_DESK_MAP,
 )
 from graphics_view import PdfGraphicsView
+from detail_dialogs import GridSplitDialog
 
 
 class MainWindow(QMainWindow):
@@ -188,6 +189,10 @@ class MainWindow(QMainWindow):
         btn_4.clicked.connect(self._apply_template_4)
         self.template_toolbar.addWidget(btn_4)
 
+        btn_xy = QPushButton("xy分割")
+        btn_xy.clicked.connect(self._apply_template_xy)
+        self.template_toolbar.addWidget(btn_xy)
+
         self.template_toolbar.addSeparator()
 
         btn_auto = QPushButton("✨ 枠線を自動認識")
@@ -306,6 +311,18 @@ class MainWindow(QMainWindow):
         view = self.current_view()
         if view:
             view.add_template_4()
+
+    def _apply_template_xy(self) -> None:
+        view = self.current_view()
+        if not view or not getattr(view, "pdf_item", None):
+            QMessageBox.information(self, "案内", "PDFが開かれていません。")
+            return
+
+        # ダイアログの表示
+        dialog = GridSplitDialog(self)
+        if dialog.exec():
+            cols, rows = dialog.get_split_counts()
+            view.add_template_xy(cols=cols, rows=rows)
 
     def _handle_auto_detect(self) -> None:
         view = self.current_view()
